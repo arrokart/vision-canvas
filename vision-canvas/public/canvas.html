@@ -341,6 +341,16 @@ html,body{height:100%;overflow:hidden;font-family:'Outfit',sans-serif;
 <!-- TOP BAR -->
 <div id="topbar">
   <div id="logo">Vision<span>.</span></div>
+  <button onclick="window.parent.location.href='/dashboard'" style="
+  height:26px;padding:0 10px;border-radius:6px;
+  border:1px solid rgba(255,255,255,0.13);
+  background:transparent;color:#8a8a9e;
+  cursor:pointer;font-size:11px;
+  font-family:'Outfit',sans-serif;
+  margin-right:6px;transition:.15s;
+" onmouseover="this.style.color='#eeeef5'" onmouseout="this.style.color='#8a8a9e'">
+  ← Dashboard
+</button>
   <div class="canvas-tabs" id="canvas-tabs"></div>
   <button id="add-canvas-btn" title="New Canvas">+</button>
   <div class="topbar-right">
