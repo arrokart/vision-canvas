@@ -58,7 +58,21 @@ export default function Dashboard({ user }: { user: any }) {
           <div key={c.id} style={s.card} onClick={() => navigate(`/canvas/${c.id}`)}>
             <div style={s.thumb}></div>
             <div style={s.cardBottom}>
-              <span style={s.cardName}>{c.name}</span>
+              <span
+                style={{...s.cardName, cursor:'text'}}
+                contentEditable
+                suppressContentEditableWarning
+                onBlur={async e => {
+                  const newName = e.currentTarget.textContent?.trim()
+                  if(!newName || newName === c.name) return
+                  await supabase.from('canvases').update({ name: newName }).eq('id', c.id)
+                  setCanvases(prev => prev.map(x => x.id === c.id ? {...x, name: newName} : x))
+                }}
+                onKeyDown={e => { if(e.key === 'Enter') e.currentTarget.blur() }}
+                onClick={e => e.stopPropagation()}
+              >
+                {c.name}
+              </span>
               <button style={s.delBtn} onClick={() => deleteCanvas(c.id)}>✕</button>
             </div>
           </div>
