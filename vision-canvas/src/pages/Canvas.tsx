@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 
-export default function Canvas({ user }: { user: any }) {
+export default function Canvas() {
   const { id } = useParams()
   const navigate = useNavigate()
 

@@ -76,7 +76,7 @@ export default function App() {
       <Routes>
         <Route path="/" element={<Navigate to="/dashboard" />} />
         <Route path="/dashboard" element={<Dashboard user={user} />} />
-        <Route path="/canvas/:id" element={<Canvas user={user} />} />
+        <Route path="/canvas/:id" element={<Canvas />} />
       </Routes>
     </BrowserRouter>
   )
