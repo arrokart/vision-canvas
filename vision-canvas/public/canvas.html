@@ -644,6 +644,12 @@ html,body{height:100%;overflow:hidden;font-family:'Outfit',sans-serif;
 <div id="toast"></div>
 
 <script>
+// Block all editing in readonly mode immediately
+const _isReadonly = new URLSearchParams(window.location.search).get('readonly');
+if(_isReadonly) {
+  document.addEventListener('contextmenu', e=>e.preventDefault(), true);
+}
+
 const $ = id => document.getElementById(id);
 const canvasArea = $('canvas-area');
 const canvasWorld = $('canvas-world');
@@ -1547,6 +1553,8 @@ function onItemDblclick(e){
 }
 function onItemContextmenu(e){
   e.preventDefault();
+  const isReadonly=new URLSearchParams(window.location.search).get('readonly');
+  if(isReadonly) return;
   const id=parseInt(e.currentTarget.dataset.id);
   state.ctxItemId=id;
   if(!state.selectedIds.includes(id)) state.selectedIds=[id];
