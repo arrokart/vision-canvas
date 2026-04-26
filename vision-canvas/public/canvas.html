@@ -2007,17 +2007,14 @@ async function init(){
     $('add-canvas-btn').style.display='none'
     $('toolbar').style.display='none'
     $('panels').style.display='none'
-    // disable right click menu
+    // hide context menu permanently
+    document.getElementById('ctx-menu').style.display='none'
+    // block ALL mouse interaction except scroll zoom
     document.addEventListener('contextmenu', e=>e.preventDefault(), true)
-    // disable all keyboard shortcuts
+    document.addEventListener('mousedown', e=>e.stopPropagation(), true)
+    document.addEventListener('dblclick', e=>e.stopPropagation(), true)
     document.addEventListener('keydown', e=>e.stopPropagation(), true)
-    // block all mousedown except pan and zoom
-    canvasArea.addEventListener('mousedown', e=>{
-      if(e.button===1) return // allow middle mouse pan
-      e.stopPropagation()
-    }, true)
-    canvasArea.addEventListener('dblclick', e=>e.stopPropagation(), true)
-    showToast('View-only mode')
+    showToast('View-only — zoom and pan only')
   } else {
     showToast('Vision Canvas v3 — ? for shortcuts ✦');
   }
