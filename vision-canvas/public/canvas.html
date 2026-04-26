@@ -1998,7 +1998,6 @@ async function init(){
   // READ-ONLY mode for shared canvases
   const isReadonly = new URLSearchParams(window.location.search).get('readonly')
   if(isReadonly) {
-    // hide all editing UI
     $('undo-btn').style.display='none'
     $('redo-btn').style.display='none'
     $('upload-btn').style.display='none'
@@ -2008,10 +2007,16 @@ async function init(){
     $('add-canvas-btn').style.display='none'
     $('toolbar').style.display='none'
     $('panels').style.display='none'
-    // disable all interactions
-    canvasArea.addEventListener('mousedown', e=>e.stopPropagation(), true)
-    canvasArea.addEventListener('dblclick', e=>e.stopPropagation(), true)
+    // disable right click menu
+    document.addEventListener('contextmenu', e=>e.preventDefault(), true)
+    // disable all keyboard shortcuts
     document.addEventListener('keydown', e=>e.stopPropagation(), true)
+    // block all mousedown except pan and zoom
+    canvasArea.addEventListener('mousedown', e=>{
+      if(e.button===1) return // allow middle mouse pan
+      e.stopPropagation()
+    }, true)
+    canvasArea.addEventListener('dblclick', e=>e.stopPropagation(), true)
     showToast('View-only mode')
   } else {
     showToast('Vision Canvas v3 — ? for shortcuts ✦');
