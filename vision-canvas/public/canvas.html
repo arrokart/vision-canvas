@@ -1994,7 +1994,28 @@ async function init(){
   await loadCanvas();
   renderAll();
   if(ac().items.length) setTimeout(fitAll, 300);
-  showToast('Vision Canvas v3 — ? for shortcuts ✦');
+  
+  // READ-ONLY mode for shared canvases
+  const isReadonly = new URLSearchParams(window.location.search).get('readonly')
+  if(isReadonly) {
+    // hide all editing UI
+    $('undo-btn').style.display='none'
+    $('redo-btn').style.display='none'
+    $('upload-btn').style.display='none'
+    $('url-btn').style.display='none'
+    $('export-btn').style.display='none'
+    $('share-btn').style.display='none'
+    $('add-canvas-btn').style.display='none'
+    $('toolbar').style.display='none'
+    $('panels').style.display='none'
+    // disable all interactions
+    canvasArea.addEventListener('mousedown', e=>e.stopPropagation(), true)
+    canvasArea.addEventListener('dblclick', e=>e.stopPropagation(), true)
+    document.addEventListener('keydown', e=>e.stopPropagation(), true)
+    showToast('View-only mode')
+  } else {
+    showToast('Vision Canvas v3 — ? for shortcuts ✦');
+  }
 }
 
 $('share-btn').addEventListener('click', async () => {
