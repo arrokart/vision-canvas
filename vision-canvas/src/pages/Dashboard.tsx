@@ -73,7 +73,10 @@ export default function Dashboard({ user }: { user: any }) {
               >
                 {c.name}
               </span>
-              <button style={s.delBtn} onClick={() => { if(window.confirm('Delete this canvas?')) deleteCanvas(c.id) }}>✕</button>
+              <button style={s.delBtn} onClick={e => {
+  e.stopPropagation()
+  if(window.confirm('Delete this canvas?')) deleteCanvas(c.id)
+}}>✕</button>
             </div>
           </div>
         ))}
