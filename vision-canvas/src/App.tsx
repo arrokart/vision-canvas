@@ -47,40 +47,49 @@ export default function App() {
     <div style={{ color: 'white', padding: 40 }}>Loading...</div>
   )
 
-  if (!user) return (
-    <div style={{ color: 'white', padding: 40, fontFamily: 'sans-serif' }}>
-      <h2 style={{ marginBottom: 20 }}>Vision Canvas</h2>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxWidth: 300 }}>
-        <input type="email" placeholder="your@email.com" value={email}
-          onChange={e => setEmail(e.target.value)}
-          style={{ padding: 8, borderRadius: 6, border: 'none', fontSize: 14 }} />
-        <input type="password" placeholder="password" value={password}
-          onChange={e => setPassword(e.target.value)}
-          style={{ padding: 8, borderRadius: 6, border: 'none', fontSize: 14 }} />
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button onClick={login}
-            style={{ flex: 1, padding: '8px 16px', borderRadius: 6,
-              background: '#6c71f0', border: 'none', color: 'white', cursor: 'pointer' }}>
-            Login
-          </button>
-          <button onClick={signup}
-            style={{ flex: 1, padding: '8px 16px', borderRadius: 6,
-              background: 'transparent', border: '1px solid rgba(255,255,255,.2)',
-              color: 'white', cursor: 'pointer' }}>
-            Sign Up
-          </button>
-        </div>
-      </div>
-    </div>
-  )
-
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/" element={<Navigate to="/dashboard" />} />
-        <Route path="/dashboard" element={<Dashboard user={user} />} />
-        <Route path="/canvas/:id" element={<Canvas />} />
+
+        {/* Public — no login needed */}
         <Route path="/shared/:token" element={<Shared />} />
+
+        {/* Not logged in */}
+        {!user ? (
+          <Route path="*" element={
+            <div style={{ color: 'white', padding: 40, fontFamily: 'sans-serif' }}>
+              <h2 style={{ marginBottom: 20 }}>Vision Canvas</h2>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxWidth: 300 }}>
+                <input type="email" placeholder="your@email.com" value={email}
+                  onChange={e => setEmail(e.target.value)}
+                  style={{ padding: 8, borderRadius: 6, border: 'none', fontSize: 14 }} />
+                <input type="password" placeholder="password" value={password}
+                  onChange={e => setPassword(e.target.value)}
+                  style={{ padding: 8, borderRadius: 6, border: 'none', fontSize: 14 }} />
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button onClick={login}
+                    style={{ flex: 1, padding: '8px 16px', borderRadius: 6,
+                      background: '#6c71f0', border: 'none', color: 'white', cursor: 'pointer' }}>
+                    Login
+                  </button>
+                  <button onClick={signup}
+                    style={{ flex: 1, padding: '8px 16px', borderRadius: 6,
+                      background: 'transparent', border: '1px solid rgba(255,255,255,.2)',
+                      color: 'white', cursor: 'pointer' }}>
+                    Sign Up
+                  </button>
+                </div>
+              </div>
+            </div>
+          } />
+        ) : (
+          <>
+            <Route path="/" element={<Navigate to="/dashboard" />} />
+            <Route path="/dashboard" element={<Dashboard user={user} />} />
+            <Route path="/canvas/:id" element={<Canvas />} />
+          </>
+        )}
+
       </Routes>
     </BrowserRouter>
   )
