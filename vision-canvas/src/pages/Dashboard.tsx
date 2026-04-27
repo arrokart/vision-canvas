@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'cd
 
 export default function Dashboard({ user }: { user: any }) {
   const navigate = useNavigate()
@@ -74,9 +74,9 @@ export default function Dashboard({ user }: { user: any }) {
                 {c.name}
               </span>
               <button style={s.delBtn} onClick={e => {
-  e.stopPropagation()
-  if(window.confirm('Delete this canvas?')) deleteCanvas(c.id)
-}}>✕</button>
+                e.stopPropagation()
+                if(window.confirm('Delete this canvas?')) deleteCanvas(c.id)
+              }}>✕</button>
             </div>
           </div>
         ))}
