@@ -1974,15 +1974,22 @@ async function saveCanvas(){
       const minY=Math.min(...items.map(i=>i.y))
       const maxX=Math.max(...items.map(i=>i.x+i.w))
       const maxY=Math.max(...items.map(i=>i.y+i.h))
-      const pad=40
+      const pad=60
+      const contentW=maxX-minX+pad*2
+      const contentH=maxY-minY+pad*2
+      const thumbW=400
+      const thumbH=280
+      const scaleX=thumbW/contentW
+      const scaleY=thumbH/contentH
+      const thumbScale=Math.min(scaleX,scaleY,1)
 
       const c=await html2canvas(canvasWorld,{
         backgroundColor:ac().bg,
-        scale:0.4,
+        scale:thumbScale,
         x:minX-pad,
         y:minY-pad,
-        width:Math.max(1,maxX-minX+pad*2),
-        height:Math.max(1,maxY-minY+pad*2),
+        width:contentW,
+        height:contentH,
         logging:false,useCORS:true,allowTaint:true,
       })
       
