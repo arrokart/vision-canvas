@@ -10,12 +10,27 @@ export default function Landing() {
   const handleAuth = async () => {
     if (!email || !password) { alert('Enter email and password'); return }
     setLoading(true)
+    
     if (mode === 'login') {
       const { error } = await supabase.auth.signInWithPassword({ email, password })
       if (error) { alert(error.message); setLoading(false) }
     } else {
-      const { error } = await supabase.auth.signUp({ email, password })
-      if (error) { alert(error.message); setLoading(false) }
+      const { data, error } = await supabase.auth.signUp({ email, password })
+      if (error) { 
+        alert(error.message)
+        setLoading(false)
+        return
+      }
+      // user already exists
+      if (data.user && data.user.identities?.length === 0) {
+        alert('This email is already registered. Please login instead.')
+        setMode('login')
+        setLoading(false)
+        return
+      }
+      // new user — show confirmation message
+      alert('✅ Check your email and click the confirmation link to activate your account.')
+      setLoading(false)
     }
   }
 
