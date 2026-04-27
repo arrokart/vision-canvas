@@ -107,7 +107,7 @@ html,body{height:100%;overflow:hidden;font-family:'Outfit',sans-serif;
 /* TEXT */
 .text-item{overflow:hidden;}
 .text-content{width:100%;height:100%;padding:8px;word-break:break-word;
-  white-space:pre-wrap;overflow:hidden;outline:none;line-height:1.4;}
+  white-space:pre-wrap;overflow:hidden;outline:none;line-height:1.4;box-sizing:border-box;}
 .text-content[contenteditable="true"]{cursor:text;user-select:text;}
 
 /* ALIGN GUIDES */
@@ -884,17 +884,24 @@ function applyItemStyle(el,item){
   el.classList.toggle('locked-item',!!item.locked);
   el.classList.toggle('multi-sel',state.selectedIds.length>1&&state.selectedIds.includes(item.id));
   if(item.type==='text'){
-    const tc=el.querySelector('.text-content');
-    if(tc&&tc.contentEditable!=='true'){
-      tc.innerText=item.text||'';
-      tc.style.fontSize=item.fontSize+'px';
-      tc.style.fontFamily=item.fontFamily;
-      tc.style.fontWeight=item.fontWeight;
-      tc.style.color=item.color;
-      tc.style.textAlign=item.textAlign;
-      tc.style.background=item.bgColor||'transparent';
-    }
+  const tc=el.querySelector('.text-content');
+  if(tc&&tc.contentEditable!=='true'){
+    tc.innerText=item.text||'';
+    tc.style.fontSize=item.fontSize+'px';
+    tc.style.fontFamily=item.fontFamily;
+    tc.style.fontWeight=item.fontWeight;
+    tc.style.color=item.color;
+    tc.style.textAlign=item.textAlign;
+    tc.style.background=item.bgColor||'transparent';
+    tc.style.width='100%';
+    tc.style.height='100%';
+    tc.style.overflow='hidden';
+    tc.style.wordBreak='break-word';
+    tc.style.whiteSpace='pre-wrap';
+    tc.style.lineHeight='1.4';
+    tc.style.padding='8px';
   }
+}
 }
 
 function renderItemsHighlight(){
