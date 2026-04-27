@@ -92,7 +92,7 @@ export default function Dashboard({ user }: { user: any }) {
                 onMouseLeave={e=>(e.currentTarget.style.borderColor='rgba(255,255,255,0.07)')}>
                 {/* THUMBNAIL */}
                 <div style={{...s.thumb,
-                  backgroundImage: c.thumbnail_url?`url(${c.thumbnail_url})`:'none',
+                  backgroundImage: c.thumbnail_url?`url(${c.thumbnail_url}?t=${new Date(c.updated_at).getTime()})`:'none',
                   backgroundSize:'cover',backgroundPosition:'center top'}}>
                   {!c.thumbnail_url && (
                     <div style={s.noThumb}>No preview</div>
