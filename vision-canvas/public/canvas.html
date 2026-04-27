@@ -1970,9 +1970,19 @@ async function saveCanvas(){
       renderItemsHighlight()
       await new Promise(r=>setTimeout(r,50))
       
+      const minX=Math.min(...items.map(i=>i.x))
+      const minY=Math.min(...items.map(i=>i.y))
+      const maxX=Math.max(...items.map(i=>i.x+i.w))
+      const maxY=Math.max(...items.map(i=>i.y+i.h))
+      const pad=40
+
       const c=await html2canvas(canvasWorld,{
-        backgroundColor:ac().bg,scale:0.3,
-        x:0,y:0,width:800,height:500,
+        backgroundColor:ac().bg,
+        scale:0.4,
+        x:minX-pad,
+        y:minY-pad,
+        width:Math.max(1,maxX-minX+pad*2),
+        height:Math.max(1,maxY-minY+pad*2),
         logging:false,useCORS:true,allowTaint:true,
       })
       
