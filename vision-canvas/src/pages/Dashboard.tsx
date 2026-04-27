@@ -56,7 +56,13 @@ export default function Dashboard({ user }: { user: any }) {
         )}
         {canvases.map(c => (
           <div key={c.id} style={s.card} onClick={() => navigate(`/canvas/${c.id}`)}>
-            <div style={s.thumb}></div>
+            <div style={{...s.thumb, backgroundImage: c.thumbnail_url ? `url(${c.thumbnail_url})` : 'none',
+              backgroundSize:'cover', backgroundPosition:'center'}}>
+              {!c.thumbnail_url && <div style={{display:'flex',alignItems:'center',
+                justifyContent:'center',height:'100%',color:'#4a4a60',fontSize:12}}>
+                No preview
+              </div>}
+            </div>
             <div style={s.cardBottom}>
               <span
                 style={{...s.cardName, cursor:'text'}}

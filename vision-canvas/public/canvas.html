@@ -1954,6 +1954,55 @@ function scheduleSave(){
 
 async function saveCanvas(){
   if(!CANVAS_ID) return
+  
+  // generate thumbnail
+  let thumbnailUrl = null
+  try {
+    const items = ac().items.filter(i=>i.visible)
+    if(items.length){
+      const savedPan={...state.pan}, savedZoom=state.zoom
+      const savedSel=[...state.selectedIds]
+      state.selectedIds=[]
+      state.pan={x:0,y:0}; state.zoom=1
+      applyTransform()
+      selOverlay.style.display='none'
+      multiSelBox.style.display='none'
+      renderItemsHighlight()
+      await new Promise(r=>setTimeout(r,50))
+      
+      const c=await html2canvas(canvasWorld,{
+        backgroundColor:ac().bg,scale:0.3,
+        x:0,y:0,width:800,height:500,
+        logging:false,useCORS:true,allowTaint:true,
+      })
+      
+      state.selectedIds=savedSel
+      state.pan=savedPan; state.zoom=savedZoom
+      applyTransform(); renderItemsHighlight()
+      updateSelectionOverlay(); updateMultiSelBox()
+      
+      // upload thumbnail
+      const blob = await new Promise(r=>c.toBlob(r,'image/jpeg',0.6))
+      const filename = `thumb-${CANVAS_ID}.jpg`
+      await fetch(`${SUPABASE_URL}/storage/v1/object/canvas-images/${filename}`,{
+        method:'POST',
+        headers:{
+          'apikey':SUPABASE_KEY,
+          'Authorization':`Bearer ${SUPABASE_KEY}`,
+          'Content-Type':'image/jpeg',
+          'x-upsert':'true'
+        },
+        body:blob
+      })
+      thumbnailUrl = `${SUPABASE_URL}/storage/v1/object/public/canvas-images/${filename}`
+    }
+  } catch(e){ console.log('thumb error',e) }
+
+  // save state + thumbnail
+  const payload = {
+    state: {canvases:state.canvases, nextId:state.nextId},
+    ...(thumbnailUrl && {thumbnail_url: thumbnailUrl})
+  }
   const res=await fetch(`${SUPABASE_URL}/rest/v1/canvases?id=eq.${CANVAS_ID}`,{
     method:'PATCH',
     headers:{
@@ -1962,7 +2011,7 @@ async function saveCanvas(){
       'Authorization':`Bearer ${SUPABASE_KEY}`,
       'Prefer':'return=minimal'
     },
-    body:JSON.stringify({state:{canvases:state.canvases,nextId:state.nextId}})
+    body:JSON.stringify(payload)
   })
   if(res.ok) showSaveIndicator('saved')
   else showSaveIndicator('error')
