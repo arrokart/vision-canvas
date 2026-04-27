@@ -5,6 +5,7 @@ import Dashboard from './pages/Dashboard'
 import Canvas from './pages/Canvas'
 import Shared from './pages/Shared'
 import Landing from './pages/Landing'
+import NotFound from './pages/NotFound'
 
 export default function App() {
   const [user, setUser] = useState<any>(null)
@@ -46,6 +47,7 @@ export default function App() {
             <Route path="/" element={<Navigate to="/dashboard" />} />
             <Route path="/dashboard" element={<Dashboard user={user} />} />
             <Route path="/canvas/:id" element={<Canvas />} />
+            <Route path="*" element={<NotFound />} />
           </>
         )}
       </Routes>
