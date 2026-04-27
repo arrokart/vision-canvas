@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
-import { useNavigate } from 'react-router-dom'cd
+import { useNavigate } from 'react-router-dom'
 
 export default function Dashboard({ user }: { user: any }) {
   const navigate = useNavigate()
