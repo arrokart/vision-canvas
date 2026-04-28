@@ -155,8 +155,19 @@ html,body{height:100%;overflow:hidden;font-family:'Outfit',sans-serif;
 #drop-hint-text{color:var(--accent2);font-size:18px;font-weight:500;}
 
 /* PANELS */
-#panels{width:var(--panel-w);background:var(--panel);border-left:1px solid var(--border);
-  display:flex;flex-direction:column;backdrop-filter:blur(20px);overflow:hidden;z-index:50;}
+#panels{
+  width:var(--panel-w);background:var(--panel);border-left:1px solid var(--border);
+  display:flex;flex-direction:column;backdrop-filter:blur(20px);
+  overflow-y:auto;z-index:50;flex-shrink:0;
+  resize:horizontal;overflow-x:hidden;min-width:200px;max-width:400px;
+  direction:rtl;
+}
+#panels > *{direction:ltr;}
+#panel-resize{
+  width:4px;background:transparent;cursor:col-resize;
+  flex-shrink:0;transition:.15s;
+}
+#panel-resize:hover{background:var(--accent);}
 .panel-section{display:flex;flex-direction:column;border-bottom:1px solid var(--border);}
 .panel-header{display:flex;align-items:center;justify-content:space-between;
   padding:8px 12px;cursor:pointer;}
@@ -425,6 +436,7 @@ html,body{height:100%;overflow:hidden;font-family:'Outfit',sans-serif;
   </div>
 
   <!-- PANELS -->
+  <div id="panel-resize"></div>
   <div id="panels">
 
     <!-- LAYERS -->
@@ -2068,6 +2080,30 @@ function showSaveIndicator(status){
   if(status==='saved') {el.textContent='✓ Saved';el.style.color='#52c97a'}
   if(status==='error') {el.textContent='✕ Error';el.style.color='#e05252'}
 }
+
+// Panel resize
+const panelResize = document.getElementById('panel-resize')
+const panels = document.getElementById('panels')
+let resizing = false, startX, startW
+
+panelResize.addEventListener('mousedown', e => {
+  resizing = true
+  startX = e.clientX
+  startW = panels.offsetWidth
+  document.body.style.cursor = 'col-resize'
+  document.body.style.userSelect = 'none'
+})
+document.addEventListener('mousemove', e => {
+  if(!resizing) return
+  const diff = startX - e.clientX
+  const newW = Math.min(400, Math.max(200, startW + diff))
+  panels.style.width = newW + 'px'
+})
+document.addEventListener('mouseup', () => {
+  resizing = false
+  document.body.style.cursor = ''
+  document.body.style.userSelect = ''
+})
 
 // ── INIT ──────────────────────────────────────────────────────────
 async function init(){
