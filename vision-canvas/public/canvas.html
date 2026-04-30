@@ -15,7 +15,7 @@
   --text3:#4a4a60;--danger:#e05252;--success:#52c97a;--warn:#f0a840;
   --toolbar-w:52px;--panel-w:268px;--topbar-h:44px;
 }
-html,body{height:100%;overflow:hidden;font-family:'Outfit',sans-serif;
+html,body{height:100%;overflow:hidden;margin:0;padding:0;font-family:'Outfit',sans-serif;
   background:var(--bg);color:var(--text);user-select:none;}
 
 /* TOP BAR */
@@ -695,6 +695,7 @@ function pushHistory(){
   c.future=[];
   updateHistoryBtns();
   scheduleSave();
+  scheduleThumbSave();
 }
 function undo(){
   const c=ac(); if(!c.history.length) return;
@@ -803,10 +804,10 @@ function startTextEdit(id,el){
 }
 
 // ── CANVAS THUMBNAIL ──────────────────────────────────────────────
-let thumbTimer;
+let uiThumbTimer;
 function scheduleThumb(){
-  clearTimeout(thumbTimer);
-  thumbTimer=setTimeout(generateThumb, 1500);
+  clearTimeout(uiThumbTimer);
+  uiThumbTimer=setTimeout(generateThumb, 1500);
 }
 async function generateThumb(){
   const items=ac().items.filter(i=>i.visible);
@@ -1964,11 +1965,33 @@ const CANVAS_ID = new URLSearchParams(window.location.search).get('id')
 const SUPABASE_URL = 'https://tzzbinwvtuvjhynlmjzo.supabase.co'
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR6emJpbnd2dHV2amh5bmxtanpvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzcyMTQwNDgsImV4cCI6MjA5Mjc5MDA0OH0.J5evLhHjvW3hn280SelzkenehL1qj7uHjW8uG-3HvZY'
 
-let saveTimer
+let saveTimer, thumbTimer
 function scheduleSave(){
   clearTimeout(saveTimer)
-  saveTimer=setTimeout(saveCanvas, 2000)
+  saveTimer = setTimeout(saveStateOnly, 2000)
   showSaveIndicator('saving')
+}
+
+async function saveStateOnly(){
+  if(!CANVAS_ID) return
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/canvases?id=eq.${CANVAS_ID}`,{
+    method:'PATCH',
+    headers:{
+      'Content-Type':'application/json',
+      'apikey':SUPABASE_KEY,
+      'Authorization':`Bearer ${SUPABASE_KEY}`,
+      'Prefer':'return=minimal'
+    },
+    body:JSON.stringify({state:{canvases:state.canvases,nextId:state.nextId}})
+  })
+  if(res.ok) showSaveIndicator('saved')
+  else showSaveIndicator('error')
+}
+
+// thumbnail only every 30 seconds
+function scheduleThumbSave(){
+  clearTimeout(thumbTimer)
+  thumbTimer = setTimeout(saveCanvas, 30000)
 }
 
 async function saveCanvas(){
