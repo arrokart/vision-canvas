@@ -151,6 +151,10 @@ body{display:flex;flex-direction:column;}
 .comment-author{font-weight:600;color:var(--text);}
 .comment-time{color:var(--text3);}
 .comment-body{font-size:12.5px;white-space:pre-wrap;color:var(--text2);line-height:1.45;}
+.comment-body-edit{width:100%;min-height:58px;background:var(--bg3);border:1px solid var(--border);
+  border-radius:8px;color:var(--text);font:inherit;font-size:12.5px;line-height:1.45;
+  padding:8px;resize:vertical;outline:none;}
+.comment-body-edit:focus{border-color:rgba(108,113,240,.55);}
 .comment-reply{display:grid;grid-template-columns:24px 1fr;gap:9px;align-items:center;}
 .comment-reply-box{height:36px;background:var(--bg3);border:1px solid var(--border);
   border-radius:8px;display:flex;align-items:center;padding:0 5px 0 10px;}
@@ -989,17 +993,17 @@ function addNoteItem(x,y,w=220,h=160){
 
 function addCommentItem(x,y,text){
   if(!canComment()) return;
-  const body=text??prompt('Comment');
-  if(!body||!body.trim()) return;
   pushHistory();
   const id=++state.nextId;
-  ac().items.push({id,type:'comment',name:`Comment ${nextCommentNumber()}`,
-    text:body.trim(),number:nextCommentNumber(),x,y,w:210,h:64,rot:0,opacity:100,
+  const number=nextCommentNumber();
+  ac().items.push({id,type:'comment',name:`Comment ${number}`,
+    text:(text||'').trim(),number,x,y,w:210,h:64,rot:0,opacity:100,
     visible:true,locked:false,flipH:false,flipV:false,z:maxZ()+1});
   state.selectedIds=[id];
   renderItems(); renderLayers();
   updateSelectionOverlay(); updateMultiSelBox();
   updateProps(); updateCanvasHint(); scheduleThumb();
+  setTimeout(()=>$('comment-main-input')?.focus(),0);
 }
 
 const SHAPE_LABELS={rect:'Rectangle',line:'Line',arrow:'Arrow',ellipse:'Ellipse',polygon:'Polygon',star:'Star'};
@@ -1360,7 +1364,7 @@ function renderCommentPanel(){
       <div class="comment-avatar">${item.number||''}</div>
       <div>
         <div class="comment-meta"><span class="comment-author">You</span><span class="comment-time">note</span></div>
-        <div class="comment-body">${escapeHtml(item.text||'')}</div>
+        ${canComment()?`<textarea class="comment-body-edit" id="comment-main-input" placeholder="Add a comment">${escapeHtml(item.text||'')}</textarea>`:`<div class="comment-body">${escapeHtml(item.text||'')}</div>`}
       </div>
     </div>
     ${replies.map(r=>`<div class="comment-row">
@@ -1376,6 +1380,12 @@ function renderCommentPanel(){
   commentPanel.classList.add('show');
   positionCommentPanel();
   const input=$('comment-reply-input'),send=$('comment-send-btn');
+  const mainInput=$('comment-main-input');
+  if(mainInput){
+    mainInput.addEventListener('change',()=>updateActiveCommentText(mainInput.value));
+    mainInput.addEventListener('blur',()=>updateActiveCommentText(mainInput.value));
+    mainInput.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key==='Enter'){e.preventDefault();mainInput.blur();}});
+  }
   if(input&&send){
     const submit=()=>addCommentReply(item,input.value);
     send.addEventListener('click',submit);
@@ -1391,15 +1401,19 @@ function addCommentReply(item,text){
   item.replies=[...(item.replies||[]),{text:text.trim(),at:Date.now()}];
   renderCommentPanel(); renderLayers(); scheduleThumb();
 }
+function updateActiveCommentText(text){
+  const item=activeComment(); if(!item||!canComment()) return;
+  const next=text.trim();
+  if(next===item.text) return;
+  pushHistory();
+  item.text=next;
+  const el=canvasWorld.querySelector(`[data-id="${item.id}"]`);
+  if(el) applyItemStyle(el,item);
+  renderLayers(); scheduleThumb(); scheduleSave();
+}
 function editActiveComment(){
   const item=activeComment(); if(!item||!canComment()) return;
-  const next=prompt('Edit comment',item.text||'');
-  if(next!==null&&next.trim()&&next!==item.text){
-    pushHistory(); item.text=next.trim();
-    const el=canvasWorld.querySelector(`[data-id="${item.id}"]`);
-    if(el) applyItemStyle(el,item);
-    renderCommentPanel(); renderLayers(); scheduleThumb();
-  }
+  $('comment-main-input')?.focus();
 }
 function resolveActiveComment(){
   const item=activeComment(); if(!item||!canComment()) return;
