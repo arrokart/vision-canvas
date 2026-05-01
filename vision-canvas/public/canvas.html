@@ -133,31 +133,32 @@ body{display:flex;flex-direction:column;}
   box-shadow:0 8px 24px rgba(108,113,240,.35);font-size:12px;font-weight:700;}
 .comment-pin span{transform:rotate(45deg);}
 .comment-pop{display:none;}
-.comment-panel{position:absolute;width:420px;max-width:calc(100% - 28px);background:#2d2d2d;
-  border:1px solid rgba(255,255,255,.14);border-radius:14px;color:#f4f4f4;z-index:420;
-  display:none;box-shadow:0 18px 50px rgba(0,0,0,.42);overflow:hidden;}
+.comment-panel{position:absolute;width:360px;max-width:calc(100% - 28px);background:rgba(17,17,21,.96);
+  border:1px solid var(--border2);border-radius:10px;color:var(--text);z-index:420;
+  display:none;box-shadow:0 18px 50px rgba(0,0,0,.42);overflow:hidden;backdrop-filter:blur(18px);}
 .comment-panel.show{display:block;}
-.comment-panel-head{height:46px;display:flex;align-items:center;justify-content:space-between;
-  padding:0 14px 0 18px;border-bottom:1px solid rgba(255,255,255,.1);font-weight:700;}
-.comment-panel-actions{display:flex;align-items:center;gap:10px;color:#fff;}
-.comment-icon-btn{width:26px;height:26px;border:none;background:transparent;color:#fff;
-  display:flex;align-items:center;justify-content:center;border-radius:5px;cursor:pointer;font-size:19px;}
+.comment-panel-head{height:42px;display:flex;align-items:center;justify-content:space-between;
+  padding:0 10px 0 14px;border-bottom:1px solid var(--border);font-size:13px;font-weight:600;}
+.comment-panel-actions{display:flex;align-items:center;gap:4px;color:var(--text2);}
+.comment-icon-btn{width:28px;height:28px;border:none;background:transparent;color:var(--text2);
+  display:flex;align-items:center;justify-content:center;border-radius:6px;cursor:pointer;font-size:15px;}
 .comment-icon-btn:hover{background:rgba(255,255,255,.08);}
-.comment-thread{padding:16px 18px 14px;display:flex;flex-direction:column;gap:14px;}
-.comment-row{display:grid;grid-template-columns:34px 1fr;gap:10px;}
-.comment-avatar{font-size:28px;font-weight:700;color:#050505;line-height:1;}
-.comment-meta{display:flex;gap:9px;align-items:center;font-size:14px;margin-bottom:8px;}
-.comment-author{font-weight:700;color:#fff;}
-.comment-time{color:#9b9b9b;}
-.comment-body{font-size:13px;font-weight:600;white-space:pre-wrap;color:#fff;}
-.comment-reply{display:grid;grid-template-columns:34px 1fr;gap:10px;align-items:center;}
-.comment-reply-box{height:42px;background:#3c3c3c;border-radius:18px;display:flex;align-items:center;
-  padding:0 8px 0 14px;}
+.comment-thread{padding:12px 14px 14px;display:flex;flex-direction:column;gap:12px;}
+.comment-row{display:grid;grid-template-columns:24px 1fr;gap:9px;}
+.comment-avatar{width:24px;height:24px;border-radius:50%;background:var(--accent);
+  color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;}
+.comment-meta{display:flex;gap:7px;align-items:center;font-size:12px;margin-bottom:5px;}
+.comment-author{font-weight:600;color:var(--text);}
+.comment-time{color:var(--text3);}
+.comment-body{font-size:12.5px;white-space:pre-wrap;color:var(--text2);line-height:1.45;}
+.comment-reply{display:grid;grid-template-columns:24px 1fr;gap:9px;align-items:center;}
+.comment-reply-box{height:36px;background:var(--bg3);border:1px solid var(--border);
+  border-radius:8px;display:flex;align-items:center;padding:0 5px 0 10px;}
 .comment-reply-box input{flex:1;background:transparent;border:none;outline:none;color:#fff;
-  font:inherit;font-size:15px;min-width:0;}
-.comment-send{width:30px;height:30px;border-radius:50%;border:none;background:#888;color:#222;
-  cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;}
-.comment-send:hover{background:#aaa;}
+  font:inherit;font-size:12.5px;min-width:0;}
+.comment-send{width:26px;height:26px;border-radius:6px;border:none;background:var(--accent);color:#fff;
+  cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;}
+.comment-send:hover{background:var(--accent2);}
 
 /* MINI MAP */
 #minimap{position:absolute;left:14px;bottom:14px;width:180px;height:124px;
@@ -547,10 +548,10 @@ body{display:flex;flex-direction:column;}
     </div>
     <div id="comment-panel" class="comment-panel">
       <div class="comment-panel-head">
-        <span>Comment</span>
+        <span>Review note</span>
         <div class="comment-panel-actions">
-          <button class="comment-icon-btn" id="comment-edit-btn" title="Edit">•••</button>
-          <button class="comment-icon-btn" id="comment-resolve-btn" title="Resolve">♡</button>
+          <button class="comment-icon-btn" id="comment-edit-btn" title="Edit">✎</button>
+          <button class="comment-icon-btn" id="comment-resolve-btn" title="Resolve">✓</button>
           <button class="comment-icon-btn" id="comment-close-btn" title="Close">×</button>
         </div>
       </div>
@@ -1356,20 +1357,20 @@ function renderCommentPanel(){
   const replies=item.replies||[];
   commentThread.innerHTML=`
     <div class="comment-row">
-      <div class="comment-avatar">A</div>
+      <div class="comment-avatar">${item.number||''}</div>
       <div>
-        <div class="comment-meta"><span class="comment-author">ADITYA</span><span class="comment-time">now</span></div>
+        <div class="comment-meta"><span class="comment-author">You</span><span class="comment-time">note</span></div>
         <div class="comment-body">${escapeHtml(item.text||'')}</div>
       </div>
     </div>
     ${replies.map(r=>`<div class="comment-row">
-      <div class="comment-avatar">A</div>
-      <div><div class="comment-meta"><span class="comment-author">ADITYA</span><span class="comment-time">reply</span></div>
+      <div class="comment-avatar">↳</div>
+      <div><div class="comment-meta"><span class="comment-author">You</span><span class="comment-time">reply</span></div>
       <div class="comment-body">${escapeHtml(r.text||'')}</div></div>
     </div>`).join('')}
     ${canComment()?`<div class="comment-reply">
-      <div class="comment-avatar">A</div>
-      <div class="comment-reply-box"><input id="comment-reply-input" placeholder="Reply"><button class="comment-send" id="comment-send-btn">↑</button></div>
+      <div class="comment-avatar">+</div>
+      <div class="comment-reply-box"><input id="comment-reply-input" placeholder="Add a reply"><button class="comment-send" id="comment-send-btn">↑</button></div>
     </div>`:''}
   `;
   commentPanel.classList.add('show');
