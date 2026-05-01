@@ -1411,6 +1411,10 @@ function updateActiveCommentText(text){
   if(el) applyItemStyle(el,item);
   renderLayers(); scheduleThumb(); scheduleSave();
 }
+function flushActiveCommentEditor(){
+  const input=$('comment-main-input');
+  if(input) updateActiveCommentText(input.value);
+}
 function editActiveComment(){
   const item=activeComment(); if(!item||!canComment()) return;
   $('comment-main-input')?.focus();
@@ -2241,6 +2245,7 @@ $('rotate-handle').addEventListener('mousedown',e=>{
 
 canvasArea.addEventListener('mousedown',e=>{
   if(state.editingId) return;
+  if(e.target.closest('#comment-panel')) return;
   if(e.button===1||(e.button===0&&(state.tool==='hand'||state.spaceHeld))){
     interaction={type:'pan',startMX:e.clientX,startMY:e.clientY,
                  startPX:state.pan.x,startPY:state.pan.y};
@@ -2263,6 +2268,11 @@ canvasArea.addEventListener('mousedown',e=>{
       return;
     }
     if(state.tool==='comment'&&!e.target.closest('.canvas-item')){
+      if(commentPanel.classList.contains('show')){
+        flushActiveCommentEditor();
+        commentPanel.classList.remove('show');
+        return;
+      }
       const wp=screenToWorld(e.clientX,e.clientY);
       addCommentItem(wp.x,wp.y); return;
     }
@@ -2469,6 +2479,7 @@ canvasArea.addEventListener('dblclick',e=>{
 document.addEventListener('mousedown',e=>{
   if(!commentPanel.classList.contains('show')) return;
   if(e.target.closest('#comment-panel')||e.target.closest('.comment-item')) return;
+  flushActiveCommentEditor();
   commentPanel.classList.remove('show');
 });
 canvasArea.addEventListener('wheel',e=>{
@@ -2499,6 +2510,8 @@ document.addEventListener('keydown',e=>{
       updateSelectionOverlay();updateProps();renderLayers();}}
   if(e.code==='Delete'||e.code==='Backspace'){if(state.selectedIds.length) deleteItems([...state.selectedIds]);}
   if(e.code==='Escape'){
+    flushActiveCommentEditor();
+    commentPanel.classList.remove('show');
     state.selectedIds=[];
     renderItemsHighlight(); updateSelectionOverlay(); updateMultiSelBox();
     updateProps(); renderLayers();}
@@ -2593,6 +2606,7 @@ commandModal.addEventListener('mousedown',e=>{if(e.target===commandModal) closeC
 function setTool(tool){
   if(ACCESS_MODE==='view') return;
   if(ACCESS_MODE==='comment'&&!['select','hand','comment'].includes(tool)) return;
+  flushActiveCommentEditor();
   state.tool=tool;
   document.querySelectorAll('.tool-btn[data-tool]').forEach(b=>b.classList.remove('active'));
   const btn=document.querySelector(`[data-tool="${tool}"]`);
