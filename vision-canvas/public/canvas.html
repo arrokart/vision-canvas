@@ -360,6 +360,22 @@ body{display:flex;flex-direction:column;}
   border:1px solid var(--border2);border-radius:4px;font-family:'Outfit',monospace;
   font-size:10px;color:var(--text);}
 
+/* COMMAND MENU */
+#command-modal{align-items:flex-start;padding-top:12vh;}
+#command-modal .modal-box{width:min(560px,calc(100vw - 28px));padding:10px;gap:8px;}
+#command-input{height:38px;background:var(--bg3);border:1px solid var(--border2);
+  border-radius:8px;color:var(--text);font-family:'Outfit',sans-serif;font-size:14px;
+  outline:none;padding:0 12px;}
+#command-input:focus{border-color:var(--accent);}
+#command-list{display:flex;flex-direction:column;gap:2px;max-height:360px;overflow-y:auto;}
+.cmd-item{display:flex;align-items:center;justify-content:space-between;gap:12px;
+  padding:9px 10px;border-radius:7px;color:var(--text2);font-size:13px;cursor:pointer;}
+.cmd-item:hover,.cmd-item.active{background:rgba(108,113,240,.14);color:var(--text);}
+.cmd-title{display:flex;flex-direction:column;gap:2px;}
+.cmd-title span:last-child{font-size:11px;color:var(--text3);}
+.cmd-key{font-size:10px;color:var(--text3);border:1px solid var(--border);
+  border-radius:4px;padding:1px 5px;white-space:nowrap;}
+
 /* TOAST */
 #toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);
   background:var(--bg3);border:1px solid var(--border2);color:var(--text);
@@ -729,6 +745,14 @@ body{display:flex;flex-direction:column;}
   </div>
 </div>
 
+<!-- COMMAND MENU -->
+<div class="modal-overlay" id="command-modal">
+  <div class="modal-box">
+    <input id="command-input" placeholder="Search commands..." autocomplete="off">
+    <div id="command-list"></div>
+  </div>
+</div>
+
 <!-- SHORTCUTS MODAL -->
 <div class="modal-overlay" id="shortcuts-modal">
   <div class="modal-box" style="width:460px;">
@@ -759,6 +783,9 @@ const rubberBand = $('rubber-band');
 const minimap = $('minimap');
 const minimapCanvas = $('minimap-canvas');
 const minimapView = $('minimap-view');
+const commandModal = $('command-modal');
+const commandInput = $('command-input');
+const commandList = $('command-list');
 
 // ── STATE ─────────────────────────────────────────────────────────
 let state = {
@@ -2224,6 +2251,7 @@ canvasArea.addEventListener('wheel',e=>{
 document.addEventListener('keydown',e=>{
   const onInput=e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA'
               ||e.target.contentEditable==='true';
+  if((e.ctrlKey||e.metaKey)&&e.code==='KeyK'){e.preventDefault();openCommandMenu();return;}
   if(onInput) return;
   if(e.code==='Space'){e.preventDefault();state.spaceHeld=true;canvasArea.classList.add('hand-tool');}
   if((e.ctrlKey||e.metaKey)&&e.code==='KeyZ'&&!e.shiftKey){e.preventDefault();undo();}
@@ -2265,6 +2293,73 @@ document.addEventListener('keyup',e=>{
 });
 
 // ── TOOLBAR ───────────────────────────────────────────────────────
+// COMMAND MENU
+let commandIndex=0,visibleCommands=[];
+const COMMANDS=[
+  {name:'Select tool',group:'Tools',key:'V',run:()=>setTool('select')},
+  {name:'Hand tool',group:'Tools',key:'H',run:()=>setTool('hand')},
+  {name:'Text tool',group:'Tools',key:'T',run:()=>setTool('text')},
+  {name:'Sticky note tool',group:'Tools',key:'N',run:()=>setTool('note')},
+  {name:'Rectangle tool',group:'Tools',key:'R',run:()=>setTool('rect')},
+  {name:'Line tool',group:'Tools',key:'L',run:()=>setTool('line')},
+  {name:'Arrow tool',group:'Tools',key:'Shift L',run:()=>setTool('arrow')},
+  {name:'Ellipse tool',group:'Tools',key:'O',run:()=>setTool('ellipse')},
+  {name:'Polygon tool',group:'Tools',key:'P',run:()=>setTool('polygon')},
+  {name:'Star tool',group:'Tools',key:'S',run:()=>setTool('star')},
+  {name:'Fit all content',group:'Canvas',run:fitAll,enabled:()=>ac().items.length>0},
+  {name:'Center view',group:'Canvas',run:centerView},
+  {name:'Toggle mini map',group:'Canvas',key:'M',run:toggleMiniMap},
+  {name:'Export canvas',group:'Canvas',run:()=>$('export-btn').click(),enabled:()=>ac().items.length>0},
+  {name:'Import image from URL',group:'Canvas',key:'Ctrl U',run:()=>$('url-btn').click()},
+  {name:'Share canvas',group:'Canvas',run:()=>$('share-btn').click()},
+  {name:'Group selection',group:'Selection',key:'Ctrl G',run:groupSelection,enabled:()=>state.selectedIds.length>1},
+  {name:'Ungroup selection',group:'Selection',key:'Ctrl Shift G',run:ungroupSelection,enabled:()=>selAll().some(i=>i.groupId)},
+  {name:'Duplicate selection',group:'Selection',key:'Ctrl D',run:()=>duplicateItems([...state.selectedIds]),enabled:()=>state.selectedIds.length>0},
+  {name:'Delete selection',group:'Selection',key:'Del',run:()=>deleteItems([...state.selectedIds]),enabled:()=>state.selectedIds.length>0},
+  {name:'Bring forward',group:'Arrange',key:']',run:()=>bringForward(state.selectedIds[0]),enabled:()=>state.selectedIds.length===1},
+  {name:'Send backward',group:'Arrange',key:'[',run:()=>sendBackward(state.selectedIds[0]),enabled:()=>state.selectedIds.length===1},
+  {name:'Bring to front',group:'Arrange',run:()=>bringToFront(state.selectedIds[0]),enabled:()=>state.selectedIds.length===1},
+  {name:'Send to back',group:'Arrange',run:()=>sendToBack(state.selectedIds[0]),enabled:()=>state.selectedIds.length===1},
+  {name:'Clear canvas',group:'Danger',run:clearCanvas,enabled:()=>ac().items.length>0},
+  {name:'Keyboard shortcuts',group:'Help',key:'?',run:showShortcuts},
+];
+function openCommandMenu(){
+  commandModal.classList.add('show');
+  commandInput.value='';
+  commandIndex=0;
+  renderCommandList();
+  setTimeout(()=>commandInput.focus(),0);
+}
+function closeCommandMenu(){commandModal.classList.remove('show');}
+function renderCommandList(){
+  const q=commandInput.value.trim().toLowerCase();
+  visibleCommands=COMMANDS.filter(c=>!c.enabled||c.enabled()).filter(c=>
+    !q||`${c.name} ${c.group} ${c.key||''}`.toLowerCase().includes(q)
+  );
+  if(commandIndex>=visibleCommands.length) commandIndex=Math.max(0,visibleCommands.length-1);
+  commandList.innerHTML=visibleCommands.length?visibleCommands.map((c,i)=>`
+    <div class="cmd-item ${i===commandIndex?'active':''}" data-cmd="${i}">
+      <div class="cmd-title"><span>${c.name}</span><span>${c.group}</span></div>
+      ${c.key?`<span class="cmd-key">${c.key}</span>`:''}
+    </div>
+  `).join(''):'<div class="cmd-item"><div class="cmd-title"><span>No commands found</span><span>Try another search</span></div></div>';
+}
+function runCommand(index=commandIndex){
+  const cmd=visibleCommands[index]; if(!cmd) return;
+  closeCommandMenu(); cmd.run();
+}
+commandInput.addEventListener('input',()=>{commandIndex=0;renderCommandList();});
+commandInput.addEventListener('keydown',e=>{
+  if(e.key==='ArrowDown'){e.preventDefault();commandIndex=Math.min(commandIndex+1,visibleCommands.length-1);renderCommandList();}
+  if(e.key==='ArrowUp'){e.preventDefault();commandIndex=Math.max(commandIndex-1,0);renderCommandList();}
+  if(e.key==='Enter'){e.preventDefault();runCommand();}
+  if(e.key==='Escape'){e.preventDefault();closeCommandMenu();}
+});
+commandList.addEventListener('mousedown',e=>{
+  const item=e.target.closest('.cmd-item[data-cmd]'); if(item) runCommand(parseInt(item.dataset.cmd,10));
+});
+commandModal.addEventListener('mousedown',e=>{if(e.target===commandModal) closeCommandMenu();});
+
 function setTool(tool){
   state.tool=tool;
   document.querySelectorAll('.tool-btn[data-tool]').forEach(b=>b.classList.remove('active'));
@@ -2291,12 +2386,7 @@ $('center-btn').addEventListener('click',centerView);
 $('minimap-btn').addEventListener('click',toggleMiniMap);
 $('undo-btn').addEventListener('click',undo);
 $('redo-btn').addEventListener('click',redo);
-$('clear-btn').addEventListener('click',()=>{
-  if(!ac().items.length) return;
-  if(!confirm('Clear all items?')) return;
-  pushHistory(); ac().items=[]; state.selectedIds=[];
-  renderAll();
-});
+$('clear-btn').addEventListener('click',clearCanvas);
 $('delete-btn').addEventListener('click',()=>{if(state.selectedIds.length) deleteItems([...state.selectedIds]);});
 
 // ── LAYER ORDER ───────────────────────────────────────────────────
@@ -2317,6 +2407,12 @@ function sendToBack(id){
   pushHistory();const item=getItem(id);
   item.z=Math.min(...ac().items.map(i=>i.z))-1;
   renderItems();renderLayers();
+}
+function clearCanvas(){
+  if(!ac().items.length) return;
+  if(!confirm('Clear all items?')) return;
+  pushHistory(); ac().items=[]; state.selectedIds=[];
+  renderAll();
 }
 
 // ── CONTEXT MENU ──────────────────────────────────────────────────
@@ -2394,6 +2490,7 @@ $('export-confirm').addEventListener('click',async()=>{
 // ── SHORTCUTS MODAL ───────────────────────────────────────────────
 const SHORTCUTS=[
   {section:'Tools'},
+  {action:'Command menu',keys:['Ctrl','K']},
   {action:'Select tool',keys:['V']},
   {action:'Hand / Pan tool',keys:['H']},
   {action:'Text tool',keys:['T']},
