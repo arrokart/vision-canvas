@@ -255,6 +255,8 @@ body{display:flex;flex-direction:column;}
   cursor:pointer;position:relative;flex-shrink:0;}
 .color-swatch input[type=color]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%;}
 .color-label{font-size:11px;color:var(--text2);}
+.prop-check{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text2);}
+.prop-check input{accent-color:var(--accent);}
 .font-select{background:var(--bg3);border:1px solid var(--border);border-radius:5px;
   padding:3px 6px;color:var(--text);font-family:'Outfit',sans-serif;font-size:12px;
   outline:none;width:100%;}
@@ -487,6 +489,21 @@ body{display:flex;flex-direction:column;}
       </div>
       <div class="panel-body" id="pb-props">
         <div id="no-sel-msg" class="no-sel">Select an item</div>
+        <div id="shape-defaults" style="display:none;flex-direction:column;gap:6px;">
+          <div class="multi-sel-info">Shape defaults</div>
+          <div class="color-row">
+            <div class="color-swatch"><input type="color" id="default-shape-fill" value="#6c71f0"></div>
+            <span class="color-label">Fill</span>
+            <button class="act-btn" id="default-shape-fill-clear" style="flex:0;padding:0 5px;height:22px;font-size:10px;">Clear</button>
+          </div>
+          <div class="color-row">
+            <div class="color-swatch"><input type="color" id="default-shape-stroke" value="#8b8ff4"></div>
+            <span class="color-label">Stroke</span>
+            <div class="prop-group" style="margin-left:auto;width:82px;">
+              <span class="lbl">W</span><input type="number" id="default-shape-stroke-width" step="1" min="0" max="40" value="2">
+            </div>
+          </div>
+        </div>
         <div id="multi-sel-msg" class="multi-sel-info" style="display:none"></div>
         <div id="props-content" style="display:none;flex-direction:column;gap:6px;">
           <div class="prop-2col">
@@ -566,6 +583,10 @@ body{display:flex;flex-direction:column;}
           <div class="action-row" style="margin-top:4px;">
             <button class="act-btn" id="m-dup-btn">⧉ Dup All</button>
             <button class="act-btn danger" id="m-del-btn">✕ Del All</button>
+          </div>
+          <div class="action-row">
+            <button class="act-btn" id="group-btn">Group</button>
+            <button class="act-btn" id="ungroup-btn">Ungroup</button>
           </div>
         </div>
       </div>
@@ -678,6 +699,10 @@ body{display:flex;flex-direction:column;}
         <option value="jpeg">JPEG</option>
       </select>
     </div>
+    <label class="prop-check" style="margin-top:8px;">
+      <input type="checkbox" id="export-selected-only">
+      Export selection only
+    </label>
     <div class="modal-actions">
       <button class="modal-btn" id="export-cancel">Cancel</button>
       <button class="modal-btn accent" id="export-confirm">Download</button>
@@ -723,12 +748,16 @@ let state = {
   tool:'select', interaction:null, spaceHeld:false,
   ctxItemId:null, editingId:null,
   snapEnabled:true,
+  nextGroupId:1,
+  shapeDefaults:{fill:'#6c71f0',stroke:'#8b8ff4',strokeWidth:2},
 };
 
 function ac(){ return state.canvases.find(c=>c.id===state.activeId); }
 function getItem(id){ return ac().items.find(i=>i.id===id); }
 function selFirst(){ return state.selectedIds.length===1 ? getItem(state.selectedIds[0]) : null; }
 function selAll(){ return state.selectedIds.map(id=>getItem(id)).filter(Boolean); }
+function groupMembers(groupId){ return ac().items.filter(i=>i.groupId===groupId); }
+function selectionIdsForItem(item){ return item&&item.groupId?groupMembers(item.groupId).map(i=>i.id):item?[item.id]:[]; }
 
 // ── HISTORY ───────────────────────────────────────────────────────
 function pushHistory(){
@@ -803,11 +832,12 @@ function addShapeItem(shape,x,y,w=160,h=110,flipH=false,flipV=false){
   pushHistory();
   const id=++state.nextId;
   const isLine=shape==='line'||shape==='arrow';
+  const defaults=state.shapeDefaults||{fill:'#6c71f0',stroke:'#8b8ff4',strokeWidth:2};
   ac().items.push({id,type:'shape',shape,name:`${SHAPE_LABELS[shape]||'Shape'} ${id}`,
     x,y,w:Math.max(20,w),h:Math.max(20,h),rot:0,opacity:100,
     visible:true,locked:false,flipH,flipV,z:maxZ()+1,
-    fill:isLine?'transparent':'#6c71f0',
-    stroke:'#8b8ff4',strokeWidth:isLine?4:2});
+    fill:isLine?'transparent':defaults.fill,
+    stroke:defaults.stroke,strokeWidth:isLine?Math.max(3,defaults.strokeWidth):defaults.strokeWidth});
   state.selectedIds=[id];
   renderItems(); renderLayers();
   updateSelectionOverlay(); updateMultiSelBox();
@@ -827,18 +857,42 @@ function deleteItems(ids){
 function duplicateItems(ids){
   if(!ids.length) return;
   pushHistory();
-  const newIds=[];
+  const newIds=[], groupMap={};
   ids.forEach(id=>{
     const src=getItem(id); if(!src) return;
     const nid=++state.nextId;
-    ac().items.push({...src,id:nid,x:src.x+20,y:src.y+20,
-      z:maxZ()+1,name:src.name+' copy'});
+    const copy={...src,id:nid,x:src.x+20,y:src.y+20,
+      z:maxZ()+1,name:src.name+' copy'};
+    if(src.groupId){
+      groupMap[src.groupId]=groupMap[src.groupId]||state.nextGroupId++;
+      copy.groupId=groupMap[src.groupId];
+    }
+    ac().items.push(copy);
     newIds.push(nid);
   });
   state.selectedIds=newIds;
   renderItems(); renderLayers();
   updateSelectionOverlay(); updateMultiSelBox();
   updateProps(); scheduleThumb();
+}
+
+function groupSelection(){
+  const items=selAll().filter(i=>!i.locked);
+  if(items.length<2){showToast('Select 2+ unlocked items');return;}
+  pushHistory();
+  const gid=state.nextGroupId++;
+  items.forEach(i=>i.groupId=gid);
+  updateProps(); renderLayers(); scheduleThumb();
+  showToast('Grouped');
+}
+
+function ungroupSelection(){
+  const groups=new Set(selAll().map(i=>i.groupId).filter(Boolean));
+  if(!groups.size){showToast('No group selected');return;}
+  pushHistory();
+  ac().items.forEach(i=>{if(groups.has(i.groupId)) delete i.groupId;});
+  updateProps(); renderLayers(); scheduleThumb();
+  showToast('Ungrouped');
 }
 
 // ── TEXT EDITING ──────────────────────────────────────────────────
@@ -1263,10 +1317,13 @@ function buildAlignTools(){
 // ── PROPS PANEL ───────────────────────────────────────────────────
 function updateProps(){
   const item=selFirst(), count=state.selectedIds.length;
-  $('no-sel-msg').style.display=count===0?'block':'none';
+  const showDefaults=count===0&&isShapeTool(state.tool);
+  $('no-sel-msg').style.display=count===0&&!showDefaults?'block':'none';
+  $('shape-defaults').style.display=showDefaults?'flex':'none';
   $('multi-sel-msg').style.display=count>1?'block':'none';
   $('props-content').style.display=count===1?'flex':'none';
   $('multi-props').style.display=count>1?'flex':'none';
+  if(showDefaults) updateShapeDefaultsUI();
   if(count>1) $('multi-sel-msg').textContent=`${count} items selected`;
   if(!item) return;
   $('px').value=Math.round(item.x); $('py').value=Math.round(item.y);
@@ -1309,6 +1366,12 @@ function setColorControl(id,value,fallback){
   input.parentElement.style.background=value==='transparent'
     ? 'linear-gradient(135deg,transparent 0 45%,rgba(255,255,255,.35) 45% 55%,transparent 55% 100%)'
     : hex;
+}
+function updateShapeDefaultsUI(){
+  const d=state.shapeDefaults;
+  setColorControl('default-shape-fill',d.fill,'#6c71f0');
+  setColorControl('default-shape-stroke',d.stroke,'#8b8ff4');
+  $('default-shape-stroke-width').value=d.strokeWidth;
 }
 
 function bindPropNum(id,key){
@@ -1354,6 +1417,8 @@ $('dup-btn').addEventListener('click',()=>{ if(state.selectedIds.length) duplica
 $('del-btn').addEventListener('click',()=>{ if(state.selectedIds.length) deleteItems([...state.selectedIds]); });
 $('m-dup-btn').addEventListener('click',()=>{ if(state.selectedIds.length) duplicateItems([...state.selectedIds]); });
 $('m-del-btn').addEventListener('click',()=>{ if(state.selectedIds.length) deleteItems([...state.selectedIds]); });
+$('group-btn').addEventListener('click',groupSelection);
+$('ungroup-btn').addEventListener('click',ungroupSelection);
 
 function bindTextProp(id,key,isNum){
   $(id).addEventListener('change',e=>{
@@ -1398,6 +1463,7 @@ function updateShapeProp(key,value,withHistory=false){
   const item=selFirst(); if(!item||item.type!=='shape'||item.locked) return;
   if(withHistory) pushHistory();
   item[key]=value;
+  if(state.shapeDefaults) state.shapeDefaults[key]=value;
   const el=canvasWorld.querySelector(`[data-id="${item.id}"]`);
   if(el) applyItemStyle(el,item);
   updateProps(); scheduleSave(); scheduleThumb();
@@ -1408,6 +1474,18 @@ $('shape-stroke-width').addEventListener('change',e=>
   updateShapeProp('strokeWidth',Math.max(0,parseFloat(e.target.value)||0),true)
 );
 $('shape-fill-clear').addEventListener('click',()=>updateShapeProp('fill','transparent',true));
+
+function updateDefaultShapeProp(key,value){
+  state.shapeDefaults[key]=value;
+  updateShapeDefaultsUI();
+  scheduleSave();
+}
+$('default-shape-fill').addEventListener('input',e=>updateDefaultShapeProp('fill',e.target.value));
+$('default-shape-stroke').addEventListener('input',e=>updateDefaultShapeProp('stroke',e.target.value));
+$('default-shape-stroke-width').addEventListener('change',e=>
+  updateDefaultShapeProp('strokeWidth',Math.max(0,parseFloat(e.target.value)||0))
+);
+$('default-shape-fill-clear').addEventListener('click',()=>updateDefaultShapeProp('fill','transparent'));
 
 let layerDrag={id:null,startY:0};
 
@@ -1446,10 +1524,11 @@ function renderLayers(){
     el.addEventListener('click',e=>{
       if(e.target.closest('.layer-actions')||e.target.closest('[data-name]')) return;
       const id=parseInt(el.dataset.id);
+      const item=getItem(id), idsToSelect=selectionIdsForItem(item);
       if(e.shiftKey){
-        if(state.selectedIds.includes(id)) state.selectedIds=state.selectedIds.filter(i=>i!==id);
-        else state.selectedIds=[...state.selectedIds,id];
-      } else state.selectedIds=[id];
+        if(idsToSelect.every(i=>state.selectedIds.includes(i))) state.selectedIds=state.selectedIds.filter(i=>!idsToSelect.includes(i));
+        else state.selectedIds=[...new Set([...state.selectedIds,...idsToSelect])];
+      } else state.selectedIds=idsToSelect;
       renderItemsHighlight(); updateSelectionOverlay();
       updateMultiSelBox(); updateProps(); renderLayers();
     });
@@ -1761,15 +1840,17 @@ function onItemMousedown(e){
   if(e.button!==0) return;
   e.stopPropagation();
   const id=parseInt(e.currentTarget.dataset.id);
+  const clicked=getItem(id);
+  const idsToSelect=selectionIdsForItem(clicked);
   if(e.shiftKey){
-    if(state.selectedIds.includes(id)) state.selectedIds=state.selectedIds.filter(i=>i!==id);
-    else state.selectedIds=[...state.selectedIds,id];
+    if(idsToSelect.every(i=>state.selectedIds.includes(i))) state.selectedIds=state.selectedIds.filter(i=>!idsToSelect.includes(i));
+    else state.selectedIds=[...new Set([...state.selectedIds,...idsToSelect])];
   } else {
-    if(!state.selectedIds.includes(id)) state.selectedIds=[id];
+    if(!idsToSelect.every(i=>state.selectedIds.includes(i))) state.selectedIds=idsToSelect;
   }
   renderItemsHighlight(); updateSelectionOverlay(); updateMultiSelBox();
   updateProps(); renderLayers();
-  const item=getItem(id);
+  const item=clicked;
   if(item&&!item.locked){
     const allSel=selAll().filter(i=>!i.locked);
     interaction={type:'move',startMX:e.clientX,startMY:e.clientY,
@@ -2025,6 +2106,8 @@ document.addEventListener('keydown',e=>{
     renderItemsHighlight(); updateSelectionOverlay(); updateMultiSelBox();
     updateProps(); renderLayers();}
   if((e.ctrlKey||e.metaKey)&&e.code==='KeyD'){e.preventDefault();if(state.selectedIds.length) duplicateItems([...state.selectedIds]);}
+  if((e.ctrlKey||e.metaKey)&&e.code==='KeyG'&&!e.shiftKey){e.preventDefault();groupSelection();}
+  if((e.ctrlKey||e.metaKey)&&e.code==='KeyG'&&e.shiftKey){e.preventDefault();ungroupSelection();}
   if((e.ctrlKey||e.metaKey)&&e.code==='KeyU'){e.preventDefault();$('url-btn').click();}
   if((e.ctrlKey||e.metaKey)&&e.code==='KeyL'){e.preventDefault();
     const item=selFirst(); if(item){pushHistory();item.locked=!item.locked;
@@ -2060,6 +2143,7 @@ function setTool(tool){
   if(btn) btn.classList.add('active');
   canvasArea.classList.toggle('hand-tool',tool==='hand');
   canvasArea.classList.toggle('text-tool',tool==='text'||isShapeTool(tool));
+  updateProps();
 }
 document.querySelectorAll('.tool-btn[data-tool]').forEach(b=>{
   b.addEventListener('click',()=>setTool(b.dataset.tool));
@@ -2128,17 +2212,28 @@ ctxMenu.querySelectorAll('.ctx-item').forEach(item=>{
 // ── EXPORT ────────────────────────────────────────────────────────
 $('export-btn').addEventListener('click',()=>{
   if(!ac().items.length){showToast('Nothing to export');return;}
+  $('export-selected-only').checked=state.selectedIds.length>0;
+  $('export-selected-only').disabled=state.selectedIds.length===0;
   $('export-modal').classList.add('show');
 });
 $('export-cancel').addEventListener('click',()=>$('export-modal').classList.remove('show'));
 $('export-confirm').addEventListener('click',async()=>{
   $('export-modal').classList.remove('show');
-  const items=ac().items.filter(i=>i.visible);
+  const selectedOnly=$('export-selected-only').checked&&state.selectedIds.length>0;
+  const exportIds=new Set(selectedOnly?state.selectedIds:ac().items.map(i=>i.id));
+  const items=ac().items.filter(i=>i.visible&&exportIds.has(i.id));
   if(!items.length){showToast('No visible items');return;}
   const pad=40,scale=parseInt($('export-scale').value)||2,fmt=$('export-format').value||'png';
   const minX=Math.min(...items.map(i=>i.x))-pad,minY=Math.min(...items.map(i=>i.y))-pad;
   const maxX=Math.max(...items.map(i=>i.x+i.w))+pad,maxY=Math.max(...items.map(i=>i.y+i.h))+pad;
+  const hidden=[];
   const saved={pan:{...state.pan},zoom:state.zoom,sel:[...state.selectedIds]};
+  if(selectedOnly){
+    ac().items.forEach(i=>{
+      if(!exportIds.has(i.id)&&i.visible){hidden.push(i);i.visible=false;}
+    });
+    renderItems();
+  }
   state.selectedIds=[]; state.pan={x:0,y:0}; state.zoom=1;
   applyTransform(); selOverlay.style.display='none'; multiSelBox.style.display='none';
   renderItemsHighlight(); showToast('Exporting…');
@@ -2154,7 +2249,9 @@ $('export-confirm').addEventListener('click',async()=>{
     link.href=c.toDataURL(fmt==='jpeg'?'image/jpeg':'image/png',0.95);
     link.click(); showToast('Exported!');
   }catch(err){showToast('Export failed');}
+  hidden.forEach(i=>i.visible=true);
   state.selectedIds=saved.sel; state.pan=saved.pan; state.zoom=saved.zoom;
+  if(hidden.length) renderItems();
   applyTransform(); updateSelectionOverlay(); updateMultiSelBox(); renderItemsHighlight();
 });
 
@@ -2182,6 +2279,8 @@ const SHORTCUTS=[
   {action:'Deselect',keys:['Esc']},
   {section:'Items'},
   {action:'Duplicate',keys:['Ctrl','D']},
+  {action:'Group',keys:['Ctrl','G']},
+  {action:'Ungroup',keys:['Ctrl','Shift','G']},
   {action:'Delete',keys:['Del']},
   {action:'Lock / Unlock',keys:['Ctrl','L']},
   {action:'Bring forward',keys:[']']},
@@ -2271,7 +2370,10 @@ async function saveStateOnly(){
       'Authorization':`Bearer ${SUPABASE_KEY}`,
       'Prefer':'return=minimal'
     },
-    body:JSON.stringify({state:{canvases:state.canvases,nextId:state.nextId}})
+    body:JSON.stringify({state:{
+      canvases:state.canvases,nextId:state.nextId,
+      nextGroupId:state.nextGroupId,shapeDefaults:state.shapeDefaults
+    }})
   })
   if(res.ok) showSaveIndicator('saved')
   else showSaveIndicator('error')
@@ -2376,6 +2478,8 @@ async function loadCanvas(){
   if(saved?.canvases){
     state.canvases=saved.canvases
     state.nextId=saved.nextId||1
+    state.nextGroupId=saved.nextGroupId||Math.max(1,...state.canvases.flatMap(c=>(c.items||[]).map(i=>i.groupId||0)))+1
+    state.shapeDefaults={fill:'#6c71f0',stroke:'#8b8ff4',strokeWidth:2,...(saved.shapeDefaults||{})}
     state.activeId=state.canvases[0]?.id||1
     state.canvases.forEach(c=>{
       if(!c.history) c.history=[]
