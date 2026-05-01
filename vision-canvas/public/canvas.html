@@ -127,6 +127,14 @@ body{display:flex;flex-direction:column;}
 .text-content[contenteditable="true"]{cursor:text;user-select:text;}
 .note-item{border-radius:6px;box-shadow:0 10px 30px rgba(0,0,0,.22);}
 .note-item .text-content{border-radius:6px;color:#171717;background:#ffd966;}
+.comment-item{overflow:visible!important;border:none!important;}
+.comment-pin{width:30px;height:30px;border-radius:50% 50% 50% 6px;background:var(--accent);
+  color:#fff;transform:rotate(-45deg);display:flex;align-items:center;justify-content:center;
+  box-shadow:0 8px 24px rgba(108,113,240,.35);font-size:12px;font-weight:700;}
+.comment-pin span{transform:rotate(45deg);}
+.comment-pop{position:absolute;left:28px;top:8px;width:180px;min-height:44px;background:var(--bg4);
+  border:1px solid var(--border2);border-radius:8px;padding:8px;color:var(--text);
+  font-size:12px;line-height:1.35;box-shadow:0 12px 30px rgba(0,0,0,.35);white-space:pre-wrap;}
 
 /* MINI MAP */
 #minimap{position:absolute;left:14px;bottom:14px;width:180px;height:124px;
@@ -461,6 +469,8 @@ body{display:flex;flex-direction:column;}
       <svg viewBox="0 0 24 24"><path d="M4 6h16v2H4V6zm4 4h8v2H8v-2zm2 4h4v2h-4v-2z"/></svg></button>
     <button class="tool-btn" data-tool="note"><span class="tool-tip">Sticky Note (N)</span>
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 4h14v11l-5 5H5z"/><path d="M14 20v-5h5"/></svg></button>
+    <button class="tool-btn" data-tool="comment"><span class="tool-tip">Comment Pin (C)</span>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 11.5a8.4 8.4 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7a8.4 8.4 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.4 8.4 0 0 1 3.8-.9h.5A8.5 8.5 0 0 1 21 11z"/></svg></button>
     <div class="tool-sep"></div>
     <button class="tool-btn" data-tool="rect"><span class="tool-tip">Rectangle (R)</span>
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="5" width="16" height="14" rx="1"/></svg></button>
@@ -764,6 +774,26 @@ body{display:flex;flex-direction:column;}
   </div>
 </div>
 
+<!-- SHARE MODAL -->
+<div class="modal-overlay" id="share-modal">
+  <div class="modal-box" style="width:340px;">
+    <div class="modal-title">Share Canvas</div>
+    <div class="modal-row">
+      <span>Permission</span>
+      <select class="modal-select" id="share-mode">
+        <option value="view">View only</option>
+        <option value="comment">Can comment</option>
+        <option value="edit">Can edit</option>
+      </select>
+    </div>
+    <div class="modal-hint">Comment links allow adding and editing comment pins only.</div>
+    <div class="modal-actions">
+      <button class="modal-btn" id="share-cancel">Cancel</button>
+      <button class="modal-btn accent" id="share-copy">Copy Link</button>
+    </div>
+  </div>
+</div>
+
 <!-- COMMAND MENU -->
 <div class="modal-overlay" id="command-modal">
   <div class="modal-box">
@@ -787,8 +817,11 @@ body{display:flex;flex-direction:column;}
 
 <script>
 // Block all editing in readonly mode immediately
-const _isReadonly = new URLSearchParams(window.location.search).get('readonly');
-if(_isReadonly) {
+const URL_PARAMS = new URLSearchParams(window.location.search);
+const ACCESS_MODE = URL_PARAMS.get('readonly') ? 'view' : (URL_PARAMS.get('mode') || 'edit');
+function canEditAll(){return ACCESS_MODE==='edit';}
+function canComment(){return ACCESS_MODE==='edit'||ACCESS_MODE==='comment';}
+if(ACCESS_MODE==='view') {
   document.addEventListener('contextmenu', e=>e.preventDefault(), true);
 }
 
@@ -860,8 +893,12 @@ function updateHistoryBtns(){
 
 // ── ITEMS ─────────────────────────────────────────────────────────
 function maxZ(){ const it=ac().items; return it.length?Math.max(...it.map(i=>i.z)):0; }
+function nextCommentNumber(){
+  return ac().items.filter(i=>i.type==='comment').reduce((m,i)=>Math.max(m,i.number||0),0)+1;
+}
 
 function addImageItem(src,x,y,w,h){
+  if(!canEditAll()) return;
   pushHistory();
   const id=++state.nextId;
   ac().items.push({id,type:'image',src,name:`Image ${id}`,
@@ -874,6 +911,7 @@ function addImageItem(src,x,y,w,h){
 }
 
 function addTextItem(x,y,w=220,h=70){
+  if(!canEditAll()) return;
   pushHistory();
   const id=++state.nextId;
   ac().items.push({id,type:'text',name:`Text ${id}`,
@@ -893,6 +931,7 @@ function addTextItem(x,y,w=220,h=70){
 }
 
 function addNoteItem(x,y,w=220,h=160){
+  if(!canEditAll()) return;
   pushHistory();
   const id=++state.nextId;
   ac().items.push({id,type:'note',name:`Note ${id}`,
@@ -911,12 +950,28 @@ function addNoteItem(x,y,w=220,h=160){
   },80);
 }
 
+function addCommentItem(x,y,text){
+  if(!canComment()) return;
+  const body=text??prompt('Comment');
+  if(!body||!body.trim()) return;
+  pushHistory();
+  const id=++state.nextId;
+  ac().items.push({id,type:'comment',name:`Comment ${nextCommentNumber()}`,
+    text:body.trim(),number:nextCommentNumber(),x,y,w:210,h:64,rot:0,opacity:100,
+    visible:true,locked:false,flipH:false,flipV:false,z:maxZ()+1});
+  state.selectedIds=[id];
+  renderItems(); renderLayers();
+  updateSelectionOverlay(); updateMultiSelBox();
+  updateProps(); updateCanvasHint(); scheduleThumb();
+}
+
 const SHAPE_LABELS={rect:'Rectangle',line:'Line',arrow:'Arrow',ellipse:'Ellipse',polygon:'Polygon',star:'Star'};
 const SHAPE_TOOLS=new Set(Object.keys(SHAPE_LABELS));
 function isShapeTool(tool){
   return SHAPE_TOOLS.has(tool);
 }
 function addShapeItem(shape,x,y,w=160,h=110,flipH=false,flipV=false){
+  if(!canEditAll()) return;
   pushHistory();
   const id=++state.nextId;
   const isLine=shape==='line'||shape==='arrow';
@@ -934,6 +989,8 @@ function addShapeItem(shape,x,y,w=160,h=110,flipH=false,flipV=false){
 
 function deleteItems(ids){
   if(!ids.length) return;
+  if(ACCESS_MODE==='comment') ids=ids.filter(id=>getItem(id)?.type==='comment');
+  if(!ids.length) return;
   pushHistory();
   ids.forEach(id=>{ ac().items=ac().items.filter(i=>i.id!==id); });
   state.selectedIds=state.selectedIds.filter(id=>!ids.includes(id));
@@ -943,6 +1000,8 @@ function deleteItems(ids){
 }
 
 function duplicateItems(ids){
+  if(!ids.length) return;
+  if(ACCESS_MODE==='comment') ids=ids.filter(id=>getItem(id)?.type==='comment');
   if(!ids.length) return;
   pushHistory();
   const newIds=[], groupMap={};
@@ -1140,12 +1199,14 @@ function renderItems(){
     let el=existing[String(item.id)];
     if(!el){
       el=document.createElement('div');
-      el.className='canvas-item'+((item.type==='text'||item.type==='note')?' text-item':'')+(item.type==='note'?' note-item':'');
+      el.className='canvas-item'+((item.type==='text'||item.type==='note')?' text-item':'')+(item.type==='note'?' note-item':'')+(item.type==='comment'?' comment-item':'');
       el.dataset.id=item.id; el.dataset.type=item.type||'image';
       if(item.type==='text'||item.type==='note'){
         const tc=document.createElement('div');
         tc.className='text-content'; tc.contentEditable='false';
         el.appendChild(tc);
+      } else if(item.type==='comment'){
+        el.innerHTML='<div class="comment-pin"><span></span></div><div class="comment-pop"></div>';
       } else if(item.type==='shape'){
         const sc=document.createElement('div');
         sc.className='shape-content';
@@ -1195,6 +1256,11 @@ function applyItemStyle(el,item){
   if(item.type==='shape'){
     const sc=el.querySelector('.shape-content');
     if(sc) sc.innerHTML=shapeMarkup(item);
+  }
+  if(item.type==='comment'){
+    const pin=el.querySelector('.comment-pin span'),pop=el.querySelector('.comment-pop');
+    if(pin) pin.textContent=item.number||'';
+    if(pop) pop.textContent=item.text||'';
   }
 }
 
@@ -1364,7 +1430,7 @@ function drawMiniMap(){
   items.forEach(item=>{
     const x=ox+(item.x-b.minX+pad)*scale,y=oy+(item.y-b.minY+pad)*scale;
     const w=Math.max(2,item.w*scale),h=Math.max(2,item.h*scale);
-    ctx.fillStyle=item.type==='note'?(item.bgColor||'#ffd966'):item.type==='shape'?(item.fill==='transparent'?'rgba(139,143,244,.18)':item.fill||'#6c71f0'):'rgba(238,238,245,.42)';
+    ctx.fillStyle=item.type==='comment'?'#8b8ff4':item.type==='note'?(item.bgColor||'#ffd966'):item.type==='shape'?(item.fill==='transparent'?'rgba(139,143,244,.18)':item.fill||'#6c71f0'):'rgba(238,238,245,.42)';
     ctx.strokeStyle=item.type==='shape'?(item.stroke||'#8b8ff4'):'rgba(238,238,245,.65)';
     ctx.lineWidth=1;
     ctx.fillRect(x,y,w,h); ctx.strokeRect(x,y,w,h);
@@ -1634,6 +1700,7 @@ let layerDrag={id:null,startY:0};
 function layerThumb(item){
   if(item.type==='text') return 'T';
   if(item.type==='note') return 'N';
+  if(item.type==='comment') return item.number||'C';
   if(item.type==='shape'){
     const icons={rect:'▭',line:'╱',arrow:'↗',ellipse:'○',polygon:'△',star:'☆'};
     return icons[item.shape]||'□';
@@ -1651,7 +1718,7 @@ function renderLayers(){
     <div class="layer-item${state.selectedIds.includes(item.id)?' selected':''}"
          data-id="${item.id}" draggable="true">
       <div class="layer-drag-handle" title="Drag to reorder">⠿</div>
-      <div class="layer-thumb ${(item.type==='text'||item.type==='note')?'text-thumb':item.type==='shape'?'shape-thumb':''}">
+      <div class="layer-thumb ${(item.type==='text'||item.type==='note'||item.type==='comment')?'text-thumb':item.type==='shape'?'shape-thumb':''}">
         ${layerThumb(item)}
       </div>
       <div class="layer-name-el" data-name="${item.id}" contenteditable="false">${item.name}</div>
@@ -1936,17 +2003,18 @@ function loadFiles(files,px,py){
 }
 $('upload-btn').addEventListener('click',()=>$('file-input').click());
 $('file-input').addEventListener('change',e=>{loadFiles(e.target.files);e.target.value='';});
-canvasArea.addEventListener('dragover',e=>{e.preventDefault();$('drop-hint').style.display='flex';});
+canvasArea.addEventListener('dragover',e=>{e.preventDefault();if(canEditAll()) $('drop-hint').style.display='flex';});
 canvasArea.addEventListener('dragleave',e=>{if(!canvasArea.contains(e.relatedTarget))$('drop-hint').style.display='none';});
 canvasArea.addEventListener('drop',e=>{
   e.preventDefault(); $('drop-hint').style.display='none';
+  if(!canEditAll()) return;
   const files=[...e.dataTransfer.files].filter(f=>f.type.startsWith('image/'));
   if(files.length){loadFiles(files,e.clientX,e.clientY);return;}
   const url=e.dataTransfer.getData('text/uri-list')||e.dataTransfer.getData('text/plain');
   if(url&&(url.startsWith('http')||url.startsWith('data:'))) loadImage(url,e.clientX,e.clientY);
 });
 document.addEventListener('paste',e=>{
-  if(state.editingId) return;
+  if(state.editingId||!canEditAll()) return;
   [...e.clipboardData.items].filter(i=>i.type.startsWith('image/')).forEach(i=>{
     const blob=i.getAsFile();
     const reader=new FileReader();
@@ -1984,6 +2052,7 @@ function onItemMousedown(e){
   e.stopPropagation();
   const id=parseInt(e.currentTarget.dataset.id);
   const clicked=getItem(id);
+  if(ACCESS_MODE==='comment'&&clicked?.type!=='comment') return;
   const idsToSelect=selectionIdsForItem(clicked);
   if(e.shiftKey){
     if(idsToSelect.every(i=>state.selectedIds.includes(i))) state.selectedIds=state.selectedIds.filter(i=>!idsToSelect.includes(i));
@@ -2006,12 +2075,19 @@ function onItemDblclick(e){
   const id=parseInt(e.currentTarget.dataset.id);
   const item=getItem(id);
   if(item&&(item.type==='text'||item.type==='note')) startTextEdit(id,e.currentTarget);
+  if(item&&item.type==='comment'&&canComment()){
+    const next=prompt('Edit comment',item.text||'');
+    if(next!==null&&next.trim()&&next!==item.text){
+      pushHistory(); item.text=next.trim(); applyItemStyle(e.currentTarget,item);
+      renderLayers(); scheduleThumb();
+    }
+  }
 }
 function onItemContextmenu(e){
   e.preventDefault();
-  const isReadonly=new URLSearchParams(window.location.search).get('readonly');
-  if(isReadonly) return;
   const id=parseInt(e.currentTarget.dataset.id);
+  const item=getItem(id);
+  if(ACCESS_MODE==='view'||(ACCESS_MODE==='comment'&&item?.type!=='comment')) return;
   state.ctxItemId=id;
   if(!state.selectedIds.includes(id)) state.selectedIds=[id];
   renderItemsHighlight(); updateSelectionOverlay(); updateMultiSelBox();
@@ -2061,6 +2137,10 @@ canvasArea.addEventListener('mousedown',e=>{
       interaction={type:'notecreate',startMX:e.clientX,startMY:e.clientY,lastMX:e.clientX,lastMY:e.clientY};
       rubberBand.style.display='none';
       return;
+    }
+    if(state.tool==='comment'&&!e.target.closest('.canvas-item')){
+      const wp=screenToWorld(e.clientX,e.clientY);
+      addCommentItem(wp.x,wp.y); return;
     }
     if(state.tool==='select'&&!e.target.closest('.canvas-item')&&!e.target.closest('#selection-overlay')){
       state.selectedIds=[];
@@ -2296,6 +2376,7 @@ document.addEventListener('keydown',e=>{
   if(e.code==='KeyV'&&!e.ctrlKey&&!e.metaKey) setTool('select');
   if(e.code==='KeyH') setTool('hand');
   if(e.code==='KeyT') setTool('text');
+  if(e.code==='KeyC'&&!e.ctrlKey&&!e.metaKey) setTool('comment');
   if(e.code==='KeyM'&&!e.ctrlKey&&!e.metaKey){e.preventDefault();toggleMiniMap();}
   if(e.code==='KeyN'&&!e.ctrlKey&&!e.metaKey) setTool('note');
   if(e.code==='KeyR'&&!e.ctrlKey&&!e.metaKey) setTool('rect');
@@ -2318,6 +2399,7 @@ const COMMANDS=[
   {name:'Select tool',group:'Tools',key:'V',run:()=>setTool('select')},
   {name:'Hand tool',group:'Tools',key:'H',run:()=>setTool('hand')},
   {name:'Text tool',group:'Tools',key:'T',run:()=>setTool('text')},
+  {name:'Comment pin tool',group:'Tools',key:'C',run:()=>setTool('comment')},
   {name:'Sticky note tool',group:'Tools',key:'N',run:()=>setTool('note')},
   {name:'Rectangle tool',group:'Tools',key:'R',run:()=>setTool('rect')},
   {name:'Line tool',group:'Tools',key:'L',run:()=>setTool('line')},
@@ -2380,12 +2462,14 @@ commandList.addEventListener('mousedown',e=>{
 commandModal.addEventListener('mousedown',e=>{if(e.target===commandModal) closeCommandMenu();});
 
 function setTool(tool){
+  if(ACCESS_MODE==='view') return;
+  if(ACCESS_MODE==='comment'&&!['select','hand','comment'].includes(tool)) return;
   state.tool=tool;
   document.querySelectorAll('.tool-btn[data-tool]').forEach(b=>b.classList.remove('active'));
   const btn=document.querySelector(`[data-tool="${tool}"]`);
   if(btn) btn.classList.add('active');
   canvasArea.classList.toggle('hand-tool',tool==='hand');
-  canvasArea.classList.toggle('text-tool',tool==='text'||tool==='note'||isShapeTool(tool));
+  canvasArea.classList.toggle('text-tool',tool==='text'||tool==='note'||tool==='comment'||isShapeTool(tool));
   updateProps();
 }
 document.querySelectorAll('.tool-btn[data-tool]').forEach(b=>{
@@ -2428,6 +2512,7 @@ function sendToBack(id){
   renderItems();renderLayers();
 }
 function clearCanvas(){
+  if(!canEditAll()) return;
   if(!ac().items.length) return;
   if(!confirm('Clear all items?')) return;
   pushHistory(); ac().items=[]; state.selectedIds=[];
@@ -2513,6 +2598,7 @@ const SHORTCUTS=[
   {action:'Select tool',keys:['V']},
   {action:'Hand / Pan tool',keys:['H']},
   {action:'Text tool',keys:['T']},
+  {action:'Comment pin tool',keys:['C']},
   {action:'Sticky note tool',keys:['N']},
   {action:'Rectangle tool',keys:['R']},
   {action:'Line tool',keys:['L']},
@@ -2545,6 +2631,7 @@ const SHORTCUTS=[
   {section:'Text'},
   {action:'Create text block',keys:['T','or dbl-click']},
   {action:'Create sticky note',keys:['N','drag']},
+  {action:'Add comment pin',keys:['C','click']},
   {action:'Edit text',keys:['Dbl-click']},
   {action:'Finish editing',keys:['Esc']},
   {section:'History'},
@@ -2568,7 +2655,7 @@ $('help-btn').addEventListener('click',showShortcuts);
 $('shortcuts-close').addEventListener('click',()=>$('shortcuts-modal').classList.remove('show'));
 
 // Close modals on overlay click
-['url-modal','export-modal','shortcuts-modal'].forEach(id=>{
+['url-modal','export-modal','share-modal','shortcuts-modal'].forEach(id=>{
   $(id).addEventListener('click',e=>{if(e.target===$(id)) $(id).classList.remove('show');});
 });
 
@@ -2784,9 +2871,8 @@ async function init(){
   renderAll();
   if(ac().items.length) setTimeout(fitAll, 300);
   
-  // READ-ONLY mode for shared canvases
-  const isReadonly = new URLSearchParams(window.location.search).get('readonly')
-  if(isReadonly) {
+  // Shared permission modes
+  if(ACCESS_MODE==='view') {
     $('undo-btn').style.display='none'
     $('redo-btn').style.display='none'
     $('upload-btn').style.display='none'
@@ -2804,13 +2890,33 @@ async function init(){
     document.addEventListener('dblclick', e=>e.stopPropagation(), true)
     document.addEventListener('keydown', e=>e.stopPropagation(), true)
     showToast('View-only — zoom and pan only')
+  } else if(ACCESS_MODE==='comment') {
+    $('undo-btn').style.display='none'
+    $('redo-btn').style.display='none'
+    $('upload-btn').style.display='none'
+    $('url-btn').style.display='none'
+    $('export-btn').style.display='none'
+    $('share-btn').style.display='none'
+    $('add-canvas-btn').style.display='none'
+    document.querySelectorAll('.tool-btn[data-tool]').forEach(btn=>{
+      if(!['select','hand','comment'].includes(btn.dataset.tool)) btn.style.display='none'
+    })
+    setTool('comment')
+    showToast('Comment mode — click to add pins')
   } else {
     showToast('Vision Canvas v3 — ? for shortcuts ✦');
   }
 }
 
-$('share-btn').addEventListener('click', async () => {
+$('share-btn').addEventListener('click', () => {
   if(!CANVAS_ID) return
+  $('share-modal').classList.add('show')
+})
+$('share-cancel').addEventListener('click', ()=>$('share-modal').classList.remove('show'))
+$('share-copy').addEventListener('click', async () => {
+  if(!CANVAS_ID) return
+  $('share-modal').classList.remove('show')
+  const mode = $('share-mode').value || 'view'
   const token = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2)
   const res = await fetch(`${SUPABASE_URL}/rest/v1/canvases?id=eq.${CANVAS_ID}`, {
     method: 'PATCH',
@@ -2822,9 +2928,9 @@ $('share-btn').addEventListener('click', async () => {
     body: JSON.stringify({ share_token: token })
   })
   if(res.ok) {
-    const shareUrl = `${window.location.origin}/shared/${token}`
+    const shareUrl = `${window.location.origin}/shared/${token}?mode=${mode}`
     navigator.clipboard.writeText(shareUrl)
-    showToast('Share link copied! ✓')
+    showToast(`${mode==='view'?'View':mode==='comment'?'Comment':'Edit'} link copied!`)
   }
 })
 
