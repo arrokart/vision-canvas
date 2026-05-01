@@ -747,14 +747,14 @@ function addImageItem(src,x,y,w,h){
   updateProps(); updateCanvasHint(); scheduleThumb();
 }
 
-function addTextItem(x,y){
+function addTextItem(x,y,w=220,h=70){
   pushHistory();
   const id=++state.nextId;
   ac().items.push({id,type:'text',name:`Text ${id}`,
     text:'Double-click to edit',fontSize:24,
     fontFamily:"'Outfit', sans-serif",fontWeight:'400',
     color:'#eeeef5',textAlign:'left',bgColor:'',
-    x,y,w:220,h:70,rot:0,opacity:100,
+    x,y,w:Math.max(40,w),h:Math.max(28,h),rot:0,opacity:100,
     visible:true,locked:false,flipH:false,flipV:false,z:maxZ()+1});
   state.selectedIds=[id];
   renderItems(); renderLayers();
@@ -799,23 +799,27 @@ function startTextEdit(id,el){
   const tc=el.querySelector('.text-content'); if(!tc) return;
   state.editingId=id;
   tc.contentEditable='true';
+  tc.focus();
   const range=document.createRange();
   range.selectNodeContents(tc);
   const s=window.getSelection(); s.removeAllRanges(); s.addRange(range);
   const onBlur=()=>{
-    pushHistory(); item.text=tc.innerText;
+    const nextText=tc.innerText.trim()?tc.innerText:'Double-click to edit';
+    if(nextText!==item.text) pushHistory();
+    item.text=nextText;
     tc.contentEditable='false'; state.editingId=null;
     tc.removeEventListener('blur',onBlur);
     tc.removeEventListener('keydown',onKey);
+    applyItemStyle(el,item);
     renderLayers(); updateProps(); scheduleThumb();
   };
   const onKey=e=>{
     if(e.key==='Escape'){e.preventDefault();tc.blur();}
+    if((e.ctrlKey||e.metaKey)&&e.key==='Enter'){e.preventDefault();tc.blur();}
     e.stopPropagation();
   };
   tc.addEventListener('blur',onBlur);
   tc.addEventListener('keydown',onKey);
-  tc.focus();
 }
 
 // ── CANVAS THUMBNAIL ──────────────────────────────────────────────
@@ -1693,8 +1697,9 @@ canvasArea.addEventListener('mousedown',e=>{
   }
   if(e.button===0){
     if(state.tool==='text'&&!e.target.closest('.canvas-item')){
-      const wp=screenToWorld(e.clientX,e.clientY);
-      addTextItem(wp.x-110,wp.y-35); return;
+      interaction={type:'textcreate',startMX:e.clientX,startMY:e.clientY,lastMX:e.clientX,lastMY:e.clientY};
+      rubberBand.style.display='none';
+      return;
     }
     if(state.tool==='select'&&!e.target.closest('.canvas-item')&&!e.target.closest('#selection-overlay')){
       state.selectedIds=[];
@@ -1714,6 +1719,19 @@ document.addEventListener('mousemove',e=>{
     applyTransform(); updateSelectionOverlay(); updateMultiSelBox(); return;
   }
   if(interaction.type==='rubberband'){
+    interaction.lastMX=e.clientX; interaction.lastMY=e.clientY;
+    const r=canvasArea.getBoundingClientRect();
+    const x=Math.min(e.clientX,interaction.startMX)-r.left;
+    const y=Math.min(e.clientY,interaction.startMY)-r.top;
+    const w=Math.abs(e.clientX-interaction.startMX);
+    const h=Math.abs(e.clientY-interaction.startMY);
+    if(w>4||h>4){
+      rubberBand.style.display='block';
+      rubberBand.style.cssText=`display:block;position:absolute;left:${x}px;top:${y}px;width:${w}px;height:${h}px;border:1.5px solid var(--accent2);background:rgba(108,113,240,0.06);pointer-events:none;z-index:45;`;
+    }
+    return;
+  }
+  if(interaction.type==='textcreate'){
     interaction.lastMX=e.clientX; interaction.lastMY=e.clientY;
     const r=canvasArea.getBoundingClientRect();
     const x=Math.min(e.clientX,interaction.startMX)-r.left;
@@ -1796,6 +1814,18 @@ document.addEventListener('mouseup',e=>{
       state.selectedIds=sel.map(i=>i.id);
       renderItemsHighlight(); updateSelectionOverlay(); updateMultiSelBox();
       updateProps(); renderLayers();
+    }
+  }
+  if(interaction&&interaction.type==='textcreate'){
+    rubberBand.style.display='none';
+    const start=screenToWorld(interaction.startMX,interaction.startMY);
+    const end=screenToWorld(interaction.lastMX,interaction.lastMY);
+    const dragged=Math.abs(interaction.lastMX-interaction.startMX)>4||Math.abs(interaction.lastMY-interaction.startMY)>4;
+    if(dragged){
+      const x=Math.min(start.x,end.x),y=Math.min(start.y,end.y);
+      addTextItem(x,y,Math.abs(end.x-start.x),Math.abs(end.y-start.y));
+    }else{
+      addTextItem(start.x-110,start.y-35);
     }
   }
   if(interaction&&(interaction.type==='resize'||interaction.type==='rotate')) scheduleThumb();
