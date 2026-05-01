@@ -3016,6 +3016,11 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 
 const THUMB_SAVE_INTERVAL = 30000
 let saveTimer, thumbTimer, thumbInProgress = false, thumbDirty = false, lastThumbSave = 0
+function canvasRestFilter(){
+  if(CANVAS_ID) return `id=eq.${encodeURIComponent(CANVAS_ID)}`
+  if(SHARE_TOKEN) return `share_token=eq.${encodeURIComponent(SHARE_TOKEN)}`
+  return ''
+}
 function scheduleSave(){
   clearTimeout(saveTimer)
   saveTimer = setTimeout(saveStateOnly, 2000)
@@ -3023,8 +3028,10 @@ function scheduleSave(){
 }
 
 async function saveStateOnly(){
-  if(!CANVAS_ID) return
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/canvases?id=eq.${CANVAS_ID}`,{
+  if(SHARE_TOKEN&&ACCESS_MODE==='view') return
+  const filter = canvasRestFilter()
+  if(!filter) return
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/canvases?${filter}`,{
     method:'PATCH',
     headers:{
       'Content-Type':'application/json',
@@ -3130,11 +3137,7 @@ async function saveCanvasThumbnail(){
 }
 
 async function loadCanvas(){
-  const query = SHARE_TOKEN
-    ? `share_token=eq.${encodeURIComponent(SHARE_TOKEN)}`
-    : CANVAS_ID
-      ? `id=eq.${encodeURIComponent(CANVAS_ID)}`
-      : ''
+  const query = canvasRestFilter()
   if(!query) return
   const res=await fetch(`${SUPABASE_URL}/rest/v1/canvases?${query}&select=state,name`,{
     headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${SUPABASE_KEY}`}
@@ -3250,10 +3253,10 @@ $('share-copy').addEventListener('click', async () => {
       'apikey': SUPABASE_KEY,
       'Authorization': `Bearer ${SUPABASE_KEY}`
     },
-    body: JSON.stringify({ share_token: token })
+    body: JSON.stringify({ share_token: token, share_permission: mode })
   })
   if(res.ok) {
-    const shareUrl = `${window.location.origin}/shared/${token}?mode=${mode}`
+    const shareUrl = `${window.location.origin}/shared/${token}`
     navigator.clipboard.writeText(shareUrl)
     showToast(`${mode==='view'?'View':mode==='comment'?'Comment':'Edit'} link copied!`)
   }

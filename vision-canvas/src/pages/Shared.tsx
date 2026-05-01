@@ -4,8 +4,7 @@ import { supabase } from '../lib/supabase'
 
 export default function Shared() {
   const { token } = useParams()
-  const requestedMode = new URLSearchParams(window.location.search).get('mode') || 'view'
-  const mode = ['view', 'comment', 'edit'].includes(requestedMode) ? requestedMode : 'view'
+  const [mode, setMode] = useState<'view' | 'comment' | 'edit'>('view')
   const [ready, setReady] = useState(false)
   const [notFound, setNotFound] = useState(false)
 
@@ -17,10 +16,14 @@ export default function Shared() {
       }
       const { data } = await supabase
         .from('canvases')
-        .select('id')
+        .select('id, share_permission')
         .eq('share_token', token)
         .single()
-      if (data) setReady(true)
+      if (data) {
+        const permission = data.share_permission
+        setMode(permission === 'comment' || permission === 'edit' ? permission : 'view')
+        setReady(true)
+      }
       else setNotFound(true)
     }
     fetchCanvas()
