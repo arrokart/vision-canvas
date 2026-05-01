@@ -153,7 +153,7 @@ body{display:flex;flex-direction:column;}
 .comment-body{font-size:12.5px;white-space:pre-wrap;color:var(--text2);line-height:1.45;}
 .comment-body-edit{width:100%;min-height:58px;background:var(--bg3);border:1px solid var(--border);
   border-radius:8px;color:var(--text);font:inherit;font-size:12.5px;line-height:1.45;
-  padding:8px;resize:vertical;outline:none;}
+  padding:8px;resize:none;outline:none;overflow:hidden;max-height:180px;}
 .comment-body-edit:focus{border-color:rgba(108,113,240,.55);}
 .comment-reply{display:grid;grid-template-columns:24px 1fr;gap:9px;align-items:center;}
 .comment-reply-box{height:36px;background:var(--bg3);border:1px solid var(--border);
@@ -1358,6 +1358,7 @@ function positionCommentPanel(){
 function renderCommentPanel(){
   const item=activeComment();
   if(!item){commentPanel.classList.remove('show');return;}
+  commentEditDirty=false;
   const replies=item.replies||[];
   commentThread.innerHTML=`
     <div class="comment-row">
@@ -1382,8 +1383,10 @@ function renderCommentPanel(){
   const input=$('comment-reply-input'),send=$('comment-send-btn');
   const mainInput=$('comment-main-input');
   if(mainInput){
-    mainInput.addEventListener('change',()=>updateActiveCommentText(mainInput.value));
-    mainInput.addEventListener('blur',()=>updateActiveCommentText(mainInput.value));
+    autoSizeCommentInput(mainInput);
+    mainInput.addEventListener('input',()=>syncActiveCommentDraft(mainInput));
+    mainInput.addEventListener('change',()=>flushActiveCommentEditor());
+    mainInput.addEventListener('blur',()=>flushActiveCommentEditor());
     mainInput.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key==='Enter'){e.preventDefault();mainInput.blur();}});
   }
   if(input&&send){
@@ -1401,11 +1404,23 @@ function addCommentReply(item,text){
   item.replies=[...(item.replies||[]),{text:text.trim(),at:Date.now()}];
   renderCommentPanel(); renderLayers(); scheduleThumb();
 }
+function autoSizeCommentInput(input){
+  input.style.height='auto';
+  input.style.height=Math.min(180,Math.max(58,input.scrollHeight))+'px';
+  positionCommentPanel();
+}
+function syncActiveCommentDraft(input){
+  const item=activeComment(); if(!item||!canComment()) return;
+  if(!commentEditDirty&&input.value!==item.text){pushHistory();commentEditDirty=true;}
+  item.text=input.value;
+  autoSizeCommentInput(input);
+  scheduleSave();
+}
 function updateActiveCommentText(text){
   const item=activeComment(); if(!item||!canComment()) return;
-  const next=text.trim();
+  const next=text;
   if(next===item.text) return;
-  pushHistory();
+  if(!commentEditDirty) pushHistory();
   item.text=next;
   const el=canvasWorld.querySelector(`[data-id="${item.id}"]`);
   if(el) applyItemStyle(el,item);
@@ -1413,7 +1428,10 @@ function updateActiveCommentText(text){
 }
 function flushActiveCommentEditor(){
   const input=$('comment-main-input');
-  if(input) updateActiveCommentText(input.value);
+  if(input){
+    updateActiveCommentText(input.value);
+    commentEditDirty=false;
+  }
 }
 function editActiveComment(){
   const item=activeComment(); if(!item||!canComment()) return;
@@ -1541,6 +1559,7 @@ function updateMultiSelBox(){
 }
 
 let minimapFrame=null,minimapMeta=null;
+let commentEditDirty=false;
 function updateMiniMap(){
   if(minimapFrame) return;
   minimapFrame=requestAnimationFrame(drawMiniMap);
