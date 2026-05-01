@@ -132,11 +132,32 @@ body{display:flex;flex-direction:column;}
   color:#fff;transform:rotate(-45deg);display:flex;align-items:center;justify-content:center;
   box-shadow:0 8px 24px rgba(108,113,240,.35);font-size:12px;font-weight:700;}
 .comment-pin span{transform:rotate(45deg);}
-.comment-pop{position:absolute;left:28px;top:8px;width:180px;min-height:44px;background:var(--bg4);
-  border:1px solid var(--border2);border-radius:8px;padding:8px;color:var(--text);
-  font-size:12px;line-height:1.35;box-shadow:0 12px 30px rgba(0,0,0,.35);white-space:pre-wrap;
-  display:none;}
-.comment-item.multi-sel .comment-pop,.comment-item.comment-open .comment-pop{display:block;}
+.comment-pop{display:none;}
+.comment-panel{position:absolute;width:420px;max-width:calc(100% - 28px);background:#2d2d2d;
+  border:1px solid rgba(255,255,255,.14);border-radius:14px;color:#f4f4f4;z-index:420;
+  display:none;box-shadow:0 18px 50px rgba(0,0,0,.42);overflow:hidden;}
+.comment-panel.show{display:block;}
+.comment-panel-head{height:46px;display:flex;align-items:center;justify-content:space-between;
+  padding:0 14px 0 18px;border-bottom:1px solid rgba(255,255,255,.1);font-weight:700;}
+.comment-panel-actions{display:flex;align-items:center;gap:10px;color:#fff;}
+.comment-icon-btn{width:26px;height:26px;border:none;background:transparent;color:#fff;
+  display:flex;align-items:center;justify-content:center;border-radius:5px;cursor:pointer;font-size:19px;}
+.comment-icon-btn:hover{background:rgba(255,255,255,.08);}
+.comment-thread{padding:16px 18px 14px;display:flex;flex-direction:column;gap:14px;}
+.comment-row{display:grid;grid-template-columns:34px 1fr;gap:10px;}
+.comment-avatar{font-size:28px;font-weight:700;color:#050505;line-height:1;}
+.comment-meta{display:flex;gap:9px;align-items:center;font-size:14px;margin-bottom:8px;}
+.comment-author{font-weight:700;color:#fff;}
+.comment-time{color:#9b9b9b;}
+.comment-body{font-size:13px;font-weight:600;white-space:pre-wrap;color:#fff;}
+.comment-reply{display:grid;grid-template-columns:34px 1fr;gap:10px;align-items:center;}
+.comment-reply-box{height:42px;background:#3c3c3c;border-radius:18px;display:flex;align-items:center;
+  padding:0 8px 0 14px;}
+.comment-reply-box input{flex:1;background:transparent;border:none;outline:none;color:#fff;
+  font:inherit;font-size:15px;min-width:0;}
+.comment-send{width:30px;height:30px;border-radius:50%;border:none;background:#888;color:#222;
+  cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;}
+.comment-send:hover{background:#aaa;}
 
 /* MINI MAP */
 #minimap{position:absolute;left:14px;bottom:14px;width:180px;height:124px;
@@ -524,6 +545,17 @@ body{display:flex;flex-direction:column;}
       <canvas id="minimap-canvas" width="168" height="112"></canvas>
       <div id="minimap-view"></div>
     </div>
+    <div id="comment-panel" class="comment-panel">
+      <div class="comment-panel-head">
+        <span>Comment</span>
+        <div class="comment-panel-actions">
+          <button class="comment-icon-btn" id="comment-edit-btn" title="Edit">•••</button>
+          <button class="comment-icon-btn" id="comment-resolve-btn" title="Resolve">♡</button>
+          <button class="comment-icon-btn" id="comment-close-btn" title="Close">×</button>
+        </div>
+      </div>
+      <div class="comment-thread" id="comment-thread"></div>
+    </div>
     <div id="drop-hint"><div id="drop-hint-text">Drop images here</div></div>
     <div id="canvas-hint">
       <h2>Drop images to begin</h2>
@@ -837,6 +869,8 @@ const rubberBand = $('rubber-band');
 const minimap = $('minimap');
 const minimapCanvas = $('minimap-canvas');
 const minimapView = $('minimap-view');
+const commentPanel = $('comment-panel');
+const commentThread = $('comment-thread');
 const commandModal = $('command-modal');
 const commandInput = $('command-input');
 const commandList = $('command-list');
@@ -1296,7 +1330,80 @@ function renderItemsHighlight(){
     el.classList.toggle('multi-sel',state.selectedIds.length>1&&state.selectedIds.includes(id));
     el.classList.toggle('comment-open',state.selectedIds.includes(id)&&getItem(id)?.type==='comment');
   });
+  renderCommentPanel();
   updateMiniMap();
+}
+
+function activeComment(){
+  const item=selFirst();
+  return item&&item.type==='comment'?item:null;
+}
+function positionCommentPanel(){
+  const item=activeComment();
+  if(!item||!commentPanel.classList.contains('show')) return;
+  const p=worldToScreen(item.x,item.y);
+  const area=canvasArea.getBoundingClientRect();
+  const panelW=commentPanel.offsetWidth||420,panelH=commentPanel.offsetHeight||230;
+  let left=p.x-area.left+42,top=p.y-area.top-10;
+  left=Math.max(12,Math.min(left,area.width-panelW-12));
+  top=Math.max(12,Math.min(top,area.height-panelH-12));
+  commentPanel.style.left=left+'px';
+  commentPanel.style.top=top+'px';
+}
+function renderCommentPanel(){
+  const item=activeComment();
+  if(!item){commentPanel.classList.remove('show');return;}
+  const replies=item.replies||[];
+  commentThread.innerHTML=`
+    <div class="comment-row">
+      <div class="comment-avatar">A</div>
+      <div>
+        <div class="comment-meta"><span class="comment-author">ADITYA</span><span class="comment-time">now</span></div>
+        <div class="comment-body">${escapeHtml(item.text||'')}</div>
+      </div>
+    </div>
+    ${replies.map(r=>`<div class="comment-row">
+      <div class="comment-avatar">A</div>
+      <div><div class="comment-meta"><span class="comment-author">ADITYA</span><span class="comment-time">reply</span></div>
+      <div class="comment-body">${escapeHtml(r.text||'')}</div></div>
+    </div>`).join('')}
+    ${canComment()?`<div class="comment-reply">
+      <div class="comment-avatar">A</div>
+      <div class="comment-reply-box"><input id="comment-reply-input" placeholder="Reply"><button class="comment-send" id="comment-send-btn">↑</button></div>
+    </div>`:''}
+  `;
+  commentPanel.classList.add('show');
+  positionCommentPanel();
+  const input=$('comment-reply-input'),send=$('comment-send-btn');
+  if(input&&send){
+    const submit=()=>addCommentReply(item,input.value);
+    send.addEventListener('click',submit);
+    input.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();submit();}});
+  }
+}
+function escapeHtml(value){
+  return String(value).replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+}
+function addCommentReply(item,text){
+  if(!canComment()||!text.trim()) return;
+  pushHistory();
+  item.replies=[...(item.replies||[]),{text:text.trim(),at:Date.now()}];
+  renderCommentPanel(); renderLayers(); scheduleThumb();
+}
+function editActiveComment(){
+  const item=activeComment(); if(!item||!canComment()) return;
+  const next=prompt('Edit comment',item.text||'');
+  if(next!==null&&next.trim()&&next!==item.text){
+    pushHistory(); item.text=next.trim();
+    const el=canvasWorld.querySelector(`[data-id="${item.id}"]`);
+    if(el) applyItemStyle(el,item);
+    renderCommentPanel(); renderLayers(); scheduleThumb();
+  }
+}
+function resolveActiveComment(){
+  const item=activeComment(); if(!item||!canComment()) return;
+  deleteItems([item.id]);
+  commentPanel.classList.remove('show');
 }
 
 // ── SNAP GUIDES ───────────────────────────────────────────────────
@@ -1352,6 +1459,7 @@ function applyTransform(){
   $('zoom-indicator').textContent=pct;
   $('info-zoom').textContent=pct;
   updateMiniMap();
+  positionCommentPanel();
 }
 function screenToWorld(sx,sy){
   const r=canvasArea.getBoundingClientRect();
@@ -1395,6 +1503,7 @@ function centerView(){
 function updateSelectionOverlay(){
   const item=selFirst();
   if(!item||!item.visible){selOverlay.style.display='none';return;}
+  if(item.type==='comment'){selOverlay.style.display='none';return;}
   const sx=item.x*state.zoom+state.pan.x,sy=item.y*state.zoom+state.pan.y;
   selOverlay.style.cssText=`display:block;left:${sx}px;top:${sy}px;width:${item.w*state.zoom}px;height:${item.h*state.zoom}px;transform:rotate(${item.rot}deg);position:absolute;pointer-events:none;transform-origin:center center;`;
   const locked=item.locked;
@@ -2080,11 +2189,7 @@ function onItemDblclick(e){
   const item=getItem(id);
   if(item&&(item.type==='text'||item.type==='note')) startTextEdit(id,e.currentTarget);
   if(item&&item.type==='comment'&&canComment()){
-    const next=prompt('Edit comment',item.text||'');
-    if(next!==null&&next.trim()&&next!==item.text){
-      pushHistory(); item.text=next.trim(); applyItemStyle(e.currentTarget,item);
-      renderLayers(); scheduleThumb();
-    }
+    editActiveComment();
   }
 }
 function onItemContextmenu(e){
@@ -2346,6 +2451,11 @@ canvasArea.addEventListener('dblclick',e=>{
     addTextItem(wp.x-110,wp.y-35);
   }
 });
+document.addEventListener('mousedown',e=>{
+  if(!commentPanel.classList.contains('show')) return;
+  if(e.target.closest('#comment-panel')||e.target.closest('.comment-item')) return;
+  commentPanel.classList.remove('show');
+});
 canvasArea.addEventListener('wheel',e=>{
   e.preventDefault(); zoomAt(e.clientX,e.clientY,-e.deltaY);
 },{passive:false});
@@ -2479,6 +2589,9 @@ function setTool(tool){
 document.querySelectorAll('.tool-btn[data-tool]').forEach(b=>{
   b.addEventListener('click',()=>setTool(b.dataset.tool));
 });
+$('comment-close-btn').addEventListener('click',()=>commentPanel.classList.remove('show'));
+$('comment-edit-btn').addEventListener('click',editActiveComment);
+$('comment-resolve-btn').addEventListener('click',resolveActiveComment);
 let miniDragging=false;
 minimap.addEventListener('mousedown',e=>{
   e.preventDefault(); miniDragging=true; panToMiniMapPoint(e);
