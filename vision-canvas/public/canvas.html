@@ -242,8 +242,8 @@ body{display:flex;flex-direction:column;}
 .no-sel{font-size:12px;color:var(--text3);padding:6px 0;text-align:center;}
 .multi-sel-info{font-size:12px;color:var(--accent2);padding:4px 0;font-weight:500;text-align:center;}
 
-/* TEXT PROPS */
-#text-props{display:none;flex-direction:column;gap:6px;
+/* TEXT / SHAPE PROPS */
+#text-props,#shape-props{display:none;flex-direction:column;gap:6px;
   padding-top:6px;border-top:1px solid var(--border);margin-top:2px;}
 .text-align-row{display:flex;gap:4px;}
 .align-btn-ui{flex:1;height:26px;background:var(--bg3);border:1px solid var(--border);
@@ -542,6 +542,20 @@ body{display:flex;flex-direction:column;}
               <button class="act-btn" id="t-bg-clear" style="flex:0;padding:0 5px;height:22px;font-size:10px;">✕</button>
             </div>
           </div>
+          <div id="shape-props">
+            <div class="color-row">
+              <div class="color-swatch"><input type="color" id="shape-fill" value="#6c71f0"></div>
+              <span class="color-label">Fill</span>
+              <button class="act-btn" id="shape-fill-clear" style="flex:0;padding:0 5px;height:22px;font-size:10px;">Clear</button>
+            </div>
+            <div class="color-row">
+              <div class="color-swatch"><input type="color" id="shape-stroke" value="#8b8ff4"></div>
+              <span class="color-label">Stroke</span>
+              <div class="prop-group" style="margin-left:auto;width:82px;">
+                <span class="lbl">W</span><input type="number" id="shape-stroke-width" step="1" min="0" max="40" value="2">
+              </div>
+            </div>
+          </div>
         </div>
         <!-- MULTI PROPS -->
         <div id="multi-props" style="display:none;flex-direction:column;gap:6px;">
@@ -792,7 +806,7 @@ function addShapeItem(shape,x,y,w=160,h=110,flipH=false,flipV=false){
   ac().items.push({id,type:'shape',shape,name:`${SHAPE_LABELS[shape]||'Shape'} ${id}`,
     x,y,w:Math.max(20,w),h:Math.max(20,h),rot:0,opacity:100,
     visible:true,locked:false,flipH,flipV,z:maxZ()+1,
-    fill:isLine?'transparent':'rgba(108,113,240,0.18)',
+    fill:isLine?'transparent':'#6c71f0',
     stroke:'#8b8ff4',strokeWidth:isLine?4:2});
   state.selectedIds=[id];
   renderItems(); renderLayers();
@@ -1261,7 +1275,9 @@ function updateProps(){
   $('popacity').value=item.opacity; $('opacity-val').textContent=item.opacity+'%';
   $('lock-btn').textContent=item.locked?'🔒':'🔓';
   const isText=item.type==='text';
+  const isShape=item.type==='shape';
   $('text-props').style.display=isText?'flex':'none';
+  $('shape-props').style.display=isShape?'flex':'none';
   $('flip-h-btn').style.display=isText?'none':'';
   $('flip-v-btn').style.display=isText?'none':'';
   if(isText){
@@ -1271,6 +1287,28 @@ function updateProps(){
     document.querySelectorAll('.align-btn-ui').forEach(b=>
       b.classList.toggle('active',b.dataset.align===item.textAlign));
   }
+  if(isShape){
+    setColorControl('shape-fill',item.fill,'#6c71f0');
+    setColorControl('shape-stroke',item.stroke,'#8b8ff4');
+    $('shape-stroke-width').value=item.strokeWidth??2;
+  }
+}
+
+function colorToHex(value,fallback){
+  if(!value||value==='transparent') return fallback;
+  if(/^#[0-9a-f]{6}$/i.test(value)) return value;
+  const match=String(value).match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/i);
+  if(!match) return fallback;
+  return '#'+[match[1],match[2],match[3]].map(n=>
+    Math.max(0,Math.min(255,parseInt(n,10))).toString(16).padStart(2,'0')
+  ).join('');
+}
+function setColorControl(id,value,fallback){
+  const input=$(id),hex=colorToHex(value,fallback);
+  input.value=hex;
+  input.parentElement.style.background=value==='transparent'
+    ? 'linear-gradient(135deg,transparent 0 45%,rgba(255,255,255,.35) 45% 55%,transparent 55% 100%)'
+    : hex;
 }
 
 function bindPropNum(id,key){
@@ -1356,6 +1394,21 @@ document.querySelectorAll('.align-btn-ui').forEach(btn=>{
 });
 
 // ── LAYERS PANEL (with drag-to-reorder + double-click rename) ─────
+function updateShapeProp(key,value,withHistory=false){
+  const item=selFirst(); if(!item||item.type!=='shape'||item.locked) return;
+  if(withHistory) pushHistory();
+  item[key]=value;
+  const el=canvasWorld.querySelector(`[data-id="${item.id}"]`);
+  if(el) applyItemStyle(el,item);
+  updateProps(); scheduleSave(); scheduleThumb();
+}
+$('shape-fill').addEventListener('input',e=>updateShapeProp('fill',e.target.value));
+$('shape-stroke').addEventListener('input',e=>updateShapeProp('stroke',e.target.value));
+$('shape-stroke-width').addEventListener('change',e=>
+  updateShapeProp('strokeWidth',Math.max(0,parseFloat(e.target.value)||0),true)
+);
+$('shape-fill-clear').addEventListener('click',()=>updateShapeProp('fill','transparent',true));
+
 let layerDrag={id:null,startY:0};
 
 function layerThumb(item){
