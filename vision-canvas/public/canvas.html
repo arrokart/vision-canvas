@@ -17,12 +17,13 @@
 }
 html,body{height:100%;overflow:hidden;margin:0;padding:0;font-family:'Outfit',sans-serif;
   background:var(--bg);color:var(--text);user-select:none;}
+body{display:flex;flex-direction:column;}
 
 /* TOP BAR */
 #topbar{min-height:var(--topbar-h);display:flex;align-items:center;
   background:var(--panel);border-bottom:1px solid var(--border);
   backdrop-filter:blur(20px);z-index:100;padding:6px 10px;gap:6px;
-  flex-wrap:wrap;overflow:visible;}
+  flex-wrap:wrap;overflow:visible;flex-shrink:0;}
 #logo{font-family:'Syne',sans-serif;font-weight:700;font-size:15px;
   color:var(--accent2);letter-spacing:.5px;white-space:nowrap;flex-shrink:0;}
 #logo span{color:var(--text3);}
@@ -81,7 +82,7 @@ html,body{height:100%;overflow:hidden;margin:0;padding:0;font-family:'Outfit',sa
 }
 
 /* MAIN */
-#main{display:flex;flex:1;height:calc(100vh - var(--topbar-h));overflow:hidden;}
+#main{display:flex;flex:1;min-height:0;overflow:hidden;}
 
 /* TOOLBAR */
 #toolbar{width:var(--toolbar-w);background:var(--panel);border-right:1px solid var(--border);
@@ -101,7 +102,7 @@ html,body{height:100%;overflow:hidden;margin:0;padding:0;font-family:'Outfit',sa
 .tool-btn:hover .tool-tip{opacity:1;}
 
 /* CANVAS */
-#canvas-area{flex:1;position:relative;overflow:hidden;cursor:default;
+#canvas-area{flex:1;min-width:0;min-height:0;position:relative;overflow:hidden;cursor:default;
   background-color:#0f0f14;
   background-image:radial-gradient(circle,rgba(255,255,255,.055) 1px,transparent 1px);
   background-size:28px 28px;}
@@ -1041,20 +1042,22 @@ function zoomAt(cx,cy,delta){
   applyTransform(); updateSelectionOverlay(); updateMultiSelBox();
 }
 function fitAll(){
-  const items=ac().items.filter(i=>i.visible);
+  const items=ac().items.filter(i=>i.visible!==false);
   if(!items.length){centerView();return;}
-  const pad=60,r=canvasArea.getBoundingClientRect();
+  const pad=80,r=canvasArea.getBoundingClientRect();
+  const viewportW=canvasArea.clientWidth||r.width;
+  const viewportH=canvasArea.clientHeight||r.height;
   const minX=Math.min(...items.map(i=>i.x)),minY=Math.min(...items.map(i=>i.y));
   const maxX=Math.max(...items.map(i=>i.x+i.w)),maxY=Math.max(...items.map(i=>i.y+i.h));
-  const z=Math.min(r.width/(maxX-minX+pad*2),r.height/(maxY-minY+pad*2),4);
+  const z=Math.min(viewportW/(maxX-minX+pad*2),viewportH/(maxY-minY+pad*2),4);
   state.zoom=z;
-  state.pan.x=r.width/2-(minX+(maxX-minX)/2)*z;
-  state.pan.y=r.height/2-(minY+(maxY-minY)/2)*z;
+  state.pan.x=viewportW/2-(minX+(maxX-minX)/2)*z;
+  state.pan.y=viewportH/2-(minY+(maxY-minY)/2)*z;
   applyTransform(); updateSelectionOverlay(); updateMultiSelBox();
 }
 function centerView(){
   const r=canvasArea.getBoundingClientRect();
-  state.pan={x:r.width/2,y:r.height/2}; state.zoom=1;
+  state.pan={x:(canvasArea.clientWidth||r.width)/2,y:(canvasArea.clientHeight||r.height)/2}; state.zoom=1;
   applyTransform();
 }
 
