@@ -4,17 +4,26 @@ import { supabase } from '../lib/supabase'
 
 export default function Shared() {
   const { token } = useParams()
-  const [id, setId] = useState<string | null>(null)
+  const [mode, setMode] = useState<'view' | 'comment' | 'edit'>('view')
+  const [ready, setReady] = useState(false)
   const [notFound, setNotFound] = useState(false)
 
   useEffect(() => {
     const fetchCanvas = async () => {
+      if (!token) {
+        setNotFound(true)
+        return
+      }
       const { data } = await supabase
         .from('canvases')
-        .select('id')
+        .select('id, share_permission')
         .eq('share_token', token)
         .single()
-      if (data) setId(data.id)
+      if (data) {
+        const permission = data.share_permission
+        setMode(permission === 'comment' || permission === 'edit' ? permission : 'view')
+        setReady(true)
+      }
       else setNotFound(true)
     }
     fetchCanvas()
@@ -26,14 +35,14 @@ export default function Shared() {
     </div>
   )
 
-  if (!id) return (
+  if (!ready) return (
     <div style={{ color: 'white', padding: 40 }}>Loading...</div>
   )
 
   return (
     <div style={{ width: '100vw', height: '100vh', background: '#0b0b0e' }}>
       <iframe
-        src={`/canvas.html?id=${id}&readonly=true`}
+        src={`/canvas.html?share=${encodeURIComponent(token || '')}&mode=${mode}`}
         style={{ width: '100%', height: '100%', border: 'none' }}
         title="Shared Canvas"
       />
