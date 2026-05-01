@@ -134,7 +134,9 @@ body{display:flex;flex-direction:column;}
 .comment-pin span{transform:rotate(45deg);}
 .comment-pop{position:absolute;left:28px;top:8px;width:180px;min-height:44px;background:var(--bg4);
   border:1px solid var(--border2);border-radius:8px;padding:8px;color:var(--text);
-  font-size:12px;line-height:1.35;box-shadow:0 12px 30px rgba(0,0,0,.35);white-space:pre-wrap;}
+  font-size:12px;line-height:1.35;box-shadow:0 12px 30px rgba(0,0,0,.35);white-space:pre-wrap;
+  display:none;}
+.comment-item.multi-sel .comment-pop,.comment-item.comment-open .comment-pop{display:block;}
 
 /* MINI MAP */
 #minimap{position:absolute;left:14px;bottom:14px;width:180px;height:124px;
@@ -1234,6 +1236,7 @@ function applyItemStyle(el,item){
   el.style.display=item.visible?'':'none';
   el.classList.toggle('locked-item',!!item.locked);
   el.classList.toggle('multi-sel',state.selectedIds.length>1&&state.selectedIds.includes(item.id));
+  el.classList.toggle('comment-open',state.selectedIds.includes(item.id)&&item.type==='comment');
   if(item.type==='text'||item.type==='note'){
   const tc=el.querySelector('.text-content');
   if(tc&&tc.contentEditable!=='true'){
@@ -1291,6 +1294,7 @@ function renderItemsHighlight(){
   canvasWorld.querySelectorAll('.canvas-item').forEach(el=>{
     const id=parseInt(el.dataset.id);
     el.classList.toggle('multi-sel',state.selectedIds.length>1&&state.selectedIds.includes(id));
+    el.classList.toggle('comment-open',state.selectedIds.includes(id)&&getItem(id)?.type==='comment');
   });
   updateMiniMap();
 }
