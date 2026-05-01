@@ -115,6 +115,7 @@ body{display:flex;flex-direction:column;}
 
 .canvas-item{position:absolute;transform-origin:center center;cursor:default;
   border:1.5px solid transparent;}
+.canvas-item.image-item{overflow:hidden;}
 .canvas-item img{width:100%;height:100%;object-fit:contain;display:block;
   pointer-events:none;border-radius:2px;}
 .shape-content{width:100%;height:100%;display:block;pointer-events:none;overflow:visible;}
@@ -669,6 +670,26 @@ body{display:flex;flex-direction:column;}
               <button class="act-btn" id="t-bg-clear" style="flex:0;padding:0 5px;height:22px;font-size:10px;">✕</button>
             </div>
           </div>
+          <div id="image-props" style="display:none;flex-direction:column;gap:6px;">
+            <select class="font-select" id="img-fit">
+              <option value="contain">Fit image</option>
+              <option value="cover">Crop / fill frame</option>
+              <option value="fill">Stretch</option>
+            </select>
+            <div class="opacity-row">
+              <span style="font-size:11px;color:var(--text2);">Zoom</span>
+              <input type="range" class="opacity-slider" id="img-scale" min="100" max="300" value="100">
+              <span class="opacity-val" id="img-scale-val">100%</span>
+            </div>
+            <div class="prop-2col">
+              <div class="prop-group"><span class="lbl">X%</span><input type="number" id="img-pos-x" step="1" min="0" max="100" value="50"></div>
+              <div class="prop-group"><span class="lbl">Y%</span><input type="number" id="img-pos-y" step="1" min="0" max="100" value="50"></div>
+            </div>
+            <div class="action-row">
+              <button class="act-btn" id="img-crop-btn">Crop mode</button>
+              <button class="act-btn" id="img-reset-crop-btn">Reset crop</button>
+            </div>
+          </div>
           <div id="shape-props">
             <div class="color-row">
               <div class="color-swatch"><input type="color" id="shape-fill" value="#6c71f0"></div>
@@ -887,6 +908,7 @@ const commandModal = $('command-modal');
 const commandInput = $('command-input');
 const commandList = $('command-list');
 let textEditDirty=false;
+let imageCropDirty=false;
 
 // ── STATE ─────────────────────────────────────────────────────────
 let state = {
@@ -909,6 +931,7 @@ function selFirst(){ return state.selectedIds.length===1 ? getItem(state.selecte
 function selAll(){ return state.selectedIds.map(id=>getItem(id)).filter(Boolean); }
 function groupMembers(groupId){ return ac().items.filter(i=>i.groupId===groupId); }
 function selectionIdsForItem(item){ return item&&item.groupId?groupMembers(item.groupId).map(i=>i.id):item?[item.id]:[]; }
+function clamp(value,min,max){ return Math.max(min,Math.min(max,Number(value)||0)); }
 
 // ── HISTORY ───────────────────────────────────────────────────────
 function pushHistory(){
@@ -952,7 +975,8 @@ function addImageItem(src,x,y,w,h){
   const id=++state.nextId;
   ac().items.push({id,type:'image',src,name:`Image ${id}`,
     x,y,w,h,rot:0,opacity:100,visible:true,locked:false,
-    flipH:false,flipV:false,z:maxZ()+1});
+    flipH:false,flipV:false,z:maxZ()+1,
+    fit:'contain',imgX:50,imgY:50,imgScale:100});
   state.selectedIds=[id];
   renderItems(); renderLayers();
   updateSelectionOverlay(); updateMultiSelBox();
@@ -1284,7 +1308,7 @@ function renderItems(){
     let el=existing[String(item.id)];
     if(!el){
       el=document.createElement('div');
-      el.className='canvas-item'+((item.type==='text'||item.type==='note')?' text-item':'')+(item.type==='note'?' note-item':'')+(item.type==='comment'?' comment-item':'');
+      el.className='canvas-item'+(item.type==='image'?' image-item':'')+((item.type==='text'||item.type==='note')?' text-item':'')+(item.type==='note'?' note-item':'')+(item.type==='comment'?' comment-item':'');
       el.dataset.id=item.id; el.dataset.type=item.type||'image';
       if(item.type==='text'||item.type==='note'){
         const tc=document.createElement('div');
@@ -1318,6 +1342,7 @@ function applyItemStyle(el,item){
   el.style.opacity=item.opacity/100;
   el.style.display=item.visible?'':'none';
   el.classList.toggle('locked-item',!!item.locked);
+  el.classList.toggle('image-item',item.type==='image');
   el.classList.toggle('multi-sel',state.selectedIds.length>1&&state.selectedIds.includes(item.id));
   el.classList.toggle('comment-open',state.selectedIds.includes(item.id)&&item.type==='comment');
   if(item.type==='text'||item.type==='note'){
@@ -1343,6 +1368,19 @@ function applyItemStyle(el,item){
   if(item.type==='shape'){
     const sc=el.querySelector('.shape-content');
     if(sc) sc.innerHTML=shapeMarkup(item);
+  }
+  if(item.type==='image'){
+    const img=el.querySelector('img');
+    if(img){
+      const fit=item.fit||'contain';
+      const posX=clamp(item.imgX??50,0,100);
+      const posY=clamp(item.imgY??50,0,100);
+      const scale=Math.max(100,item.imgScale||100)/100;
+      img.style.objectFit=fit;
+      img.style.objectPosition=`${posX}% ${posY}%`;
+      img.style.transform=fit==='fill'?'none':`scale(${scale})`;
+      img.style.transformOrigin=`${posX}% ${posY}%`;
+    }
   }
   if(item.type==='comment'){
     const pin=el.querySelector('.comment-pin span'),pop=el.querySelector('.comment-pop');
@@ -1737,8 +1775,10 @@ function updateProps(){
   $('lock-btn').textContent=item.locked?'🔒':'🔓';
   const isText=item.type==='text'||item.type==='note';
   const isShape=item.type==='shape';
+  const isImage=item.type==='image';
   $('text-props').style.display=isText?'flex':'none';
   $('shape-props').style.display=isShape?'flex':'none';
+  $('image-props').style.display=isImage?'flex':'none';
   $('flip-h-btn').style.display=isText?'none':'';
   $('flip-v-btn').style.display=isText?'none':'';
   if(isText){
@@ -1753,6 +1793,13 @@ function updateProps(){
     setColorControl('shape-fill',item.fill,'#6c71f0');
     setColorControl('shape-stroke',item.stroke,'#8b8ff4');
     $('shape-stroke-width').value=item.strokeWidth??2;
+  }
+  if(isImage){
+    $('img-fit').value=item.fit||'contain';
+    $('img-scale').value=item.imgScale||100;
+    $('img-scale-val').textContent=(item.imgScale||100)+'%';
+    $('img-pos-x').value=Math.round(item.imgX??50);
+    $('img-pos-y').value=Math.round(item.imgY??50);
   }
 }
 
@@ -1824,6 +1871,46 @@ $('m-dup-btn').addEventListener('click',()=>{ if(state.selectedIds.length) dupli
 $('m-del-btn').addEventListener('click',()=>{ if(state.selectedIds.length) deleteItems([...state.selectedIds]); });
 $('group-btn').addEventListener('click',groupSelection);
 $('ungroup-btn').addEventListener('click',ungroupSelection);
+
+function updateImageCropProp(key,value,withHistory=false){
+  const item=selFirst(); if(!item||item.type!=='image'||item.locked) return;
+  if(withHistory) pushHistory();
+  if(key==='imgX'||key==='imgY') value=clamp(value,0,100);
+  if(key==='imgScale') value=clamp(value,100,300);
+  item[key]=value;
+  if(key==='fit'&&value==='fill') item.imgScale=100;
+  const el=canvasWorld.querySelector(`[data-id="${item.id}"]`);
+  if(el) applyItemStyle(el,item);
+  updateProps(); scheduleSave(); scheduleThumb();
+}
+$('img-fit').addEventListener('change',e=>updateImageCropProp('fit',e.target.value,true));
+$('img-scale').addEventListener('input',e=>{
+  if(!imageCropDirty){pushHistory();imageCropDirty=true;}
+  $('img-scale-val').textContent=e.target.value+'%';
+  updateImageCropProp('imgScale',parseInt(e.target.value,10),false);
+});
+$('img-scale').addEventListener('change',e=>{
+  updateImageCropProp('imgScale',parseInt(e.target.value,10),false);
+  imageCropDirty=false;
+});
+$('img-pos-x').addEventListener('change',e=>updateImageCropProp('imgX',parseFloat(e.target.value),true));
+$('img-pos-y').addEventListener('change',e=>updateImageCropProp('imgY',parseFloat(e.target.value),true));
+$('img-crop-btn').addEventListener('click',()=>{
+  const item=selFirst(); if(!item||item.type!=='image'||item.locked) return;
+  pushHistory();
+  item.fit='cover'; item.imgScale=Math.max(120,item.imgScale||100);
+  const el=canvasWorld.querySelector(`[data-id="${item.id}"]`);
+  if(el) applyItemStyle(el,item);
+  updateProps(); scheduleSave(); scheduleThumb(); showToast('Crop mode');
+});
+$('img-reset-crop-btn').addEventListener('click',()=>{
+  const item=selFirst(); if(!item||item.type!=='image'||item.locked) return;
+  pushHistory();
+  item.fit='contain'; item.imgX=50; item.imgY=50; item.imgScale=100;
+  const el=canvasWorld.querySelector(`[data-id="${item.id}"]`);
+  if(el) applyItemStyle(el,item);
+  updateProps(); scheduleSave(); scheduleThumb(); showToast('Image crop reset');
+});
 
 function bindTextProp(id,key,isNum){
   $(id).addEventListener('change',e=>{
@@ -2282,6 +2369,15 @@ function onItemDblclick(e){
   const id=parseInt(e.currentTarget.dataset.id);
   const item=getItem(id);
   if(item&&(item.type==='text'||item.type==='note')) startTextEdit(id,e.currentTarget);
+  if(item&&item.type==='image'&&canEditAll()&&!item.locked){
+    pushHistory();
+    item.fit=item.fit==='cover'?'contain':'cover';
+    if(item.fit==='cover') item.imgScale=Math.max(120,item.imgScale||100);
+    else { item.imgScale=100; item.imgX=50; item.imgY=50; }
+    applyItemStyle(e.currentTarget,item);
+    updateProps(); scheduleSave(); scheduleThumb();
+    showToast(item.fit==='cover'?'Crop mode':'Fit image');
+  }
   if(item&&item.type==='comment'&&canComment()){
     editActiveComment();
   }
@@ -2634,6 +2730,8 @@ const COMMANDS=[
   {name:'Ungroup selection',group:'Selection',key:'Ctrl Shift G',run:ungroupSelection,enabled:()=>selAll().some(i=>i.groupId)},
   {name:'Duplicate selection',group:'Selection',key:'Ctrl D',run:()=>duplicateItems([...state.selectedIds]),enabled:()=>state.selectedIds.length>0},
   {name:'Delete selection',group:'Selection',key:'Del',run:()=>deleteItems([...state.selectedIds]),enabled:()=>state.selectedIds.length>0},
+  {name:'Crop selected image',group:'Image',run:()=>$('img-crop-btn').click(),enabled:()=>selFirst()?.type==='image'},
+  {name:'Reset image crop',group:'Image',run:()=>$('img-reset-crop-btn').click(),enabled:()=>selFirst()?.type==='image'},
   {name:'Bring forward',group:'Arrange',key:']',run:()=>bringForward(state.selectedIds[0]),enabled:()=>state.selectedIds.length===1},
   {name:'Send backward',group:'Arrange',key:'[',run:()=>sendBackward(state.selectedIds[0]),enabled:()=>state.selectedIds.length===1},
   {name:'Bring to front',group:'Arrange',run:()=>bringToFront(state.selectedIds[0]),enabled:()=>state.selectedIds.length===1},
