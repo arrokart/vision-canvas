@@ -2911,6 +2911,7 @@ function renderAll(){
 
 // ── SAVE & LOAD ───────────────────────────────────────────────────
 const CANVAS_ID = new URLSearchParams(window.location.search).get('id')
+const SHARE_TOKEN = new URLSearchParams(window.location.search).get('share')
 const SUPABASE_URL = 'https://tzzbinwvtuvjhynlmjzo.supabase.co'
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR6emJpbnd2dHV2amh5bmxtanpvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzcyMTQwNDgsImV4cCI6MjA5Mjc5MDA0OH0.J5evLhHjvW3hn280SelzkenehL1qj7uHjW8uG-3HvZY'
 
@@ -3030,8 +3031,13 @@ async function saveCanvasThumbnail(){
 }
 
 async function loadCanvas(){
-  if(!CANVAS_ID) return
-  const res=await fetch(`${SUPABASE_URL}/rest/v1/canvases?id=eq.${CANVAS_ID}&select=state,name`,{
+  const query = SHARE_TOKEN
+    ? `share_token=eq.${encodeURIComponent(SHARE_TOKEN)}`
+    : CANVAS_ID
+      ? `id=eq.${encodeURIComponent(CANVAS_ID)}`
+      : ''
+  if(!query) return
+  const res=await fetch(`${SUPABASE_URL}/rest/v1/canvases?${query}&select=state,name`,{
     headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${SUPABASE_KEY}`}
   })
   const data=await res.json()
