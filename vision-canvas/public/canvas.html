@@ -122,9 +122,11 @@ body{display:flex;flex-direction:column;}
 
 /* TEXT */
 .text-item{overflow:hidden;}
+.text-item.editing{border-color:rgba(108,113,240,.55);box-shadow:0 0 0 3px rgba(108,113,240,.12);}
 .text-content{width:100%;height:100%;padding:8px;word-break:break-word;
   white-space:pre-wrap;overflow:hidden;outline:none;line-height:1.4;box-sizing:border-box;}
 .text-content[contenteditable="true"]{cursor:text;user-select:text;}
+.text-content:empty:before{content:attr(data-placeholder);color:var(--text3);}
 .note-item{border-radius:6px;box-shadow:0 10px 30px rgba(0,0,0,.22);}
 .note-item .text-content{border-radius:6px;color:#171717;background:#ffd966;}
 .comment-item{overflow:visible!important;border:none!important;}
@@ -643,6 +645,10 @@ body{display:flex;flex-direction:column;}
                 <option value="700">Bold</option>
               </select>
             </div>
+            <div class="prop-2col">
+              <div class="prop-group"><span class="lbl">Line</span><input type="number" id="t-line" step="0.05" min="0.8" max="3" value="1.4"></div>
+              <button class="act-btn" id="t-fit" style="height:28px;">Fit height</button>
+            </div>
             <select class="font-select" id="t-font">
               <option value="'Outfit', sans-serif">Outfit</option>
               <option value="'Syne', sans-serif">Syne</option>
@@ -879,6 +885,7 @@ const commentThread = $('comment-thread');
 const commandModal = $('command-modal');
 const commandInput = $('command-input');
 const commandList = $('command-list');
+let textEditDirty=false;
 
 // ── STATE ─────────────────────────────────────────────────────────
 let state = {
@@ -956,7 +963,7 @@ function addTextItem(x,y,w=220,h=70){
   pushHistory();
   const id=++state.nextId;
   ac().items.push({id,type:'text',name:`Text ${id}`,
-    text:'Double-click to edit',fontSize:24,
+    text:'',fontSize:24,lineHeight:1.4,
     fontFamily:"'Outfit', sans-serif",fontWeight:'400',
     color:'#eeeef5',textAlign:'left',bgColor:'',
     x,y,w:Math.max(40,w),h:Math.max(28,h),rot:0,opacity:100,
@@ -976,7 +983,7 @@ function addNoteItem(x,y,w=220,h=160){
   pushHistory();
   const id=++state.nextId;
   ac().items.push({id,type:'note',name:`Note ${id}`,
-    text:'Write a note...',fontSize:18,
+    text:'',fontSize:18,lineHeight:1.35,
     fontFamily:"'Outfit', sans-serif",fontWeight:'500',
     color:'#171717',textAlign:'left',bgColor:'#ffd966',
     x,y,w:Math.max(120,w),h:Math.max(90,h),rot:0,opacity:100,
@@ -1088,20 +1095,35 @@ function startTextEdit(id,el){
   const item=getItem(id); if(!item||item.locked) return;
   const tc=el.querySelector('.text-content'); if(!tc) return;
   state.editingId=id;
+  textEditDirty=false;
+  el.classList.add('editing');
   tc.contentEditable='true';
+  tc.spellcheck=true;
+  if(isLegacyTextPlaceholder(item)) item.text='';
+  tc.innerText=item.text||'';
   tc.focus();
   const range=document.createRange();
   range.selectNodeContents(tc);
+  range.collapse(false);
   const s=window.getSelection(); s.removeAllRanges(); s.addRange(range);
   const onBlur=()=>{
-    const nextText=tc.innerText.trim()?tc.innerText:(item.type==='note'?'Write a note...':'Double-click to edit');
-    if(nextText!==item.text) pushHistory();
+    const nextText=normalizeTextContent(tc.innerText);
+    if(!textEditDirty&&nextText!==item.text) pushHistory();
     item.text=nextText;
-    tc.contentEditable='false'; state.editingId=null;
+    fitTextHeight(item,el);
+    tc.contentEditable='false'; state.editingId=null; textEditDirty=false;
+    el.classList.remove('editing');
     tc.removeEventListener('blur',onBlur);
     tc.removeEventListener('keydown',onKey);
+    tc.removeEventListener('input',onInput);
     applyItemStyle(el,item);
     renderLayers(); updateProps(); scheduleThumb();
+  };
+  const onInput=()=>{
+    if(!textEditDirty){pushHistory();textEditDirty=true;}
+    item.text=normalizeTextContent(tc.innerText);
+    fitTextHeight(item,el);
+    updateSelectionOverlay(); updateProps(); scheduleSave();
   };
   const onKey=e=>{
     if(e.key==='Escape'){e.preventDefault();tc.blur();}
@@ -1110,6 +1132,27 @@ function startTextEdit(id,el){
   };
   tc.addEventListener('blur',onBlur);
   tc.addEventListener('keydown',onKey);
+  tc.addEventListener('input',onInput);
+  fitTextHeight(item,el);
+}
+
+function isLegacyTextPlaceholder(item){
+  return (item.type==='text'&&item.text==='Double-click to edit')
+    ||(item.type==='note'&&item.text==='Write a note...');
+}
+function normalizeTextContent(value){
+  return String(value||'').replace(/\u00a0/g,' ');
+}
+function fitTextHeight(item,el,shrink=false){
+  if(!item||!(item.type==='text'||item.type==='note')) return;
+  el=el||canvasWorld.querySelector(`[data-id="${item.id}"]`);
+  const tc=el?.querySelector('.text-content'); if(!tc) return;
+  const minH=item.type==='note'?90:28;
+  const nextH=Math.max(minH,Math.ceil(tc.scrollHeight)+2);
+  if(shrink||nextH>item.h){
+    item.h=nextH;
+    el.style.height=item.h+'px';
+  }
 }
 
 // ── CANVAS THUMBNAIL ──────────────────────────────────────────────
@@ -1279,7 +1322,8 @@ function applyItemStyle(el,item){
   if(item.type==='text'||item.type==='note'){
   const tc=el.querySelector('.text-content');
   if(tc&&tc.contentEditable!=='true'){
-    tc.innerText=item.text||'';
+    tc.innerText=isLegacyTextPlaceholder(item)?'':(item.text||'');
+    tc.dataset.placeholder=item.type==='note'?'Write a note...':'Type text';
     tc.style.fontSize=item.fontSize+'px';
     tc.style.fontFamily=item.fontFamily;
     tc.style.fontWeight=item.fontWeight;
@@ -1291,7 +1335,7 @@ function applyItemStyle(el,item){
     tc.style.overflow='hidden';
     tc.style.wordBreak='break-word';
     tc.style.whiteSpace='pre-wrap';
-    tc.style.lineHeight='1.4';
+    tc.style.lineHeight=item.lineHeight||1.4;
     tc.style.padding='8px';
   }
 }
@@ -1698,6 +1742,7 @@ function updateProps(){
   $('flip-v-btn').style.display=isText?'none':'';
   if(isText){
     $('t-size').value=item.fontSize; $('t-weight').value=item.fontWeight;
+    $('t-line').value=item.lineHeight||1.4;
     $('t-font').value=item.fontFamily; $('t-color').value=item.color;
     if(item.bgColor) $('t-bg').value=item.bgColor;
     document.querySelectorAll('.align-btn-ui').forEach(b=>
@@ -1782,14 +1827,24 @@ $('ungroup-btn').addEventListener('click',ungroupSelection);
 function bindTextProp(id,key,isNum){
   $(id).addEventListener('change',e=>{
     const item=selFirst(); if(!item||(item.type!=='text'&&item.type!=='note')) return;
-    pushHistory(); item[key]=isNum?(parseFloat(e.target.value)||16):e.target.value;
+    const fallback=key==='lineHeight'?1.4:16;
+    pushHistory(); item[key]=isNum?(parseFloat(e.target.value)||fallback):e.target.value;
     const el=canvasWorld.querySelector(`[data-id="${item.id}"]`);
-    if(el) applyItemStyle(el,item);
+    if(el){ applyItemStyle(el,item); fitTextHeight(item,el); }
+    updateSelectionOverlay(); updateProps(); scheduleThumb();
   });
 }
 bindTextProp('t-size','fontSize',true);
+bindTextProp('t-line','lineHeight',true);
 bindTextProp('t-weight','fontWeight',false);
 bindTextProp('t-font','fontFamily',false);
+$('t-fit').addEventListener('click',()=>{
+  const item=selFirst(); if(!item||(item.type!=='text'&&item.type!=='note')||item.locked) return;
+  pushHistory();
+  const el=canvasWorld.querySelector(`[data-id="${item.id}"]`);
+  if(el){fitTextHeight(item,el,true); applyItemStyle(el,item);}
+  updateSelectionOverlay(); updateProps(); scheduleThumb();
+});
 $('t-color').addEventListener('input',e=>{
   const item=selFirst(); if(!item||(item.type!=='text'&&item.type!=='note')) return;
   item.color=e.target.value;
