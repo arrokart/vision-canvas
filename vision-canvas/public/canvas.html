@@ -15,20 +15,21 @@
   --text3:#4a4a60;--danger:#e05252;--success:#52c97a;--warn:#f0a840;
   --toolbar-w:52px;--panel-w:268px;--topbar-h:44px;
 }
-html,body{height:100%;overflow:hidden;font-family:'Outfit',sans-serif;
+html,body{height:100%;overflow:hidden;margin:0;padding:0;font-family:'Outfit',sans-serif;
   background:var(--bg);color:var(--text);user-select:none;}
 
 /* TOP BAR */
-#topbar{height:var(--topbar-h);display:flex;align-items:center;
+#topbar{min-height:var(--topbar-h);display:flex;align-items:center;
   background:var(--panel);border-bottom:1px solid var(--border);
-  backdrop-filter:blur(20px);z-index:100;padding:0 10px;}
+  backdrop-filter:blur(20px);z-index:100;padding:6px 10px;gap:6px;
+  flex-wrap:wrap;overflow:visible;}
 #logo{font-family:'Syne',sans-serif;font-weight:700;font-size:15px;
-  color:var(--accent2);letter-spacing:.5px;margin-right:10px;white-space:nowrap;}
+  color:var(--accent2);letter-spacing:.5px;white-space:nowrap;flex-shrink:0;}
 #logo span{color:var(--text3);}
-.canvas-tabs{display:flex;gap:3px;flex:1;overflow:hidden;align-items:center;}
+.canvas-tabs{display:flex;gap:3px;flex:1 1 160px;min-width:0;overflow:hidden;align-items:center;}
 .canvas-tab{display:flex;align-items:center;gap:5px;padding:3px 9px;border-radius:6px;
   font-size:12px;color:var(--text2);cursor:pointer;border:1px solid transparent;
-  white-space:nowrap;transition:all .15s;position:relative;}
+  white-space:nowrap;transition:all .15s;position:relative;min-width:0;flex-shrink:1;}
 .canvas-tab:hover{background:var(--bg3);color:var(--text);}
 .canvas-tab.active{background:rgba(108,113,240,.12);border-color:rgba(108,113,240,.3);color:var(--accent2);}
 /* thumbnail tooltip on tab hover */
@@ -44,11 +45,12 @@ html,body{height:100%;overflow:hidden;font-family:'Outfit',sans-serif;
 .tab-close:hover{background:rgba(255,255,255,.1);color:var(--text);}
 #add-canvas-btn{min-width:26px;height:26px;border-radius:5px;border:1px solid var(--border2);
   background:transparent;color:var(--text2);cursor:pointer;font-size:16px;
-  display:flex;align-items:center;justify-content:center;transition:.15s;}
+  display:flex;align-items:center;justify-content:center;transition:.15s;flex-shrink:0;}
 #add-canvas-btn:hover{background:var(--bg3);color:var(--text);}
-.topbar-right{display:flex;align-items:center;gap:5px;margin-left:10px;}
+.topbar-right{display:flex;align-items:center;justify-content:flex-end;gap:5px;
+  margin-left:auto;min-width:0;flex:0 1 auto;flex-wrap:wrap;}
 .zoom-controls{display:flex;align-items:center;gap:3px;background:var(--bg3);
-  border-radius:6px;padding:2px;border:1px solid var(--border);}
+  border-radius:6px;padding:2px;border:1px solid var(--border);flex-shrink:0;}
 .zoom-btn{width:20px;height:20px;border:none;background:transparent;color:var(--text2);
   cursor:pointer;border-radius:4px;font-size:13px;display:flex;align-items:center;
   justify-content:center;transition:.15s;}
@@ -58,13 +60,25 @@ html,body{height:100%;overflow:hidden;font-family:'Outfit',sans-serif;
 .tb-btn{height:26px;padding:0 8px;border-radius:6px;border:1px solid var(--border2);
   background:transparent;color:var(--text2);cursor:pointer;font-size:11px;
   font-family:'Outfit',sans-serif;display:flex;align-items:center;gap:4px;
-  transition:.15s;white-space:nowrap;}
+  transition:.15s;white-space:nowrap;flex-shrink:0;}
 .tb-btn:hover{background:var(--bg3);color:var(--text);}
 .tb-btn.primary{background:var(--accent);border-color:var(--accent);color:#fff;}
 .tb-btn.primary:hover{background:var(--accent2);}
 .tb-btn:disabled{opacity:.35;cursor:not-allowed;}
 .tb-btn:disabled:hover{background:transparent;color:var(--text2);}
 .tb-sep{width:1px;height:20px;background:var(--border);margin:0 2px;}
+@media (max-width:900px){
+  :root{--topbar-h:76px;}
+  .topbar-right{order:2;flex:1 1 100%;}
+  .canvas-tabs{flex-basis:120px;}
+  .tb-btn{padding:0 6px;}
+  .tb-sep{display:none;}
+}
+@media (max-width:620px){
+  :root{--topbar-h:108px;}
+  .canvas-tabs{order:3;flex-basis:100%;}
+  .topbar-right{justify-content:flex-start;}
+}
 
 /* MAIN */
 #main{display:flex;flex:1;height:calc(100vh - var(--topbar-h));overflow:hidden;}
@@ -695,6 +709,7 @@ function pushHistory(){
   c.future=[];
   updateHistoryBtns();
   scheduleSave();
+  scheduleThumbSave();
 }
 function undo(){
   const c=ac(); if(!c.history.length) return;
@@ -803,22 +818,39 @@ function startTextEdit(id,el){
 }
 
 // ── CANVAS THUMBNAIL ──────────────────────────────────────────────
-let thumbTimer;
-function scheduleThumb(){
-  clearTimeout(thumbTimer);
-  thumbTimer=setTimeout(generateThumb, 1500);
+const UI_THUMB_INTERVAL = 30000;
+let uiThumbTimer, uiThumbInProgress=false, uiThumbDirty=false, lastUiThumb=0;
+function scheduleThumb(force=false){
+  uiThumbDirty=true;
+  if(force && uiThumbTimer){
+    clearTimeout(uiThumbTimer);
+    uiThumbTimer=null;
+  }
+  if(uiThumbInProgress || uiThumbTimer) return;
+  const elapsed=Date.now()-lastUiThumb;
+  const wait=force ? 0 : Math.max(0,UI_THUMB_INTERVAL-elapsed);
+  uiThumbTimer=setTimeout(generateThumb, wait);
 }
 async function generateThumb(){
-  const items=ac().items.filter(i=>i.visible);
-  if(!items.length){ac().thumb=null;renderTabs();return;}
+  uiThumbTimer=null;
+  if(uiThumbInProgress) return;
+  uiThumbInProgress=true;
+  uiThumbDirty=false;
+  const items=ac().items.filter(i=>i.visible!==false);
+  if(!items.length){
+    ac().thumb=null; renderTabs();
+    lastUiThumb=Date.now(); uiThumbInProgress=false;
+    if(uiThumbDirty) scheduleThumb();
+    return;
+  }
   const saved={pan:{...state.pan},zoom:state.zoom,sel:[...state.selectedIds]};
-  state.selectedIds=[];
-  state.pan={x:0,y:0}; state.zoom=1;
-  applyTransform(); renderItemsHighlight();
-  selOverlay.style.display='none';
-  multiSelBox.style.display='none';
-  await new Promise(r=>setTimeout(r,50));
   try{
+    state.selectedIds=[];
+    state.pan={x:0,y:0}; state.zoom=1;
+    applyTransform(); renderItemsHighlight();
+    selOverlay.style.display='none';
+    multiSelBox.style.display='none';
+    await new Promise(r=>setTimeout(r,50));
     const c=await html2canvas(canvasWorld,{
       backgroundColor:getCanvasBg(),scale:0.3,
       x:0,y:0,width:canvasWorld.scrollWidth||800,
@@ -827,11 +859,16 @@ async function generateThumb(){
     });
     ac().thumb=c.toDataURL('image/jpeg',0.7);
   }catch(e){}
-  state.selectedIds=saved.sel;
-  state.pan=saved.pan; state.zoom=saved.zoom;
-  applyTransform(); renderItemsHighlight();
-  updateSelectionOverlay(); updateMultiSelBox();
-  renderTabs();
+  finally{
+    state.selectedIds=saved.sel;
+    state.pan=saved.pan; state.zoom=saved.zoom;
+    applyTransform(); renderItemsHighlight();
+    updateSelectionOverlay(); updateMultiSelBox();
+    renderTabs();
+    lastUiThumb=Date.now();
+    uiThumbInProgress=false;
+    if(uiThumbDirty) scheduleThumb();
+  }
 }
 
 // ── CANVAS MANAGEMENT ─────────────────────────────────────────────
@@ -1964,23 +2001,57 @@ const CANVAS_ID = new URLSearchParams(window.location.search).get('id')
 const SUPABASE_URL = 'https://tzzbinwvtuvjhynlmjzo.supabase.co'
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR6emJpbnd2dHV2amh5bmxtanpvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzcyMTQwNDgsImV4cCI6MjA5Mjc5MDA0OH0.J5evLhHjvW3hn280SelzkenehL1qj7uHjW8uG-3HvZY'
 
-let saveTimer
+const THUMB_SAVE_INTERVAL = 30000
+let saveTimer, thumbTimer, thumbInProgress = false, thumbDirty = false, lastThumbSave = 0
 function scheduleSave(){
   clearTimeout(saveTimer)
-  saveTimer=setTimeout(saveCanvas, 2000)
+  saveTimer = setTimeout(saveStateOnly, 2000)
   showSaveIndicator('saving')
 }
 
-async function saveCanvas(){
+async function saveStateOnly(){
   if(!CANVAS_ID) return
-  
-  // generate thumbnail
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/canvases?id=eq.${CANVAS_ID}`,{
+    method:'PATCH',
+    headers:{
+      'Content-Type':'application/json',
+      'apikey':SUPABASE_KEY,
+      'Authorization':`Bearer ${SUPABASE_KEY}`,
+      'Prefer':'return=minimal'
+    },
+    body:JSON.stringify({state:{canvases:state.canvases,nextId:state.nextId}})
+  })
+  if(res.ok) showSaveIndicator('saved')
+  else showSaveIndicator('error')
+}
+
+// Thumbnail work is intentionally separate from the 2s state autosave.
+function scheduleThumbSave(force=false){
+  if(!CANVAS_ID) return
+  thumbDirty = true
+  if(force && thumbTimer){
+    clearTimeout(thumbTimer)
+    thumbTimer = null
+  }
+  if(thumbInProgress || thumbTimer) return
+  const elapsed = Date.now() - lastThumbSave
+  const wait = force ? 0 : Math.max(0, THUMB_SAVE_INTERVAL - elapsed)
+  thumbTimer = setTimeout(saveCanvasThumbnail, wait)
+}
+
+async function saveCanvasThumbnail(){
+  if(!CANVAS_ID) return
+  thumbTimer = null
+  if(thumbInProgress) return
+  thumbInProgress = true
+  thumbDirty = false
+
   let thumbnailUrl = null
+  let savedView = null
   try {
-    const items = ac().items.filter(i=>i.visible)
+    const items = ac().items.filter(i=>i.visible!==false)
     if(items.length){
-      const savedPan={...state.pan}, savedZoom=state.zoom
-      const savedSel=[...state.selectedIds]
+      savedView = {pan:{...state.pan}, zoom:state.zoom, sel:[...state.selectedIds]}
       state.selectedIds=[]
       state.pan={x:0,y:0}; state.zoom=1
       applyTransform()
@@ -2011,16 +2082,11 @@ async function saveCanvas(){
         height:contentH,
         logging:false,useCORS:true,allowTaint:true,
       })
-      
-      state.selectedIds=savedSel
-      state.pan=savedPan; state.zoom=savedZoom
-      applyTransform(); renderItemsHighlight()
-      updateSelectionOverlay(); updateMultiSelBox()
-      
-      // upload thumbnail
+
       const blob = await new Promise(r=>c.toBlob(r,'image/jpeg',0.6))
+      if(!blob) throw new Error('thumbnail blob failed')
       const filename = `thumb-${CANVAS_ID}.jpg`
-      await fetch(`${SUPABASE_URL}/storage/v1/object/canvas-images/${filename}`,{
+      const uploadRes = await fetch(`${SUPABASE_URL}/storage/v1/object/canvas-images/${filename}`,{
         method:'POST',
         headers:{
           'apikey':SUPABASE_KEY,
@@ -2030,27 +2096,39 @@ async function saveCanvas(){
         },
         body:blob
       })
+      if(!uploadRes.ok) throw new Error('thumbnail upload failed')
       thumbnailUrl = `${SUPABASE_URL}/storage/v1/object/public/canvas-images/${filename}`
     }
   } catch(e){ console.log('thumb error',e) }
-
-  // save state + thumbnail
-  const payload = {
-    state: {canvases:state.canvases, nextId:state.nextId},
-    ...(thumbnailUrl && {thumbnail_url: thumbnailUrl})
+  finally {
+    if(savedView){
+      state.selectedIds=savedView.sel
+      state.pan=savedView.pan
+      state.zoom=savedView.zoom
+      applyTransform(); renderItemsHighlight()
+      updateSelectionOverlay(); updateMultiSelBox()
+    }
   }
-  const res=await fetch(`${SUPABASE_URL}/rest/v1/canvases?id=eq.${CANVAS_ID}`,{
-    method:'PATCH',
-    headers:{
-      'Content-Type':'application/json',
-      'apikey':SUPABASE_KEY,
-      'Authorization':`Bearer ${SUPABASE_KEY}`,
-      'Prefer':'return=minimal'
-    },
-    body:JSON.stringify(payload)
-  })
-  if(res.ok) showSaveIndicator('saved')
-  else showSaveIndicator('error')
+
+  try {
+    if(thumbnailUrl){
+      await fetch(`${SUPABASE_URL}/rest/v1/canvases?id=eq.${CANVAS_ID}`,{
+        method:'PATCH',
+        headers:{
+          'Content-Type':'application/json',
+          'apikey':SUPABASE_KEY,
+          'Authorization':`Bearer ${SUPABASE_KEY}`,
+          'Prefer':'return=minimal'
+        },
+        body:JSON.stringify({thumbnail_url: thumbnailUrl})
+      })
+    }
+  } catch(e){ console.log('thumb patch error',e) }
+  finally {
+    lastThumbSave = Date.now()
+    thumbInProgress = false
+    if(thumbDirty) scheduleThumbSave()
+  }
 }
 
 async function loadCanvas(){
