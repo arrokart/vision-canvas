@@ -819,7 +819,11 @@ function startTextEdit(id,el){
 
 // ── CANVAS THUMBNAIL ──────────────────────────────────────────────
 const UI_THUMB_INTERVAL = 30000;
+const THUMB_DEFER_MS = 1000;
 let uiThumbTimer, uiThumbInProgress=false, uiThumbDirty=false, lastUiThumb=0;
+function isCanvasInteractionActive(){
+  return !!interaction || !!state.editingId;
+}
 function scheduleThumb(force=false){
   uiThumbDirty=true;
   if(force && uiThumbTimer){
@@ -834,6 +838,11 @@ function scheduleThumb(force=false){
 async function generateThumb(){
   uiThumbTimer=null;
   if(uiThumbInProgress) return;
+  if(isCanvasInteractionActive()){
+    uiThumbDirty=true;
+    uiThumbTimer=setTimeout(generateThumb, THUMB_DEFER_MS);
+    return;
+  }
   uiThumbInProgress=true;
   uiThumbDirty=false;
   const items=ac().items.filter(i=>i.visible!==false);
@@ -1756,6 +1765,8 @@ document.addEventListener('mouseup',e=>{
   if(interaction&&(interaction.type==='resize'||interaction.type==='rotate')) scheduleThumb();
   if(interaction&&interaction.type==='move'&&interaction.moved) scheduleThumb();
   interaction=null;
+  if(uiThumbDirty) scheduleThumb(true);
+  if(thumbDirty) scheduleThumbSave(true);
   canvasArea.classList.remove('panning');
 });
 
@@ -2043,6 +2054,11 @@ async function saveCanvasThumbnail(){
   if(!CANVAS_ID) return
   thumbTimer = null
   if(thumbInProgress) return
+  if(isCanvasInteractionActive()){
+    thumbDirty = true
+    thumbTimer = setTimeout(saveCanvasThumbnail, THUMB_DEFER_MS)
+    return
+  }
   thumbInProgress = true
   thumbDirty = false
 
