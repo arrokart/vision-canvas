@@ -825,6 +825,55 @@ let uiThumbTimer, uiThumbInProgress=false, uiThumbDirty=false, lastUiThumb=0;
 function isCanvasInteractionActive(){
   return !!interaction || !!state.editingId;
 }
+function getThumbItems(){
+  return ac().items.filter(i=>i.visible!==false);
+}
+function getItemsBounds(items,pad=0){
+  const minX=Math.min(...items.map(i=>i.x));
+  const minY=Math.min(...items.map(i=>i.y));
+  const maxX=Math.max(...items.map(i=>i.x+i.w));
+  const maxY=Math.max(...items.map(i=>i.y+i.h));
+  return {
+    minX,minY,maxX,maxY,
+    width:Math.max(1,maxX-minX+pad*2),
+    height:Math.max(1,maxY-minY+pad*2)
+  };
+}
+async function captureCanvasThumb(items,{pad=60,scale=0.3,width,height,backgroundColor}={}){
+  const bounds=getItemsBounds(items,pad);
+  const captureW=width||bounds.width;
+  const captureH=height||bounds.height;
+  const clone=canvasWorld.cloneNode(true);
+  clone.id='canvas-world-thumb';
+  clone.style.position='fixed';
+  clone.style.left='-100000px';
+  clone.style.top='0';
+  clone.style.width=captureW+'px';
+  clone.style.height=captureH+'px';
+  clone.style.transform='none';
+  clone.style.transformOrigin='0 0';
+  clone.style.pointerEvents='none';
+  clone.style.overflow='hidden';
+  clone.style.background=backgroundColor||getCanvasBg();
+  clone.querySelectorAll('.canvas-item').forEach(el=>{
+    const item=getItem(parseInt(el.dataset.id));
+    if(!item||item.visible===false){el.remove();return;}
+    el.classList.remove('multi-sel');
+    el.style.left=(item.x-bounds.minX+pad)+'px';
+    el.style.top=(item.y-bounds.minY+pad)+'px';
+  });
+  document.body.appendChild(clone);
+  await new Promise(r=>requestAnimationFrame(r));
+  try{
+    return await html2canvas(clone,{
+      backgroundColor:backgroundColor||getCanvasBg(),
+      scale,x:0,y:0,width:captureW,height:captureH,
+      logging:false,useCORS:true,allowTaint:true,
+    });
+  }finally{
+    clone.remove();
+  }
+}
 function scheduleThumb(force=false){
   uiThumbDirty=true;
   if(force && uiThumbTimer){
@@ -846,34 +895,18 @@ async function generateThumb(){
   }
   uiThumbInProgress=true;
   uiThumbDirty=false;
-  const items=ac().items.filter(i=>i.visible!==false);
+  const items=getThumbItems();
   if(!items.length){
     ac().thumb=null; renderTabs();
     lastUiThumb=Date.now(); uiThumbInProgress=false;
     if(uiThumbDirty) scheduleThumb();
     return;
   }
-  const saved={pan:{...state.pan},zoom:state.zoom,sel:[...state.selectedIds]};
   try{
-    state.selectedIds=[];
-    state.pan={x:0,y:0}; state.zoom=1;
-    applyTransform(); renderItemsHighlight();
-    selOverlay.style.display='none';
-    multiSelBox.style.display='none';
-    await new Promise(r=>setTimeout(r,50));
-    const c=await html2canvas(canvasWorld,{
-      backgroundColor:getCanvasBg(),scale:0.3,
-      x:0,y:0,width:canvasWorld.scrollWidth||800,
-      height:canvasWorld.scrollHeight||600,
-      logging:false,useCORS:true,allowTaint:true,
-    });
+    const c=await captureCanvasThumb(items,{pad:40,scale:0.3,backgroundColor:getCanvasBg()});
     ac().thumb=c.toDataURL('image/jpeg',0.7);
   }catch(e){}
   finally{
-    state.selectedIds=saved.sel;
-    state.pan=saved.pan; state.zoom=saved.zoom;
-    applyTransform(); renderItemsHighlight();
-    updateSelectionOverlay(); updateMultiSelBox();
     renderTabs();
     lastUiThumb=Date.now();
     uiThumbInProgress=false;
@@ -2066,40 +2099,25 @@ async function saveCanvasThumbnail(){
   thumbDirty = false
 
   let thumbnailUrl = null
-  let savedView = null
   try {
-    const items = ac().items.filter(i=>i.visible!==false)
+    const items = getThumbItems()
     if(items.length){
-      savedView = {pan:{...state.pan}, zoom:state.zoom, sel:[...state.selectedIds]}
-      state.selectedIds=[]
-      state.pan={x:0,y:0}; state.zoom=1
-      applyTransform()
-      selOverlay.style.display='none'
-      multiSelBox.style.display='none'
-      renderItemsHighlight()
-      await new Promise(r=>setTimeout(r,50))
-      
-      const minX=Math.min(...items.map(i=>i.x))
-      const minY=Math.min(...items.map(i=>i.y))
-      const maxX=Math.max(...items.map(i=>i.x+i.w))
-      const maxY=Math.max(...items.map(i=>i.y+i.h))
       const pad=60
-      const contentW=maxX-minX+pad*2
-      const contentH=maxY-minY+pad*2
+      const bounds=getItemsBounds(items,pad)
+      const contentW=bounds.width
+      const contentH=bounds.height
       const thumbW=400
       const thumbH=280
       const scaleX=thumbW/contentW
       const scaleY=thumbH/contentH
       const thumbScale=Math.min(scaleX,scaleY,1)
 
-      const c=await html2canvas(canvasWorld,{
+      const c=await captureCanvasThumb(items,{
         backgroundColor:ac().bg,
         scale:thumbScale,
-        x:minX-pad,
-        y:minY-pad,
         width:contentW,
         height:contentH,
-        logging:false,useCORS:true,allowTaint:true,
+        pad
       })
 
       const blob = await new Promise(r=>c.toBlob(r,'image/jpeg',0.6))
@@ -2119,15 +2137,6 @@ async function saveCanvasThumbnail(){
       thumbnailUrl = `${SUPABASE_URL}/storage/v1/object/public/canvas-images/${filename}`
     }
   } catch(e){ console.log('thumb error',e) }
-  finally {
-    if(savedView){
-      state.selectedIds=savedView.sel
-      state.pan=savedView.pan
-      state.zoom=savedView.zoom
-      applyTransform(); renderItemsHighlight()
-      updateSelectionOverlay(); updateMultiSelBox()
-    }
-  }
 
   try {
     if(thumbnailUrl){
