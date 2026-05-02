@@ -110,6 +110,9 @@ body{display:flex;flex-direction:column;}
 #canvas-area.panning{cursor:grabbing!important;}
 #canvas-area.hand-tool{cursor:grab;}
 #canvas-area.hand-tool.panning{cursor:grabbing!important;}
+#canvas-area.zoom-tool{cursor:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='28' viewBox='0 0 28 28'%3E%3Ccircle cx='11' cy='11' r='7' fill='none' stroke='%23f4f4fb' stroke-width='2.2'/%3E%3Cpath d='M16.5 16.5L24 24' stroke='%23f4f4fb' stroke-width='2.4' stroke-linecap='round'/%3E%3Cpath d='M11 7.5v7M7.5 11h7' stroke='%238f91ff' stroke-width='2.2' stroke-linecap='round'/%3E%3C/svg%3E") 11 11, zoom-in;}
+#canvas-area.zoom-tool.zoom-out{cursor:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='28' viewBox='0 0 28 28'%3E%3Ccircle cx='11' cy='11' r='7' fill='none' stroke='%23f4f4fb' stroke-width='2.2'/%3E%3Cpath d='M16.5 16.5L24 24' stroke='%23f4f4fb' stroke-width='2.4' stroke-linecap='round'/%3E%3Cpath d='M7.5 11h7' stroke='%238f91ff' stroke-width='2.2' stroke-linecap='round'/%3E%3C/svg%3E") 11 11, zoom-out;}
+#canvas-area.zoom-tool .canvas-item{cursor:inherit!important;}
 #canvas-area.text-tool{cursor:crosshair;}
 #canvas-world{position:absolute;transform-origin:0 0;will-change:transform;}
 
@@ -181,6 +184,24 @@ body{display:flex;flex-direction:column;}
 .align-guide{position:absolute;pointer-events:none;z-index:300;transition:opacity .1s;}
 .align-guide.v{width:1px;top:0;bottom:0;background:rgba(255,80,80,.7);}
 .align-guide.h{height:1px;left:0;right:0;background:rgba(255,80,80,.7);}
+.user-guide{position:absolute;z-index:38;background:rgba(139,143,244,.75);pointer-events:auto;}
+.user-guide.v{width:1px;top:0;bottom:0;cursor:ew-resize;}
+.user-guide.h{height:1px;left:0;right:0;cursor:ns-resize;}
+.user-guide:hover{background:rgba(255,255,255,.9);}
+#ruler-x,#ruler-y,#ruler-corner{position:absolute;background:rgba(12,12,16,.92);border-color:var(--border);z-index:42;}
+#ruler-x{left:20px;right:0;top:0;height:20px;border-bottom:1px solid var(--border);cursor:ns-resize;overflow:hidden;}
+#ruler-y{left:0;top:20px;bottom:0;width:20px;border-right:1px solid var(--border);cursor:ew-resize;overflow:hidden;}
+#ruler-corner{left:0;top:0;width:20px;height:20px;border-right:1px solid var(--border);border-bottom:1px solid var(--border);}
+.ruler-mark{position:absolute;color:var(--text3);font-size:9px;line-height:1;font-variant-numeric:tabular-nums;pointer-events:none;}
+.ruler-mark.major::before,.ruler-mark.minor::before{content:'';position:absolute;background:rgba(255,255,255,.22);}
+#ruler-x .ruler-mark.major::before{left:0;top:0;width:1px;height:9px;}
+#ruler-x .ruler-mark.minor::before{left:0;top:0;width:1px;height:5px;}
+#ruler-y .ruler-mark.major::before{left:0;top:0;width:9px;height:1px;}
+#ruler-y .ruler-mark.minor::before{left:0;top:0;width:5px;height:1px;}
+#ruler-x .ruler-mark span{position:absolute;left:3px;top:9px;}
+#ruler-y .ruler-mark span{position:absolute;left:2px;top:3px;transform:rotate(-90deg);transform-origin:left top;}
+#guide-layer{position:absolute;inset:0;pointer-events:none;z-index:38;}
+#guide-layer .user-guide{pointer-events:auto;}
 
 /* SELECTION OVERLAY */
 #selection-overlay{position:absolute;pointer-events:none;transform-origin:center center;display:none;}
@@ -501,6 +522,8 @@ body{display:flex;flex-direction:column;}
       <svg viewBox="0 0 24 24"><path d="M4 2l16 10-7 1.5L9 22z"/></svg></button>
     <button class="tool-btn" data-tool="hand"><span class="tool-tip">Pan (H)</span>
       <svg viewBox="0 0 24 24"><path d="M9 5a1 1 0 0 1 2 0v4.5a1 1 0 0 1 2 0V10a1 1 0 0 1 2 0v1a1 1 0 0 1 2 0v6a4 4 0 0 1-4 4h-2A5 5 0 0 1 5 16v-5a1 1 0 0 1 2 0V5z"/></svg></button>
+    <button class="tool-btn" data-tool="zoom"><span class="tool-tip">Zoom (Z)</span>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="10.5" cy="10.5" r="6.5"/><line x1="15.5" y1="15.5" x2="21" y2="21"/><line x1="10.5" y1="7.5" x2="10.5" y2="13.5"/><line x1="7.5" y1="10.5" x2="13.5" y2="10.5"/></svg></button>
     <button class="tool-btn" data-tool="text"><span class="tool-tip">Text (T)</span>
       <svg viewBox="0 0 24 24"><path d="M4 6h16v2H4V6zm4 4h8v2H8v-2zm2 4h4v2h-4v-2z"/></svg></button>
     <button class="tool-btn" data-tool="note"><span class="tool-tip">Sticky Note (N)</span>
@@ -537,7 +560,11 @@ body{display:flex;flex-direction:column;}
 
   <!-- CANVAS -->
   <div id="canvas-area">
+    <div id="ruler-corner"></div>
+    <div id="ruler-x" title="Drag down to add horizontal guide"></div>
+    <div id="ruler-y" title="Drag right to add vertical guide"></div>
     <div id="canvas-world"></div>
+    <div id="guide-layer"></div>
     <div id="selection-overlay">
       <div class="selection-border"></div>
       <div class="sel-handle nw" data-dir="nw"></div>
@@ -640,6 +667,32 @@ body{display:flex;flex-direction:column;}
             <button class="act-btn" id="lock-btn">🔓</button>
             <button class="act-btn" id="dup-btn">⧉</button>
             <button class="act-btn danger" id="del-btn">✕</button>
+          </div>
+          <div id="effect-props" style="display:flex;flex-direction:column;gap:6px;">
+            <select class="font-select" id="blend-mode">
+              <option value="normal">Normal blend</option>
+              <option value="multiply">Multiply</option>
+              <option value="screen">Screen</option>
+              <option value="overlay">Overlay</option>
+              <option value="darken">Darken</option>
+              <option value="lighten">Lighten</option>
+              <option value="color-dodge">Color dodge</option>
+              <option value="color-burn">Color burn</option>
+              <option value="difference">Difference</option>
+              <option value="luminosity">Luminosity</option>
+            </select>
+            <label class="prop-check"><input type="checkbox" id="fx-shadow"> Drop shadow</label>
+            <div class="prop-2col">
+              <div class="prop-group"><span class="lbl">Blur</span><input type="number" id="fx-shadow-blur" min="0" max="120" step="1"></div>
+              <div class="prop-group"><span class="lbl">Y</span><input type="number" id="fx-shadow-y" min="-80" max="120" step="1"></div>
+            </div>
+            <div class="prop-2col">
+              <div class="prop-group"><span class="lbl">Round</span><input type="number" id="fx-radius" min="0" max="120" step="1"></div>
+              <div class="color-row" style="padding:0;">
+                <div class="color-swatch"><input type="color" id="fx-shadow-color" value="#000000"></div>
+                <span class="color-label">Shadow</span>
+              </div>
+            </div>
           </div>
           <div id="text-props">
             <div class="prop-2col">
@@ -905,6 +958,7 @@ if(ACCESS_MODE==='view') {
 const $ = id => document.getElementById(id);
 const canvasArea = $('canvas-area');
 const canvasWorld = $('canvas-world');
+const guideLayer = $('guide-layer');
 const selOverlay = $('selection-overlay');
 const multiSelBox = $('multi-sel-box');
 const ctxMenu = $('ctx-menu');
@@ -924,7 +978,7 @@ let imageCropDirty=false;
 let state = {
   canvases:[{id:1,name:'Canvas 1',bg:'#0f0f14',bgType:'solid',
              gradC1:'#6c71f0',gradC2:'#0b0b0e',gradDir:'to bottom',
-             items:[],history:[],future:[],thumb:null}],
+             items:[],history:[],future:[],thumb:null,guides:{v:[],h:[]}}],
   activeId:1, nextId:1, nextCanvasId:2,
   selectedIds:[], pan:{x:0,y:0}, zoom:1,
   tool:'select', interaction:null, spaceHeld:false,
@@ -992,7 +1046,8 @@ function addImageItem(src,x,y,w,h){
   ac().items.push({id,type:'image',src,name:`Image ${id}`,
     x,y,w,h,rot:0,opacity:100,visible:true,locked:false,
     flipH:false,flipV:false,z:maxZ()+1,
-    fit:'contain',imgX:50,imgY:50,imgScale:100});
+    fit:'contain',imgX:50,imgY:50,imgScale:100,
+    blendMode:'normal',shadow:false,shadowBlur:18,shadowY:10,shadowColor:'rgba(0,0,0,.35)',radius:2});
   state.selectedIds=[id];
   renderItems(); renderLayers();
   updateSelectionOverlay(); updateMultiSelBox();
@@ -1008,7 +1063,8 @@ function addTextItem(x,y,w=220,h=70){
     fontFamily:"'Outfit', sans-serif",fontWeight:'400',
     color:'#eeeef5',textAlign:'left',bgColor:'',
     x,y,w:Math.max(40,w),h:Math.max(28,h),rot:0,opacity:100,
-    visible:true,locked:false,flipH:false,flipV:false,z:maxZ()+1});
+    visible:true,locked:false,flipH:false,flipV:false,z:maxZ()+1,
+    blendMode:'normal',shadow:false,shadowBlur:18,shadowY:10,shadowColor:'rgba(0,0,0,.35)',radius:0});
   state.selectedIds=[id];
   renderItems(); renderLayers();
   updateSelectionOverlay(); updateMultiSelBox();
@@ -1028,7 +1084,8 @@ function addNoteItem(x,y,w=220,h=160){
     fontFamily:"'Outfit', sans-serif",fontWeight:'500',
     color:'#171717',textAlign:'left',bgColor:'#ffd966',
     x,y,w:Math.max(120,w),h:Math.max(90,h),rot:0,opacity:100,
-    visible:true,locked:false,flipH:false,flipV:false,z:maxZ()+1});
+    visible:true,locked:false,flipH:false,flipV:false,z:maxZ()+1,
+    blendMode:'normal',shadow:true,shadowBlur:24,shadowY:10,shadowColor:'rgba(0,0,0,.28)',radius:6});
   state.selectedIds=[id];
   renderItems(); renderLayers();
   updateSelectionOverlay(); updateMultiSelBox();
@@ -1068,6 +1125,7 @@ function addShapeItem(shape,x,y,w=160,h=110,flipH=false,flipV=false){
   ac().items.push({id,type:'shape',shape,name:`${SHAPE_LABELS[shape]||'Shape'} ${id}`,
     x,y,w:Math.max(20,w),h:Math.max(20,h),rot:0,opacity:100,
     visible:true,locked:false,flipH,flipV,z:maxZ()+1,
+    blendMode:'normal',shadow:false,shadowBlur:18,shadowY:10,shadowColor:'rgba(0,0,0,.35)',radius:3,
     fill:isLine?'transparent':defaults.fill,
     stroke:defaults.stroke,strokeWidth:isLine?Math.max(3,defaults.strokeWidth):defaults.strokeWidth});
   state.selectedIds=[id];
@@ -1297,7 +1355,7 @@ function addCanvas(name){
   const id=state.nextCanvasId++;
   state.canvases.push({id,name:name||`Canvas ${id}`,
     bg:'#0f0f14',bgType:'solid',gradC1:'#6c71f0',gradC2:'#0b0b0e',
-    gradDir:'to bottom',items:[],history:[],future:[],thumb:null});
+    gradDir:'to bottom',items:[],history:[],future:[],thumb:null,guides:{v:[],h:[]}});
   switchCanvas(id);
 }
 function switchCanvas(id){
@@ -1357,6 +1415,9 @@ function applyItemStyle(el,item){
   el.style.zIndex=item.z;
   el.style.opacity=item.opacity/100;
   el.style.display=item.visible?'':'none';
+  el.style.mixBlendMode=item.blendMode||'normal';
+  el.style.borderRadius=(item.radius||0)+'px';
+  el.style.boxShadow=item.shadow?`0 ${item.shadowY||10}px ${item.shadowBlur||18}px ${item.shadowColor||'rgba(0,0,0,.35)'}`:'none';
   el.classList.toggle('locked-item',!!item.locked);
   el.classList.toggle('image-item',item.type==='image');
   el.classList.toggle('multi-sel',state.selectedIds.length>1&&state.selectedIds.includes(item.id));
@@ -1403,6 +1464,10 @@ function applyItemStyle(el,item){
     if(pin) pin.textContent=item.number||'';
     if(pop) pop.textContent=item.text||'';
   }
+}
+
+function shadowColorHex(item){
+  return colorToHex(item.shadowColor||'rgba(0,0,0,.35)','#000000');
 }
 
 function shapeMarkup(item){
@@ -1560,6 +1625,70 @@ function showGuide(type,pos){
   guideEls.push(g);
 }
 
+function canvasGuides(){
+  const c=ac();
+  c.guides=c.guides||{v:[],h:[]};
+  c.guides.v=c.guides.v||[];
+  c.guides.h=c.guides.h||[];
+  return c.guides;
+}
+function renderUserGuides(){
+  if(!guideLayer) return;
+  guideLayer.innerHTML='';
+  const guides=canvasGuides();
+  guides.v.forEach((x,idx)=>{
+    const g=document.createElement('div');
+    g.className='user-guide v'; g.dataset.type='v'; g.dataset.idx=idx;
+    g.style.left=(x*state.zoom+state.pan.x)+'px';
+    guideLayer.appendChild(g);
+  });
+  guides.h.forEach((y,idx)=>{
+    const g=document.createElement('div');
+    g.className='user-guide h'; g.dataset.type='h'; g.dataset.idx=idx;
+    g.style.top=(y*state.zoom+state.pan.y)+'px';
+    guideLayer.appendChild(g);
+  });
+}
+function addUserGuide(type,pos){
+  const guides=canvasGuides();
+  guides[type].push(Math.round(pos));
+  renderUserGuides(); scheduleSave();
+}
+function clearUserGuides(){
+  const guides=canvasGuides();
+  if(!guides.v.length&&!guides.h.length){showToast('No guides');return;}
+  pushHistory();
+  guides.v=[]; guides.h=[];
+  renderUserGuides(); scheduleSave(); showToast('Guides cleared');
+}
+function deleteUserGuide(type,idx){
+  const guides=canvasGuides();
+  if(!guides[type]||idx<0||idx>=guides[type].length) return;
+  pushHistory();
+  guides[type].splice(idx,1);
+  renderUserGuides(); scheduleSave(); showToast('Guide deleted');
+}
+function renderRulers(){
+  const rx=$('ruler-x'),ry=$('ruler-y');
+  if(!rx||!ry) return;
+  rx.innerHTML=''; ry.innerHTML='';
+  const step=state.zoom>=1.5?50:state.zoom>=.75?100:state.zoom>=.35?200:500;
+  const minor=step/5;
+  const r=canvasArea.getBoundingClientRect();
+  const start=screenToWorld(r.left,r.top);
+  const end=screenToWorld(r.right,r.bottom);
+  const addMark=(parent,axis,value,major)=>{
+    const pos=axis==='x'?value*state.zoom+state.pan.x-20:value*state.zoom+state.pan.y-20;
+    const el=document.createElement('div');
+    el.className='ruler-mark '+(major?'major':'minor');
+    if(axis==='x') el.style.left=pos+'px'; else el.style.top=pos+'px';
+    if(major) el.innerHTML=`<span>${Math.round(value)}</span>`;
+    parent.appendChild(el);
+  };
+  for(let x=Math.floor(start.x/minor)*minor;x<=end.x+minor;x+=minor) addMark(rx,'x',x,Math.abs(x%step)<.001);
+  for(let y=Math.floor(start.y/minor)*minor;y<=end.y+minor;y+=minor) addMark(ry,'y',y,Math.abs(y%step)<.001);
+}
+
 function snapItem(item, othersArr){
   if(!state.snapEnabled) return {dx:0,dy:0};
   const iL=item.x, iR=item.x+item.w, iCX=item.x+item.w/2;
@@ -1581,6 +1710,19 @@ function snapItem(item, othersArr){
       if(d<bestY){bestY=d;dy=b-a;}
     });
   });
+  const guides=canvasGuides();
+  (guides.v||[]).forEach(x=>{
+    [[iL,x],[iR,x],[iCX,x]].forEach(([a,b])=>{
+      const d=Math.abs(a-b);
+      if(d<bestX){bestX=d;dx=b-a;}
+    });
+  });
+  (guides.h||[]).forEach(y=>{
+    [[iT,y],[iB,y],[iCY,y]].forEach(([a,b])=>{
+      const d=Math.abs(a-b);
+      if(d<bestY){bestY=d;dy=b-a;}
+    });
+  });
   if(bestX<=SNAP_DIST) showGuide('v',item.x+dx+item.w/2);
   else dx=0;
   if(bestY<=SNAP_DIST) showGuide('h',item.y+dy+item.h/2);
@@ -1595,6 +1737,8 @@ function applyTransform(){
   $('zoom-indicator').textContent=pct;
   $('info-zoom').textContent=pct;
   updateMiniMap();
+  renderUserGuides();
+  renderRulers();
   positionCommentPanel();
 }
 function screenToWorld(sx,sy){
@@ -1627,6 +1771,20 @@ function fitAll(){
   state.zoom=z;
   state.pan.x=viewportW/2-(minX+(maxX-minX)/2)*z;
   state.pan.y=viewportH/2-(minY+(maxY-minY)/2)*z;
+  applyTransform(); updateSelectionOverlay(); updateMultiSelBox();
+}
+function zoomToScreenRect(x1,y1,x2,y2){
+  const r=canvasArea.getBoundingClientRect();
+  const left=Math.min(x1,x2),top=Math.min(y1,y2);
+  const w=Math.abs(x2-x1),h=Math.abs(y2-y1);
+  if(w<8||h<8){zoomAt(x2,y2,1);return;}
+  const a=screenToWorld(left,top);
+  const b=screenToWorld(left+w,top+h);
+  const worldW=Math.max(1,b.x-a.x),worldH=Math.max(1,b.y-a.y);
+  const nextZoom=Math.min(8,Math.max(0.05,Math.min(r.width/worldW,r.height/worldH)*0.88));
+  state.zoom=nextZoom;
+  state.pan.x=r.width/2-(a.x+worldW/2)*nextZoom;
+  state.pan.y=r.height/2-(a.y+worldH/2)*nextZoom;
   applyTransform(); updateSelectionOverlay(); updateMultiSelBox();
 }
 function centerView(){
@@ -1789,9 +1947,16 @@ function updateProps(){
   $('pr').value=Math.round(item.rot); $('pz').value=item.z;
   $('popacity').value=item.opacity; $('opacity-val').textContent=item.opacity+'%';
   $('lock-btn').textContent=item.locked?'🔒':'🔓';
+  $('blend-mode').value=item.blendMode||'normal';
+  $('fx-shadow').checked=!!item.shadow;
+  $('fx-shadow-blur').value=item.shadowBlur??18;
+  $('fx-shadow-y').value=item.shadowY??10;
+  $('fx-radius').value=item.radius??0;
+  setColorControl('fx-shadow-color',shadowColorHex(item),'#000000');
   const isText=item.type==='text'||item.type==='note';
   const isShape=item.type==='shape';
   const isImage=item.type==='image';
+  $('effect-props').style.display=item.type==='comment'?'none':'flex';
   $('text-props').style.display=isText?'flex':'none';
   $('shape-props').style.display=isShape?'flex':'none';
   $('image-props').style.display=isImage?'flex':'none';
@@ -1802,7 +1967,7 @@ function updateProps(){
     $('t-line').value=item.lineHeight||1.4;
     $('t-font').value=item.fontFamily; $('t-color').value=item.color;
     if(item.bgColor) $('t-bg').value=item.bgColor;
-    document.querySelectorAll('.align-btn-ui').forEach(b=>
+  document.querySelectorAll('.align-btn-ui').forEach(b=>
       b.classList.toggle('active',b.dataset.align===item.textAlign));
   }
   if(isShape){
@@ -1862,6 +2027,20 @@ $('popacity').addEventListener('input',e=>{
   const el=canvasWorld.querySelector(`[data-id="${item.id}"]`);
   if(el) applyItemStyle(el,item);
 });
+function updateEffectProp(key,value,withHistory=false){
+  const item=selFirst(); if(!item||item.locked||item.type==='comment') return;
+  if(withHistory) pushHistory();
+  item[key]=value;
+  const el=canvasWorld.querySelector(`[data-id="${item.id}"]`);
+  if(el) applyItemStyle(el,item);
+  updateProps(); scheduleSave(); scheduleThumb();
+}
+$('blend-mode').addEventListener('change',e=>updateEffectProp('blendMode',e.target.value,true));
+$('fx-shadow').addEventListener('change',e=>updateEffectProp('shadow',e.target.checked,true));
+$('fx-shadow-blur').addEventListener('change',e=>updateEffectProp('shadowBlur',Math.max(0,parseFloat(e.target.value)||0),true));
+$('fx-shadow-y').addEventListener('change',e=>updateEffectProp('shadowY',parseFloat(e.target.value)||0,true));
+$('fx-radius').addEventListener('change',e=>updateEffectProp('radius',Math.max(0,parseFloat(e.target.value)||0),true));
+$('fx-shadow-color').addEventListener('input',e=>updateEffectProp('shadowColor',e.target.value,false));
 $('flip-h-btn').addEventListener('click',()=>{
   const item=selFirst(); if(!item||item.locked) return;
   pushHistory(); item.flipH=!item.flipH;
@@ -2373,11 +2552,46 @@ $('url-input').addEventListener('keydown',e=>{
 // ── MOUSE INTERACTIONS ────────────────────────────────────────────
 let interaction=null;
 
+$('ruler-x').addEventListener('mousedown',e=>{
+  if(!canEditAll()) return;
+  e.preventDefault(); e.stopPropagation();
+  const p=screenToWorld(e.clientX,e.clientY);
+  addUserGuide('h',p.y);
+  interaction={type:'guide',guideType:'h',idx:canvasGuides().h.length-1};
+});
+$('ruler-y').addEventListener('mousedown',e=>{
+  if(!canEditAll()) return;
+  e.preventDefault(); e.stopPropagation();
+  const p=screenToWorld(e.clientX,e.clientY);
+  addUserGuide('v',p.x);
+  interaction={type:'guide',guideType:'v',idx:canvasGuides().v.length-1};
+});
+guideLayer.addEventListener('mousedown',e=>{
+  const g=e.target.closest('.user-guide'); if(!g||!canEditAll()) return;
+  e.preventDefault(); e.stopPropagation();
+  interaction={type:'guide',guideType:g.dataset.type,idx:parseInt(g.dataset.idx,10)};
+});
+guideLayer.addEventListener('dblclick',e=>{
+  const g=e.target.closest('.user-guide'); if(!g||!canEditAll()) return;
+  e.preventDefault(); e.stopPropagation();
+  deleteUserGuide(g.dataset.type,parseInt(g.dataset.idx,10));
+});
+guideLayer.addEventListener('contextmenu',e=>{
+  const g=e.target.closest('.user-guide'); if(!g||!canEditAll()) return;
+  e.preventDefault(); e.stopPropagation();
+  deleteUserGuide(g.dataset.type,parseInt(g.dataset.idx,10));
+});
+
 function onItemMousedown(e){
   if(state.editingId) return;
   if(state.tool==='hand'||state.spaceHeld) return;
   if(e.button!==0) return;
   e.stopPropagation();
+  if(state.tool==='zoom'){
+    interaction={type:'zoomrect',startMX:e.clientX,startMY:e.clientY,lastMX:e.clientX,lastMY:e.clientY,alt:e.altKey};
+    rubberBand.style.display='none';
+    return;
+  }
   const id=parseInt(e.currentTarget.dataset.id);
   const clicked=getItem(id);
   if(ACCESS_MODE==='comment'&&clicked?.type!=='comment') return;
@@ -2461,6 +2675,11 @@ canvasArea.addEventListener('mousedown',e=>{
     canvasArea.classList.add('panning'); return;
   }
   if(e.button===0){
+    if(state.tool==='zoom'&&!e.target.closest('.canvas-item')&&!e.target.closest('#selection-overlay')){
+      interaction={type:'zoomrect',startMX:e.clientX,startMY:e.clientY,lastMX:e.clientX,lastMY:e.clientY,alt:e.altKey};
+      rubberBand.style.display='none';
+      return;
+    }
     if(isShapeTool(state.tool)&&!e.target.closest('.canvas-item')){
       interaction={type:'shapecreate',shape:state.tool,startMX:e.clientX,startMY:e.clientY,lastMX:e.clientX,lastMY:e.clientY};
       rubberBand.style.display='none';
@@ -2497,6 +2716,14 @@ canvasArea.addEventListener('mousedown',e=>{
 
 document.addEventListener('mousemove',e=>{
   if(!interaction) return;
+  if(interaction.type==='guide'){
+    const p=screenToWorld(e.clientX,e.clientY);
+    const guides=canvasGuides();
+    if(interaction.guideType==='v') guides.v[interaction.idx]=Math.round(p.x);
+    else guides.h[interaction.idx]=Math.round(p.y);
+    renderUserGuides();
+    return;
+  }
   if(interaction.type==='pan'){
     state.pan.x=interaction.startPX+(e.clientX-interaction.startMX);
     state.pan.y=interaction.startPY+(e.clientY-interaction.startMY);
@@ -2512,6 +2739,19 @@ document.addEventListener('mousemove',e=>{
     if(w>4||h>4){
       rubberBand.style.display='block';
       rubberBand.style.cssText=`display:block;position:absolute;left:${x}px;top:${y}px;width:${w}px;height:${h}px;border:1.5px solid var(--accent2);background:rgba(108,113,240,0.06);pointer-events:none;z-index:45;`;
+    }
+    return;
+  }
+  if(interaction.type==='zoomrect'){
+    interaction.lastMX=e.clientX; interaction.lastMY=e.clientY;
+    const r=canvasArea.getBoundingClientRect();
+    const x=Math.min(e.clientX,interaction.startMX)-r.left;
+    const y=Math.min(e.clientY,interaction.startMY)-r.top;
+    const w=Math.abs(e.clientX-interaction.startMX);
+    const h=Math.abs(e.clientY-interaction.startMY);
+    if(w>4||h>4){
+      rubberBand.style.display='block';
+      rubberBand.style.cssText=`display:block;position:absolute;left:${x}px;top:${y}px;width:${w}px;height:${h}px;border:1.5px solid var(--accent2);background:rgba(108,113,240,0.08);pointer-events:none;z-index:45;`;
     }
     return;
   }
@@ -2625,6 +2865,14 @@ document.addEventListener('mousemove',e=>{
 });
 
 document.addEventListener('mouseup',e=>{
+  if(interaction&&interaction.type==='guide'){
+    const r=canvasArea.getBoundingClientRect();
+    const remove=interaction.guideType==='h'
+      ? e.clientY<r.top+24||e.clientY>r.bottom-4
+      : e.clientX<r.left+24||e.clientX>r.right-4;
+    if(remove) deleteUserGuide(interaction.guideType,interaction.idx);
+    else scheduleSave();
+  }
   if(interaction&&interaction.type==='move') clearGuides();
   if(interaction&&interaction.type==='rubberband'){
     rubberBand.style.display='none';
@@ -2639,6 +2887,12 @@ document.addEventListener('mouseup',e=>{
       renderItemsHighlight(); updateSelectionOverlay(); updateMultiSelBox();
       updateProps(); renderLayers();
     }
+  }
+  if(interaction&&interaction.type==='zoomrect'){
+    rubberBand.style.display='none';
+    const dragged=Math.abs(interaction.lastMX-interaction.startMX)>8||Math.abs(interaction.lastMY-interaction.startMY)>8;
+    if(dragged&&!interaction.alt) zoomToScreenRect(interaction.startMX,interaction.startMY,interaction.lastMX,interaction.lastMY);
+    else zoomAt(interaction.lastMX,interaction.lastMY,interaction.alt?-1:1);
   }
   if(interaction&&interaction.type==='textcreate'){
     rubberBand.style.display='none';
@@ -2739,6 +2993,7 @@ document.addEventListener('keydown',e=>{
     updateProps(); renderLayers();}
   if(e.code==='KeyV'&&!e.ctrlKey&&!e.metaKey) setTool('select');
   if(e.code==='KeyH') setTool('hand');
+  if(e.code==='KeyZ'&&!e.ctrlKey&&!e.metaKey) setTool('zoom');
   if(e.code==='KeyT') setTool('text');
   if(e.code==='KeyC'&&!e.ctrlKey&&!e.metaKey) setTool('comment');
   if(e.code==='KeyM'&&!e.ctrlKey&&!e.metaKey){e.preventDefault();toggleMiniMap();}
@@ -2755,6 +3010,12 @@ document.addEventListener('keydown',e=>{
 document.addEventListener('keyup',e=>{
   if(e.code==='Space'){state.spaceHeld=false;canvasArea.classList.remove('hand-tool');}
 });
+document.addEventListener('keydown',e=>{
+  if(e.key==='Alt'&&state.tool==='zoom') canvasArea.classList.add('zoom-out');
+});
+document.addEventListener('keyup',e=>{
+  if(e.key==='Alt') canvasArea.classList.remove('zoom-out');
+});
 
 // ── TOOLBAR ───────────────────────────────────────────────────────
 // COMMAND MENU
@@ -2762,6 +3023,7 @@ let commandIndex=0,visibleCommands=[];
 const COMMANDS=[
   {name:'Select tool',group:'Tools',key:'V',run:()=>setTool('select')},
   {name:'Hand tool',group:'Tools',key:'H',run:()=>setTool('hand')},
+  {name:'Zoom tool',group:'Tools',key:'Z',run:()=>setTool('zoom')},
   {name:'Text tool',group:'Tools',key:'T',run:()=>setTool('text')},
   {name:'Comment pin tool',group:'Tools',key:'C',run:()=>setTool('comment')},
   {name:'Sticky note tool',group:'Tools',key:'N',run:()=>setTool('note')},
@@ -2774,6 +3036,7 @@ const COMMANDS=[
   {name:'Fit all content',group:'Canvas',run:fitAll,enabled:()=>ac().items.length>0},
   {name:'Center view',group:'Canvas',run:centerView},
   {name:'Toggle mini map',group:'Canvas',key:'M',run:toggleMiniMap},
+  {name:'Clear guides',group:'Canvas',run:clearUserGuides,enabled:()=>canvasGuides().v.length||canvasGuides().h.length},
   {name:'Export canvas',group:'Canvas',run:()=>$('export-btn').click(),enabled:()=>ac().items.length>0},
   {name:'Import image from URL',group:'Canvas',key:'Ctrl U',run:()=>$('url-btn').click()},
   {name:'Share canvas',group:'Canvas',run:()=>$('share-btn').click()},
@@ -2829,13 +3092,16 @@ commandModal.addEventListener('mousedown',e=>{if(e.target===commandModal) closeC
 
 function setTool(tool){
   if(ACCESS_MODE==='view') return;
-  if(ACCESS_MODE==='comment'&&!['select','hand','comment'].includes(tool)) return;
+  if(ACCESS_MODE==='comment'&&!['select','hand','zoom','comment'].includes(tool)) return;
   flushActiveCommentEditor();
   state.tool=tool;
   document.querySelectorAll('.tool-btn[data-tool]').forEach(b=>b.classList.remove('active'));
   const btn=document.querySelector(`[data-tool="${tool}"]`);
   if(btn) btn.classList.add('active');
   canvasArea.classList.toggle('hand-tool',tool==='hand');
+  canvasArea.classList.toggle('zoom-tool',tool==='zoom');
+  canvasArea.classList.toggle('zoom-out',tool==='zoom'&&window.event?.altKey);
+  if(tool!=='zoom') canvasArea.classList.remove('zoom-out');
   canvasArea.classList.toggle('text-tool',tool==='text'||tool==='note'||tool==='comment'||isShapeTool(tool));
   updateProps();
 }
@@ -2967,6 +3233,7 @@ const SHORTCUTS=[
   {action:'Command menu',keys:['Ctrl','K']},
   {action:'Select tool',keys:['V']},
   {action:'Hand / Pan tool',keys:['H']},
+  {action:'Zoom tool',keys:['Z']},
   {action:'Text tool',keys:['T']},
   {action:'Comment pin tool',keys:['C']},
   {action:'Sticky note tool',keys:['N']},
@@ -2979,6 +3246,8 @@ const SHORTCUTS=[
   {section:'Canvas'},
   {action:'Pan canvas',keys:['Space','drag']},
   {action:'Zoom in / out',keys:['Scroll']},
+  {action:'Zoom to area',keys:['Z','drag']},
+  {action:'Zoom out',keys:['Z','Alt click']},
   {action:'Toggle mini map',keys:['M']},
   {action:'Fit all content',keys:['—']},
   {action:'Center view',keys:['—']},
@@ -3213,6 +3482,7 @@ async function loadCanvas(){
     state.canvases.forEach(c=>{
       if(!c.history) c.history=[]
       if(!c.future) c.future=[]
+      if(!c.guides) c.guides={v:[],h:[]}
     })
   }
 }
@@ -3284,7 +3554,7 @@ async function init(){
     $('share-btn').style.display='none'
     $('add-canvas-btn').style.display='none'
     document.querySelectorAll('.tool-btn[data-tool]').forEach(btn=>{
-      if(!['select','hand','comment'].includes(btn.dataset.tool)) btn.style.display='none'
+      if(!['select','hand','zoom','comment'].includes(btn.dataset.tool)) btn.style.display='none'
     })
     setTool('comment')
     showToast('Comment mode — click to add pins')
