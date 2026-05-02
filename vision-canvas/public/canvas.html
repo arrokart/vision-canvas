@@ -184,6 +184,20 @@ body{display:flex;flex-direction:column;}
 .align-guide{position:absolute;pointer-events:none;z-index:300;transition:opacity .1s;}
 .align-guide.v{width:1px;top:0;bottom:0;background:rgba(255,80,80,.7);}
 .align-guide.h{height:1px;left:0;right:0;background:rgba(255,80,80,.7);}
+.user-guide{position:absolute;z-index:38;background:rgba(139,143,244,.75);pointer-events:auto;}
+.user-guide.v{width:1px;top:0;bottom:0;cursor:ew-resize;}
+.user-guide.h{height:1px;left:0;right:0;cursor:ns-resize;}
+.user-guide:hover{background:rgba(255,255,255,.9);}
+#ruler-x,#ruler-y,#ruler-corner{position:absolute;background:rgba(12,12,16,.92);border-color:var(--border);z-index:42;}
+#ruler-x{left:20px;right:0;top:0;height:20px;border-bottom:1px solid var(--border);
+  background-image:linear-gradient(90deg,rgba(255,255,255,.22) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.1) 1px,transparent 1px);
+  background-size:100px 100%,20px 100%;cursor:ns-resize;}
+#ruler-y{left:0;top:20px;bottom:0;width:20px;border-right:1px solid var(--border);
+  background-image:linear-gradient(0deg,rgba(255,255,255,.22) 1px,transparent 1px),linear-gradient(0deg,rgba(255,255,255,.1) 1px,transparent 1px);
+  background-size:100% 100px,100% 20px;cursor:ew-resize;}
+#ruler-corner{left:0;top:0;width:20px;height:20px;border-right:1px solid var(--border);border-bottom:1px solid var(--border);}
+#guide-layer{position:absolute;inset:0;pointer-events:none;z-index:38;}
+#guide-layer .user-guide{pointer-events:auto;}
 
 /* SELECTION OVERLAY */
 #selection-overlay{position:absolute;pointer-events:none;transform-origin:center center;display:none;}
@@ -542,7 +556,11 @@ body{display:flex;flex-direction:column;}
 
   <!-- CANVAS -->
   <div id="canvas-area">
+    <div id="ruler-corner"></div>
+    <div id="ruler-x" title="Drag down to add horizontal guide"></div>
+    <div id="ruler-y" title="Drag right to add vertical guide"></div>
     <div id="canvas-world"></div>
+    <div id="guide-layer"></div>
     <div id="selection-overlay">
       <div class="selection-border"></div>
       <div class="sel-handle nw" data-dir="nw"></div>
@@ -645,6 +663,32 @@ body{display:flex;flex-direction:column;}
             <button class="act-btn" id="lock-btn">🔓</button>
             <button class="act-btn" id="dup-btn">⧉</button>
             <button class="act-btn danger" id="del-btn">✕</button>
+          </div>
+          <div id="effect-props" style="display:flex;flex-direction:column;gap:6px;">
+            <select class="font-select" id="blend-mode">
+              <option value="normal">Normal blend</option>
+              <option value="multiply">Multiply</option>
+              <option value="screen">Screen</option>
+              <option value="overlay">Overlay</option>
+              <option value="darken">Darken</option>
+              <option value="lighten">Lighten</option>
+              <option value="color-dodge">Color dodge</option>
+              <option value="color-burn">Color burn</option>
+              <option value="difference">Difference</option>
+              <option value="luminosity">Luminosity</option>
+            </select>
+            <label class="prop-check"><input type="checkbox" id="fx-shadow"> Drop shadow</label>
+            <div class="prop-2col">
+              <div class="prop-group"><span class="lbl">Blur</span><input type="number" id="fx-shadow-blur" min="0" max="120" step="1"></div>
+              <div class="prop-group"><span class="lbl">Y</span><input type="number" id="fx-shadow-y" min="-80" max="120" step="1"></div>
+            </div>
+            <div class="prop-2col">
+              <div class="prop-group"><span class="lbl">Round</span><input type="number" id="fx-radius" min="0" max="120" step="1"></div>
+              <div class="color-row" style="padding:0;">
+                <div class="color-swatch"><input type="color" id="fx-shadow-color" value="#000000"></div>
+                <span class="color-label">Shadow</span>
+              </div>
+            </div>
           </div>
           <div id="text-props">
             <div class="prop-2col">
@@ -910,6 +954,7 @@ if(ACCESS_MODE==='view') {
 const $ = id => document.getElementById(id);
 const canvasArea = $('canvas-area');
 const canvasWorld = $('canvas-world');
+const guideLayer = $('guide-layer');
 const selOverlay = $('selection-overlay');
 const multiSelBox = $('multi-sel-box');
 const ctxMenu = $('ctx-menu');
@@ -929,7 +974,7 @@ let imageCropDirty=false;
 let state = {
   canvases:[{id:1,name:'Canvas 1',bg:'#0f0f14',bgType:'solid',
              gradC1:'#6c71f0',gradC2:'#0b0b0e',gradDir:'to bottom',
-             items:[],history:[],future:[],thumb:null}],
+             items:[],history:[],future:[],thumb:null,guides:{v:[],h:[]}}],
   activeId:1, nextId:1, nextCanvasId:2,
   selectedIds:[], pan:{x:0,y:0}, zoom:1,
   tool:'select', interaction:null, spaceHeld:false,
@@ -997,7 +1042,8 @@ function addImageItem(src,x,y,w,h){
   ac().items.push({id,type:'image',src,name:`Image ${id}`,
     x,y,w,h,rot:0,opacity:100,visible:true,locked:false,
     flipH:false,flipV:false,z:maxZ()+1,
-    fit:'contain',imgX:50,imgY:50,imgScale:100});
+    fit:'contain',imgX:50,imgY:50,imgScale:100,
+    blendMode:'normal',shadow:false,shadowBlur:18,shadowY:10,shadowColor:'rgba(0,0,0,.35)',radius:2});
   state.selectedIds=[id];
   renderItems(); renderLayers();
   updateSelectionOverlay(); updateMultiSelBox();
@@ -1013,7 +1059,8 @@ function addTextItem(x,y,w=220,h=70){
     fontFamily:"'Outfit', sans-serif",fontWeight:'400',
     color:'#eeeef5',textAlign:'left',bgColor:'',
     x,y,w:Math.max(40,w),h:Math.max(28,h),rot:0,opacity:100,
-    visible:true,locked:false,flipH:false,flipV:false,z:maxZ()+1});
+    visible:true,locked:false,flipH:false,flipV:false,z:maxZ()+1,
+    blendMode:'normal',shadow:false,shadowBlur:18,shadowY:10,shadowColor:'rgba(0,0,0,.35)',radius:0});
   state.selectedIds=[id];
   renderItems(); renderLayers();
   updateSelectionOverlay(); updateMultiSelBox();
@@ -1033,7 +1080,8 @@ function addNoteItem(x,y,w=220,h=160){
     fontFamily:"'Outfit', sans-serif",fontWeight:'500',
     color:'#171717',textAlign:'left',bgColor:'#ffd966',
     x,y,w:Math.max(120,w),h:Math.max(90,h),rot:0,opacity:100,
-    visible:true,locked:false,flipH:false,flipV:false,z:maxZ()+1});
+    visible:true,locked:false,flipH:false,flipV:false,z:maxZ()+1,
+    blendMode:'normal',shadow:true,shadowBlur:24,shadowY:10,shadowColor:'rgba(0,0,0,.28)',radius:6});
   state.selectedIds=[id];
   renderItems(); renderLayers();
   updateSelectionOverlay(); updateMultiSelBox();
@@ -1073,6 +1121,7 @@ function addShapeItem(shape,x,y,w=160,h=110,flipH=false,flipV=false){
   ac().items.push({id,type:'shape',shape,name:`${SHAPE_LABELS[shape]||'Shape'} ${id}`,
     x,y,w:Math.max(20,w),h:Math.max(20,h),rot:0,opacity:100,
     visible:true,locked:false,flipH,flipV,z:maxZ()+1,
+    blendMode:'normal',shadow:false,shadowBlur:18,shadowY:10,shadowColor:'rgba(0,0,0,.35)',radius:3,
     fill:isLine?'transparent':defaults.fill,
     stroke:defaults.stroke,strokeWidth:isLine?Math.max(3,defaults.strokeWidth):defaults.strokeWidth});
   state.selectedIds=[id];
@@ -1302,7 +1351,7 @@ function addCanvas(name){
   const id=state.nextCanvasId++;
   state.canvases.push({id,name:name||`Canvas ${id}`,
     bg:'#0f0f14',bgType:'solid',gradC1:'#6c71f0',gradC2:'#0b0b0e',
-    gradDir:'to bottom',items:[],history:[],future:[],thumb:null});
+    gradDir:'to bottom',items:[],history:[],future:[],thumb:null,guides:{v:[],h:[]}});
   switchCanvas(id);
 }
 function switchCanvas(id){
@@ -1362,6 +1411,9 @@ function applyItemStyle(el,item){
   el.style.zIndex=item.z;
   el.style.opacity=item.opacity/100;
   el.style.display=item.visible?'':'none';
+  el.style.mixBlendMode=item.blendMode||'normal';
+  el.style.borderRadius=(item.radius||0)+'px';
+  el.style.boxShadow=item.shadow?`0 ${item.shadowY||10}px ${item.shadowBlur||18}px ${item.shadowColor||'rgba(0,0,0,.35)'}`:'none';
   el.classList.toggle('locked-item',!!item.locked);
   el.classList.toggle('image-item',item.type==='image');
   el.classList.toggle('multi-sel',state.selectedIds.length>1&&state.selectedIds.includes(item.id));
@@ -1408,6 +1460,10 @@ function applyItemStyle(el,item){
     if(pin) pin.textContent=item.number||'';
     if(pop) pop.textContent=item.text||'';
   }
+}
+
+function shadowColorHex(item){
+  return colorToHex(item.shadowColor||'rgba(0,0,0,.35)','#000000');
 }
 
 function shapeMarkup(item){
@@ -1565,6 +1621,43 @@ function showGuide(type,pos){
   guideEls.push(g);
 }
 
+function canvasGuides(){
+  const c=ac();
+  c.guides=c.guides||{v:[],h:[]};
+  c.guides.v=c.guides.v||[];
+  c.guides.h=c.guides.h||[];
+  return c.guides;
+}
+function renderUserGuides(){
+  if(!guideLayer) return;
+  guideLayer.innerHTML='';
+  const guides=canvasGuides();
+  guides.v.forEach((x,idx)=>{
+    const g=document.createElement('div');
+    g.className='user-guide v'; g.dataset.type='v'; g.dataset.idx=idx;
+    g.style.left=(x*state.zoom+state.pan.x)+'px';
+    guideLayer.appendChild(g);
+  });
+  guides.h.forEach((y,idx)=>{
+    const g=document.createElement('div');
+    g.className='user-guide h'; g.dataset.type='h'; g.dataset.idx=idx;
+    g.style.top=(y*state.zoom+state.pan.y)+'px';
+    guideLayer.appendChild(g);
+  });
+}
+function addUserGuide(type,pos){
+  const guides=canvasGuides();
+  guides[type].push(Math.round(pos));
+  renderUserGuides(); scheduleSave();
+}
+function clearUserGuides(){
+  const guides=canvasGuides();
+  if(!guides.v.length&&!guides.h.length){showToast('No guides');return;}
+  pushHistory();
+  guides.v=[]; guides.h=[];
+  renderUserGuides(); scheduleSave(); showToast('Guides cleared');
+}
+
 function snapItem(item, othersArr){
   if(!state.snapEnabled) return {dx:0,dy:0};
   const iL=item.x, iR=item.x+item.w, iCX=item.x+item.w/2;
@@ -1586,6 +1679,19 @@ function snapItem(item, othersArr){
       if(d<bestY){bestY=d;dy=b-a;}
     });
   });
+  const guides=canvasGuides();
+  (guides.v||[]).forEach(x=>{
+    [[iL,x],[iR,x],[iCX,x]].forEach(([a,b])=>{
+      const d=Math.abs(a-b);
+      if(d<bestX){bestX=d;dx=b-a;}
+    });
+  });
+  (guides.h||[]).forEach(y=>{
+    [[iT,y],[iB,y],[iCY,y]].forEach(([a,b])=>{
+      const d=Math.abs(a-b);
+      if(d<bestY){bestY=d;dy=b-a;}
+    });
+  });
   if(bestX<=SNAP_DIST) showGuide('v',item.x+dx+item.w/2);
   else dx=0;
   if(bestY<=SNAP_DIST) showGuide('h',item.y+dy+item.h/2);
@@ -1600,6 +1706,7 @@ function applyTransform(){
   $('zoom-indicator').textContent=pct;
   $('info-zoom').textContent=pct;
   updateMiniMap();
+  renderUserGuides();
   positionCommentPanel();
 }
 function screenToWorld(sx,sy){
@@ -1808,9 +1915,16 @@ function updateProps(){
   $('pr').value=Math.round(item.rot); $('pz').value=item.z;
   $('popacity').value=item.opacity; $('opacity-val').textContent=item.opacity+'%';
   $('lock-btn').textContent=item.locked?'🔒':'🔓';
+  $('blend-mode').value=item.blendMode||'normal';
+  $('fx-shadow').checked=!!item.shadow;
+  $('fx-shadow-blur').value=item.shadowBlur??18;
+  $('fx-shadow-y').value=item.shadowY??10;
+  $('fx-radius').value=item.radius??0;
+  setColorControl('fx-shadow-color',shadowColorHex(item),'#000000');
   const isText=item.type==='text'||item.type==='note';
   const isShape=item.type==='shape';
   const isImage=item.type==='image';
+  $('effect-props').style.display=item.type==='comment'?'none':'flex';
   $('text-props').style.display=isText?'flex':'none';
   $('shape-props').style.display=isShape?'flex':'none';
   $('image-props').style.display=isImage?'flex':'none';
@@ -1821,7 +1935,7 @@ function updateProps(){
     $('t-line').value=item.lineHeight||1.4;
     $('t-font').value=item.fontFamily; $('t-color').value=item.color;
     if(item.bgColor) $('t-bg').value=item.bgColor;
-    document.querySelectorAll('.align-btn-ui').forEach(b=>
+  document.querySelectorAll('.align-btn-ui').forEach(b=>
       b.classList.toggle('active',b.dataset.align===item.textAlign));
   }
   if(isShape){
@@ -1881,6 +1995,20 @@ $('popacity').addEventListener('input',e=>{
   const el=canvasWorld.querySelector(`[data-id="${item.id}"]`);
   if(el) applyItemStyle(el,item);
 });
+function updateEffectProp(key,value,withHistory=false){
+  const item=selFirst(); if(!item||item.locked||item.type==='comment') return;
+  if(withHistory) pushHistory();
+  item[key]=value;
+  const el=canvasWorld.querySelector(`[data-id="${item.id}"]`);
+  if(el) applyItemStyle(el,item);
+  updateProps(); scheduleSave(); scheduleThumb();
+}
+$('blend-mode').addEventListener('change',e=>updateEffectProp('blendMode',e.target.value,true));
+$('fx-shadow').addEventListener('change',e=>updateEffectProp('shadow',e.target.checked,true));
+$('fx-shadow-blur').addEventListener('change',e=>updateEffectProp('shadowBlur',Math.max(0,parseFloat(e.target.value)||0),true));
+$('fx-shadow-y').addEventListener('change',e=>updateEffectProp('shadowY',parseFloat(e.target.value)||0,true));
+$('fx-radius').addEventListener('change',e=>updateEffectProp('radius',Math.max(0,parseFloat(e.target.value)||0),true));
+$('fx-shadow-color').addEventListener('input',e=>updateEffectProp('shadowColor',e.target.value,false));
 $('flip-h-btn').addEventListener('click',()=>{
   const item=selFirst(); if(!item||item.locked) return;
   pushHistory(); item.flipH=!item.flipH;
@@ -2392,6 +2520,26 @@ $('url-input').addEventListener('keydown',e=>{
 // ── MOUSE INTERACTIONS ────────────────────────────────────────────
 let interaction=null;
 
+$('ruler-x').addEventListener('mousedown',e=>{
+  if(!canEditAll()) return;
+  e.preventDefault(); e.stopPropagation();
+  const p=screenToWorld(e.clientX,e.clientY);
+  addUserGuide('h',p.y);
+  interaction={type:'guide',guideType:'h',idx:canvasGuides().h.length-1};
+});
+$('ruler-y').addEventListener('mousedown',e=>{
+  if(!canEditAll()) return;
+  e.preventDefault(); e.stopPropagation();
+  const p=screenToWorld(e.clientX,e.clientY);
+  addUserGuide('v',p.x);
+  interaction={type:'guide',guideType:'v',idx:canvasGuides().v.length-1};
+});
+guideLayer.addEventListener('mousedown',e=>{
+  const g=e.target.closest('.user-guide'); if(!g||!canEditAll()) return;
+  e.preventDefault(); e.stopPropagation();
+  interaction={type:'guide',guideType:g.dataset.type,idx:parseInt(g.dataset.idx,10)};
+});
+
 function onItemMousedown(e){
   if(state.editingId) return;
   if(state.tool==='hand'||state.spaceHeld) return;
@@ -2526,6 +2674,14 @@ canvasArea.addEventListener('mousedown',e=>{
 
 document.addEventListener('mousemove',e=>{
   if(!interaction) return;
+  if(interaction.type==='guide'){
+    const p=screenToWorld(e.clientX,e.clientY);
+    const guides=canvasGuides();
+    if(interaction.guideType==='v') guides.v[interaction.idx]=Math.round(p.x);
+    else guides.h[interaction.idx]=Math.round(p.y);
+    renderUserGuides();
+    return;
+  }
   if(interaction.type==='pan'){
     state.pan.x=interaction.startPX+(e.clientX-interaction.startMX);
     state.pan.y=interaction.startPY+(e.clientY-interaction.startMY);
@@ -2667,6 +2823,7 @@ document.addEventListener('mousemove',e=>{
 });
 
 document.addEventListener('mouseup',e=>{
+  if(interaction&&interaction.type==='guide') scheduleSave();
   if(interaction&&interaction.type==='move') clearGuides();
   if(interaction&&interaction.type==='rubberband'){
     rubberBand.style.display='none';
@@ -2830,6 +2987,7 @@ const COMMANDS=[
   {name:'Fit all content',group:'Canvas',run:fitAll,enabled:()=>ac().items.length>0},
   {name:'Center view',group:'Canvas',run:centerView},
   {name:'Toggle mini map',group:'Canvas',key:'M',run:toggleMiniMap},
+  {name:'Clear guides',group:'Canvas',run:clearUserGuides,enabled:()=>canvasGuides().v.length||canvasGuides().h.length},
   {name:'Export canvas',group:'Canvas',run:()=>$('export-btn').click(),enabled:()=>ac().items.length>0},
   {name:'Import image from URL',group:'Canvas',key:'Ctrl U',run:()=>$('url-btn').click()},
   {name:'Share canvas',group:'Canvas',run:()=>$('share-btn').click()},
@@ -3275,6 +3433,7 @@ async function loadCanvas(){
     state.canvases.forEach(c=>{
       if(!c.history) c.history=[]
       if(!c.future) c.future=[]
+      if(!c.guides) c.guides={v:[],h:[]}
     })
   }
 }
