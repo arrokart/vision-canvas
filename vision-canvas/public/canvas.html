@@ -131,6 +131,9 @@ body{display:flex;flex-direction:column;}
 
 .canvas-item{position:absolute;transform-origin:center center;cursor:default;
   border:1.5px solid transparent;}
+body.exporting-canvas .canvas-item{border:none!important;outline:none!important;}
+body.exporting-canvas .canvas-item img{border-radius:0!important;}
+body.exporting-canvas .frame-label{display:none!important;}
 .canvas-item.image-item{overflow:hidden;}
 .canvas-item img{width:100%;height:100%;object-fit:contain;display:block;
   pointer-events:none;border-radius:2px;}
@@ -1002,7 +1005,8 @@ body{display:flex;flex-direction:column;}
     <div class="modal-row">
       <span>Background</span>
       <select class="modal-select" id="export-bg">
-        <option value="transparent" selected>Transparent</option>
+        <option value="transparent" selected>No canvas background</option>
+        <option value="white">White background</option>
         <option value="canvas">Canvas background</option>
       </select>
     </div>
@@ -3655,16 +3659,11 @@ $('export-btn').addEventListener('click',()=>{
   if(!ac().items.length){showToast('Nothing to export');return;}
   $('export-area').value=state.selectedIds.length>0?'selection':'canvas';
   $('export-area').querySelector('option[value="selection"]').disabled=state.selectedIds.length===0;
-  $('export-bg').value=$('export-format').value==='jpeg'?'canvas':state.selectedIds.length>0?'transparent':'canvas';
-  $('export-bg').disabled=$('export-format').value==='jpeg';
+  $('export-bg').value=state.selectedIds.length>0?'transparent':'canvas';
+  $('export-bg').disabled=false;
   $('export-modal').classList.add('show');
 });
-$('export-format').addEventListener('change',e=>{
-  $('export-bg').disabled=e.target.value==='jpeg';
-  if(e.target.value==='jpeg') $('export-bg').value='canvas';
-});
 $('export-area').addEventListener('change',e=>{
-  if($('export-format').value==='jpeg') return;
   $('export-bg').value=e.target.value==='canvas'?'canvas':'transparent';
 });
 $('export-cancel').addEventListener('click',()=>$('export-modal').classList.remove('show'));
@@ -3684,7 +3683,8 @@ $('export-confirm').addEventListener('click',async()=>{
   const items=ac().items.filter(i=>i.visible&&exportIds.has(i.id));
   if(!items.length){showToast('No visible items');return;}
   const scale=parseInt($('export-scale').value)||2,fmt=$('export-format').value||'png';
-  const includeBg=$('export-bg').value==='canvas'||fmt==='jpeg';
+  const bgMode=$('export-bg').value;
+  const captureBg=bgMode==='canvas'?(ac().bgType==='gradient'?null:ac().bg):bgMode==='white'?'#ffffff':null;
   const pad=selectedOnly?0:40;
   const selectedFrame=selectedOnly&&state.selectedIds.length===1?getItem(state.selectedIds[0]):null;
   const exportFrame=selectedFrame?.type==='frame'?selectedFrame:null;
@@ -3706,10 +3706,11 @@ $('export-confirm').addEventListener('click',async()=>{
   state.selectedIds=[]; state.pan={x:0,y:0}; state.zoom=1;
   applyTransform(); selOverlay.style.display='none'; multiSelBox.style.display='none';
   renderItemsHighlight(); showToast('Exporting…');
+  document.body.classList.add('exporting-canvas');
   await new Promise(r=>setTimeout(r,80));
   try{
     const c=await html2canvas(canvasWorld,{
-      backgroundColor:includeBg?(ac().bgType==='gradient'?null:ac().bg):null,
+      backgroundColor:captureBg,
       scale,x:minX,y:minY,width:Math.max(1,maxX-minX),height:Math.max(1,maxY-minY),
       logging:false,useCORS:true,allowTaint:true,
     });
@@ -3719,6 +3720,7 @@ $('export-confirm').addEventListener('click',async()=>{
     link.href=c.toDataURL(mime,0.95);
     link.click(); showToast('Exported!');
   }catch(err){showToast('Export failed');}
+  document.body.classList.remove('exporting-canvas');
   hidden.forEach(i=>i.visible=true);
   state.selectedIds=saved.sel; state.pan=saved.pan; state.zoom=saved.zoom;
   if(hidden.length) renderItems();
