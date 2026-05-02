@@ -104,6 +104,7 @@ body{display:flex;flex-direction:column;}
   background:rgba(16,16,22,.98);border:1px solid rgba(255,255,255,.11);border-radius:10px;
   box-shadow:0 18px 44px rgba(0,0,0,.42);backdrop-filter:blur(18px);z-index:1001;}
 .tool-group:hover .tool-flyout,.tool-group.open .tool-flyout{display:flex;}
+.tool-group.open>.tool-btn{background:rgba(255,255,255,.075);color:#f1f1f7;}
 .tool-flyout .tool-btn{background:rgba(255,255,255,.035);}
 .tool-flyout .tool-btn:hover{background:rgba(255,255,255,.09);}
 .tool-flyout .tool-btn.active{background:#242454;color:#8f91ff;}
@@ -552,10 +553,10 @@ body{display:flex;flex-direction:column;}
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="10.5" cy="10.5" r="6.5"/><line x1="15.5" y1="15.5" x2="21" y2="21"/><line x1="10.5" y1="7.5" x2="10.5" y2="13.5"/><line x1="7.5" y1="10.5" x2="13.5" y2="10.5"/></svg></button>
     <div class="tool-group" data-tool-group="markup">
       <button class="tool-btn" data-primary-tool="text"><span class="tool-tip">Text tools</span>
-        <svg viewBox="0 0 24 24"><path d="M4 6h16v2H4V6zm4 4h8v2H8v-2zm2 4h4v2h-4v-2z"/></svg></button>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 5h14"/><path d="M12 5v14"/><path d="M9 19h6"/></svg></button>
       <div class="tool-flyout">
         <button class="tool-btn" data-tool="text"><span class="tool-tip">Text (T)</span>
-          <svg viewBox="0 0 24 24"><path d="M4 6h16v2H4V6zm4 4h8v2H8v-2zm2 4h4v2h-4v-2z"/></svg></button>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 5h14"/><path d="M12 5v14"/><path d="M9 19h6"/></svg></button>
         <button class="tool-btn" data-tool="note"><span class="tool-tip">Sticky Note (N)</span>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 4h14v11l-5 5H5z"/><path d="M14 20v-5h5"/></svg></button>
         <button class="tool-btn" data-tool="comment"><span class="tool-tip">Comment Pin (C)</span>
@@ -565,12 +566,12 @@ body{display:flex;flex-direction:column;}
     <div class="tool-sep"></div>
     <div class="tool-group" data-tool-group="shapes">
       <button class="tool-btn" data-primary-tool="rect"><span class="tool-tip">Shape tools</span>
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="5" width="16" height="14" rx="1"/></svg></button>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="6" width="14" height="12" rx="2"/></svg></button>
       <div class="tool-flyout">
         <button class="tool-btn" data-tool="frame"><span class="tool-tip">Frame (F)</span>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="5" width="16" height="14" rx="1"/><path d="M8 5v14M16 5v14M4 9h16M4 15h16"/></svg></button>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 9V5h4"/><path d="M15 5h4v4"/><path d="M19 15v4h-4"/><path d="M9 19H5v-4"/><path d="M9 12h6"/></svg></button>
         <button class="tool-btn" data-tool="rect"><span class="tool-tip">Rectangle (R)</span>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="5" width="16" height="14" rx="1"/></svg></button>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="6" width="14" height="12" rx="2"/></svg></button>
         <button class="tool-btn" data-tool="ellipse"><span class="tool-tip">Ellipse (O)</span>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="12" rx="8" ry="7"/></svg></button>
         <button class="tool-btn" data-tool="polygon"><span class="tool-tip">Polygon (P)</span>
@@ -3309,6 +3310,7 @@ function setTool(tool){
     if(group){
       group.classList.add('active');
       group.dataset.currentTool=tool;
+      updateToolGroupPrimary(group,btn);
     }
   }
   canvasArea.classList.toggle('hand-tool',tool==='hand');
@@ -3321,14 +3323,34 @@ function setTool(tool){
 function returnToSelectTool(){
   if(state.tool!=='select') setTool('select');
 }
+function updateToolGroupPrimary(group,toolBtn){
+  const primary=group?.querySelector('.tool-btn[data-primary-tool]');
+  const icon=toolBtn?.querySelector('svg');
+  const label=toolBtn?.querySelector('.tool-tip')?.textContent||'Tools';
+  if(!primary||!icon) return;
+  primary.dataset.primaryTool=toolBtn.dataset.tool;
+  primary.innerHTML=`<span class="tool-tip">${label}</span>${icon.outerHTML}`;
+}
 document.querySelectorAll('.tool-btn[data-tool]').forEach(b=>{
-  b.addEventListener('click',()=>setTool(b.dataset.tool));
+  b.addEventListener('click',e=>{
+    setTool(b.dataset.tool);
+    b.closest('.tool-group')?.classList.remove('open');
+    e.stopPropagation();
+  });
 });
 document.querySelectorAll('.tool-btn[data-primary-tool]').forEach(b=>{
-  b.addEventListener('click',()=>{
+  b.addEventListener('click',e=>{
     const group=b.closest('.tool-group');
-    setTool(group?.dataset.currentTool||b.dataset.primaryTool);
+    document.querySelectorAll('.tool-group.open').forEach(g=>{if(g!==group) g.classList.remove('open');});
+    if(group){
+      group.classList.toggle('open');
+      group.dataset.currentTool=group.dataset.currentTool||b.dataset.primaryTool;
+    }
+    e.stopPropagation();
   });
+});
+document.addEventListener('click',e=>{
+  if(!e.target.closest('.tool-group')) document.querySelectorAll('.tool-group.open').forEach(g=>g.classList.remove('open'));
 });
 $('comment-close-btn').addEventListener('click',()=>commentPanel.classList.remove('show'));
 $('comment-edit-btn').addEventListener('click',editActiveComment);
