@@ -2395,6 +2395,11 @@ function onItemMousedown(e){
   if(state.tool==='hand'||state.spaceHeld) return;
   if(e.button!==0) return;
   e.stopPropagation();
+  if(state.tool==='zoom'){
+    interaction={type:'zoomrect',startMX:e.clientX,startMY:e.clientY,lastMX:e.clientX,lastMY:e.clientY,alt:e.altKey};
+    rubberBand.style.display='none';
+    return;
+  }
   const id=parseInt(e.currentTarget.dataset.id);
   const clicked=getItem(id);
   if(ACCESS_MODE==='comment'&&clicked?.type!=='comment') return;
