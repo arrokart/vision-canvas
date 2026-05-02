@@ -311,6 +311,11 @@ body.exporting-canvas .frame-label{display:none!important;}
 .layer-item.drag-above::before{content:'';position:absolute;left:7px;right:7px;
   top:-1px;height:2px;background:var(--accent2);border-radius:1px;}
 .layer-item{position:relative;}
+.layer-item.group-row{background:rgba(255,255,255,.025);border-color:rgba(255,255,255,.06);}
+.layer-item.group-row .layer-thumb{background:#222238;color:#a9abff;border-color:rgba(139,143,244,.25);}
+.layer-item.group-child{margin-left:18px;}
+.layer-item.group-child::before{content:'';position:absolute;left:-10px;top:0;bottom:0;width:1px;background:rgba(255,255,255,.08);}
+.layer-caret{width:14px;color:var(--text3);font-size:10px;text-align:center;flex-shrink:0;}
 .layer-thumb{width:30px;height:30px;border-radius:6px;background:#171720;
   border:1px solid var(--border2);flex-shrink:0;overflow:hidden;
   display:flex;align-items:center;justify-content:center;}
@@ -350,6 +355,7 @@ body.exporting-canvas .frame-label{display:none!important;}
   border-radius:7px;color:var(--text2);font-size:12px;cursor:pointer;
   font-family:'Outfit',sans-serif;transition:.15s;}
 .act-btn:hover{background:rgba(255,255,255,.07);color:var(--text);border-color:rgba(255,255,255,.16);}
+.act-btn.active{background:#242454;border-color:rgba(139,143,244,.35);color:#a9abff;}
 .act-btn.danger:hover{background:rgba(224,82,82,.1);border-color:rgba(224,82,82,.3);color:var(--danger);}
 .no-sel{font-size:12px;color:var(--text3);padding:6px 0;text-align:center;}
 .multi-sel-info{font-size:12px;color:var(--accent2);padding:4px 0;font-weight:500;text-align:center;}
@@ -724,6 +730,12 @@ body.exporting-canvas .frame-label{display:none!important;}
           <div class="prop-2col">
             <div class="prop-group"><span class="lbl">W</span><input type="number" id="pw" step="1" min="10"></div>
             <div class="prop-group"><span class="lbl">H</span><input type="number" id="ph_" step="1" min="10"></div>
+          </div>
+          <div class="action-row">
+            <button class="act-btn" id="ratio-btn">Lock ratio</button>
+            <button class="act-btn" id="rot-left-btn">-90</button>
+            <button class="act-btn" id="rot-right-btn">+90</button>
+            <button class="act-btn" id="reset-transform-btn">Reset</button>
           </div>
           <div class="prop-2col">
             <div class="prop-group"><span class="lbl">°</span><input type="number" id="pr" step="1"></div>
@@ -1107,6 +1119,8 @@ let state = {
   layerQuery:'',
   layerFilter:'all',
   styleClipboard:null,
+  collapsedGroups:{},
+  lockAspect:false,
   nextGroupId:1,
   shapeDefaults:{fill:'#6c71f0',stroke:'#8b8ff4',strokeWidth:2},
   minimapEnabled:true,
@@ -2176,6 +2190,7 @@ function updateProps(){
   $('px').value=Math.round(item.x); $('py').value=Math.round(item.y);
   $('pw').value=Math.round(item.w); $('ph_').value=Math.round(item.h);
   $('pr').value=Math.round(item.rot); $('pz').value=item.z;
+  $('ratio-btn').classList.toggle('active',!!state.lockAspect);
   $('popacity').value=item.opacity; $('opacity-val').textContent=item.opacity+'%';
   $('lock-btn').textContent=item.locked?'🔒':'🔓';
   $('blend-mode').value=item.blendMode||'normal';
@@ -2251,7 +2266,13 @@ function updateShapeDefaultsUI(){
 function bindPropNum(id,key){
   $(id).addEventListener('change',e=>{
     const item=selFirst(); if(!item||item.locked) return;
-    pushHistory(); item[key]=parseFloat(e.target.value)||0;
+    pushHistory();
+    const next=parseFloat(e.target.value)||0;
+    if(state.lockAspect&&(key==='w'||key==='h')&&item.w>0&&item.h>0){
+      const ratio=item.w/item.h;
+      if(key==='w'){item.w=Math.max(10,next); item.h=Math.max(10,item.w/ratio);}
+      else {item.h=Math.max(10,next); item.w=Math.max(10,item.h*ratio);}
+    }else item[key]=next;
     const el=canvasWorld.querySelector(`[data-id="${item.id}"]`);
     if(el) applyItemStyle(el,item);
     applyFrameClipping();
@@ -2261,6 +2282,22 @@ function bindPropNum(id,key){
 bindPropNum('px','x'); bindPropNum('py','y');
 bindPropNum('pw','w'); bindPropNum('ph_','h');
 bindPropNum('pr','rot'); bindPropNum('pz','z');
+$('ratio-btn').addEventListener('click',()=>{
+  state.lockAspect=!state.lockAspect;
+  updateProps();
+});
+function updateTransformQuick(fn){
+  const item=selFirst(); if(!item||item.locked) return;
+  pushHistory(); fn(item);
+  const el=canvasWorld.querySelector(`[data-id="${item.id}"]`);
+  if(el) applyItemStyle(el,item);
+  applyFrameClipping(); updateSelectionOverlay(); updateMultiSelBox(); updateProps(); scheduleSave(); scheduleThumb();
+}
+$('rot-left-btn').addEventListener('click',()=>updateTransformQuick(item=>{item.rot=(item.rot||0)-90;}));
+$('rot-right-btn').addEventListener('click',()=>updateTransformQuick(item=>{item.rot=(item.rot||0)+90;}));
+$('reset-transform-btn').addEventListener('click',()=>updateTransformQuick(item=>{
+  item.rot=0; item.flipH=false; item.flipV=false;
+}));
 
 $('popacity').addEventListener('input',e=>{
   const item=selFirst(); if(!item) return;
@@ -2533,7 +2570,7 @@ function renderLayers(){
   if(!allItems.length){list.innerHTML='<div class="layer-empty">No layers</div>';return;}
   if(!items.length){list.innerHTML='<div class="layer-empty">No matching layers</div>';return;}
 
-  list.innerHTML=items.map(item=>`
+  const itemRow=item=>`
     <div class="layer-item${state.selectedIds.includes(item.id)?' selected':''}"
          data-id="${item.id}" draggable="true">
       <div class="layer-drag-handle" title="Drag to reorder">⠿</div>
@@ -2546,12 +2583,49 @@ function renderLayers(){
         <div class="layer-icon${item.visible?'':' off'}" data-vis="${item.id}">◉</div>
       </div>
     </div>
-  `).join('');
+  `;
+  const renderedGroups=new Set(), rows=[];
+  items.forEach(item=>{
+    if(item.groupId){
+      const gid=item.groupId;
+      if(renderedGroups.has(gid)) return;
+      renderedGroups.add(gid);
+      const members=items.filter(i=>i.groupId===gid);
+      const collapsed=!!state.collapsedGroups[gid];
+      const selected=members.length&&members.every(i=>state.selectedIds.includes(i.id));
+      rows.push(`
+        <div class="layer-item group-row${selected?' selected':''}" data-group="${gid}">
+          <div class="layer-caret">${collapsed?'+':'-'}</div>
+          <div class="layer-thumb text-thumb">[]</div>
+          <div class="layer-name-el">Group ${gid}</div>
+          <div class="layer-actions"><span class="layer-icon">${members.length}</span></div>
+        </div>
+      `);
+      if(!collapsed) members.forEach(member=>rows.push(itemRow(member).replace('layer-item','layer-item group-child')));
+    }else rows.push(itemRow(item));
+  });
+  list.innerHTML=rows.join('');
 
   // Click to select
   list.querySelectorAll('.layer-item').forEach(el=>{
     el.addEventListener('click',e=>{
       if(e.target.closest('.layer-actions')||e.target.closest('[data-name]')) return;
+      if(el.dataset.group){
+        const gid=parseInt(el.dataset.group,10);
+        if(e.target.closest('.layer-caret')){
+          state.collapsedGroups[gid]=!state.collapsedGroups[gid];
+          renderLayers();
+          return;
+        }
+        const members=items.filter(i=>i.groupId===gid).map(i=>i.id);
+        if(e.shiftKey){
+          if(members.every(i=>state.selectedIds.includes(i))) state.selectedIds=state.selectedIds.filter(i=>!members.includes(i));
+          else state.selectedIds=[...new Set([...state.selectedIds,...members])];
+        }else state.selectedIds=members;
+        renderItemsHighlight(); updateSelectionOverlay();
+        updateMultiSelBox(); updateProps(); renderLayers();
+        return;
+      }
       const id=parseInt(el.dataset.id);
       const item=getItem(id), idsToSelect=selectionIdsForItem(item);
       if(e.shiftKey){
@@ -2564,6 +2638,7 @@ function renderLayers(){
 
     // Drag to reorder
     el.addEventListener('dragstart',e=>{
+      if(!el.dataset.id){e.preventDefault();return;}
       layerDrag.id=parseInt(el.dataset.id);
       el.style.opacity='.5';
     });
@@ -2575,6 +2650,7 @@ function renderLayers(){
     });
     el.addEventListener('drop',e=>{
       e.preventDefault();
+      if(!el.dataset.id){clearLayerDragOver();return;}
       const targetId=parseInt(el.dataset.id);
       if(layerDrag.id&&layerDrag.id!==targetId){
         pushHistory();
@@ -4004,6 +4080,8 @@ async function loadCanvas(){
     state.nextGroupId=saved.nextGroupId||Math.max(1,...state.canvases.flatMap(c=>(c.items||[]).map(i=>i.groupId||0)))+1
     state.shapeDefaults={fill:'#6c71f0',stroke:'#8b8ff4',strokeWidth:2,...(saved.shapeDefaults||{})}
     state.minimapEnabled=saved.minimapEnabled!==false
+    state.collapsedGroups=saved.collapsedGroups||{}
+    state.lockAspect=!!saved.lockAspect
     state.activeId=state.canvases[0]?.id||1
     state.canvases.forEach(c=>{
       if(!c.history) c.history=[]
