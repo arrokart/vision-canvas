@@ -1508,7 +1508,8 @@ function shapeMarkup(item){
   if(item.shape==='star'){
     return `<svg class="shape-content" viewBox="0 0 100 100" preserveAspectRatio="none"><polygon points="50,4 61,36 95,36 67,56 78,90 50,70 22,90 33,56 5,36 39,36" ${common} stroke-linejoin="round"/></svg>`;
   }
-  return `<svg class="shape-content" viewBox="0 0 100 100" preserveAspectRatio="none"><rect x="4" y="4" width="92" height="92" rx="3" ${common}/></svg>`;
+  const rx=Math.max(0,Math.min(46,item.radius??3));
+  return `<svg class="shape-content" viewBox="0 0 100 100" preserveAspectRatio="none"><rect x="4" y="4" width="92" height="92" rx="${rx}" ry="${rx}" ${common}/></svg>`;
 }
 
 function renderItemsHighlight(){
@@ -2057,6 +2058,7 @@ $('blend-mode').addEventListener('change',e=>updateEffectProp('blendMode',e.targ
 $('fx-shadow').addEventListener('change',e=>updateEffectProp('shadow',e.target.checked,true));
 $('fx-shadow-blur').addEventListener('change',e=>updateEffectProp('shadowBlur',Math.max(0,parseFloat(e.target.value)||0),true));
 $('fx-shadow-y').addEventListener('change',e=>updateEffectProp('shadowY',parseFloat(e.target.value)||0,true));
+$('fx-radius').addEventListener('input',e=>updateEffectProp('radius',Math.max(0,parseFloat(e.target.value)||0),false));
 $('fx-radius').addEventListener('change',e=>updateEffectProp('radius',Math.max(0,parseFloat(e.target.value)||0),true));
 $('fx-shadow-color').addEventListener('input',e=>updateEffectProp('shadowColor',e.target.value,false));
 $('flip-h-btn').addEventListener('click',()=>{
