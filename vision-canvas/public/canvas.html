@@ -199,6 +199,9 @@ body{display:flex;flex-direction:column;}
 .align-guide{position:absolute;pointer-events:none;z-index:300;transition:opacity .1s;}
 .align-guide.v{width:1px;top:0;bottom:0;background:rgba(255,80,80,.7);}
 .align-guide.h{height:1px;left:0;right:0;background:rgba(255,80,80,.7);}
+.guide-label{position:absolute;z-index:301;pointer-events:none;background:rgba(18,18,24,.92);
+  border:1px solid rgba(255,255,255,.14);border-radius:5px;padding:2px 5px;color:#f4f4fb;
+  font-size:10px;font-weight:700;font-variant-numeric:tabular-nums;box-shadow:0 8px 18px rgba(0,0,0,.28);}
 .user-guide{position:absolute;z-index:38;background:rgba(139,143,244,.75);pointer-events:auto;}
 .user-guide.v{width:1px;top:0;bottom:0;cursor:ew-resize;}
 .user-guide.h{height:1px;left:0;right:0;cursor:ns-resize;}
@@ -289,6 +292,14 @@ body{display:flex;flex-direction:column;}
 /* LAYERS */
 #layers-list{display:flex;flex-direction:column;gap:4px;max-height:260px;overflow-y:auto;padding-right:2px;transition:max-height .18s;}
 #layers-section.layers-expanded #layers-list{max-height:calc(100vh - 190px);}
+.layer-tools{display:flex;flex-direction:column;gap:6px;margin-bottom:7px;}
+.layer-search{width:100%;height:30px;border-radius:7px;border:1px solid var(--border);
+  background:#17171d;color:var(--text);font-size:12px;padding:0 9px;outline:none;}
+.layer-search:focus{border-color:rgba(139,143,244,.55);}
+.layer-filters{display:flex;gap:4px;overflow-x:auto;padding-bottom:1px;}
+.layer-filter{height:25px;min-width:32px;border-radius:7px;border:1px solid rgba(255,255,255,.08);
+  background:var(--bg3);color:var(--text2);font-size:11px;cursor:pointer;padding:0 8px;}
+.layer-filter.active{background:#242454;border-color:rgba(139,143,244,.35);color:#a9abff;}
 .layer-item{display:flex;align-items:center;gap:9px;padding:6px 8px;
   border-radius:7px;cursor:pointer;border:1px solid transparent;transition:.15s;background:transparent;}
 .layer-item:hover{background:rgba(255,255,255,.035);}
@@ -661,6 +672,18 @@ body{display:flex;flex-direction:column;}
         <span class="panel-toggle" id="pt-layers">▲</span>
       </div>
       <div class="panel-body" id="pb-layers">
+        <div class="layer-tools">
+          <input class="layer-search" id="layer-search" placeholder="Search layers" autocomplete="off">
+          <div class="layer-filters" id="layer-filters">
+            <button class="layer-filter active" data-layer-filter="all">All</button>
+            <button class="layer-filter" data-layer-filter="image">Images</button>
+            <button class="layer-filter" data-layer-filter="text">Text</button>
+            <button class="layer-filter" data-layer-filter="shape">Shapes</button>
+            <button class="layer-filter" data-layer-filter="frame">Frames</button>
+            <button class="layer-filter" data-layer-filter="hidden">Hidden</button>
+            <button class="layer-filter" data-layer-filter="locked">Locked</button>
+          </div>
+        </div>
         <div id="layers-list"><div class="layer-empty">No layers</div></div>
       </div>
     </div>
@@ -796,6 +819,28 @@ body{display:flex;flex-direction:column;}
               <button class="act-btn" id="img-crop-btn">Adjust crop</button>
               <button class="act-btn" id="img-reset-crop-btn">Reset crop</button>
             </div>
+            <div class="inspector-group-title">Adjustments</div>
+            <div class="opacity-row">
+              <span style="font-size:11px;color:var(--text2);">Bright</span>
+              <input type="range" class="opacity-slider" id="img-bright" min="0" max="200" value="100">
+              <span class="opacity-val" id="img-bright-val">100%</span>
+            </div>
+            <div class="opacity-row">
+              <span style="font-size:11px;color:var(--text2);">Contrast</span>
+              <input type="range" class="opacity-slider" id="img-contrast" min="0" max="200" value="100">
+              <span class="opacity-val" id="img-contrast-val">100%</span>
+            </div>
+            <div class="opacity-row">
+              <span style="font-size:11px;color:var(--text2);">Saturate</span>
+              <input type="range" class="opacity-slider" id="img-saturate" min="0" max="200" value="100">
+              <span class="opacity-val" id="img-saturate-val">100%</span>
+            </div>
+            <div class="opacity-row">
+              <span style="font-size:11px;color:var(--text2);">Blur</span>
+              <input type="range" class="opacity-slider" id="img-blur" min="0" max="20" value="0">
+              <span class="opacity-val" id="img-blur-val">0px</span>
+            </div>
+            <button class="act-btn" id="img-reset-adjust">Reset adjustments</button>
           </div>
           <div id="shape-props">
             <div class="inspector-group-title">Shape</div>
@@ -1025,6 +1070,7 @@ const commandInput = $('command-input');
 const commandList = $('command-list');
 let textEditDirty=false;
 let imageCropDirty=false;
+let imageAdjustDirty=false;
 
 // ── STATE ─────────────────────────────────────────────────────────
 let state = {
@@ -1036,6 +1082,8 @@ let state = {
   tool:'select', interaction:null, spaceHeld:false,
   ctxItemId:null, editingId:null,
   snapEnabled:true,
+  layerQuery:'',
+  layerFilter:'all',
   nextGroupId:1,
   shapeDefaults:{fill:'#6c71f0',stroke:'#8b8ff4',strokeWidth:2},
   minimapEnabled:true,
@@ -1099,6 +1147,7 @@ function addImageItem(src,x,y,w,h){
     x,y,w,h,rot:0,opacity:100,visible:true,locked:false,
     flipH:false,flipV:false,z:maxZ()+1,
     fit:'contain',imgX:50,imgY:50,imgScale:100,
+    imgBright:100,imgContrast:100,imgSaturate:100,imgBlur:0,
     blendMode:'normal',shadow:false,shadowBlur:18,shadowY:10,shadowColor:'rgba(0,0,0,.35)',radius:2});
   assignInitialFrame(ac().items[ac().items.length-1]);
   state.selectedIds=[id];
@@ -1541,6 +1590,7 @@ function applyItemStyle(el,item){
       img.style.objectPosition=`${posX}% ${posY}%`;
       img.style.transform=fit==='fill'?'none':`scale(${scale})`;
       img.style.transformOrigin=`${posX}% ${posY}%`;
+      img.style.filter=`brightness(${item.imgBright??100}%) contrast(${item.imgContrast??100}%) saturate(${item.imgSaturate??100}%) blur(${item.imgBlur??0}px)`;
     }
   }
   if(item.type==='comment'){
@@ -1767,6 +1817,15 @@ function showGuide(type,pos){
   canvasArea.appendChild(g);
   guideEls.push(g);
 }
+function showGuideLabel(text,x,y){
+  const label=document.createElement('div');
+  label.className='guide-label';
+  label.textContent=text;
+  label.style.left=x+'px';
+  label.style.top=y+'px';
+  canvasArea.appendChild(label);
+  guideEls.push(label);
+}
 
 function canvasGuides(){
   const c=ac();
@@ -1866,9 +1925,15 @@ function snapItem(item, othersArr){
       if(d<bestY){bestY=d;dy=b-a;}
     });
   });
-  if(bestX<=SNAP_DIST) showGuide('v',item.x+dx+item.w/2);
+  if(bestX<=SNAP_DIST){
+    showGuide('v',item.x+dx+item.w/2);
+    showGuideLabel(`${Math.round(Math.abs(dx))} px`,(item.x+dx+item.w/2)*state.zoom+state.pan.x+8,(item.y+item.h/2)*state.zoom+state.pan.y-11);
+  }
   else dx=0;
-  if(bestY<=SNAP_DIST) showGuide('h',item.y+dy+item.h/2);
+  if(bestY<=SNAP_DIST){
+    showGuide('h',item.y+dy+item.h/2);
+    showGuideLabel(`${Math.round(Math.abs(dy))} px`,(item.x+item.w/2)*state.zoom+state.pan.x+8,(item.y+dy+item.h/2)*state.zoom+state.pan.y+8);
+  }
   else dy=0;
   return {dx,dy};
 }
@@ -2126,6 +2191,14 @@ function updateProps(){
     $('img-scale-val').textContent=(item.imgScale||100)+'%';
     $('img-pos-x').value=Math.round(item.imgX??50);
     $('img-pos-y').value=Math.round(item.imgY??50);
+    $('img-bright').value=item.imgBright??100;
+    $('img-bright-val').textContent=(item.imgBright??100)+'%';
+    $('img-contrast').value=item.imgContrast??100;
+    $('img-contrast-val').textContent=(item.imgContrast??100)+'%';
+    $('img-saturate').value=item.imgSaturate??100;
+    $('img-saturate-val').textContent=(item.imgSaturate??100)+'%';
+    $('img-blur').value=item.imgBlur??0;
+    $('img-blur-val').textContent=(item.imgBlur??0)+'px';
   }
 }
 
@@ -2253,6 +2326,39 @@ $('img-scale').addEventListener('change',e=>{
 });
 $('img-pos-x').addEventListener('change',e=>updateImageCropProp('imgX',parseFloat(e.target.value),true));
 $('img-pos-y').addEventListener('change',e=>updateImageCropProp('imgY',parseFloat(e.target.value),true));
+function updateImageAdjustment(key,value,withHistory=false){
+  const item=selFirst(); if(!item||item.type!=='image'||item.locked) return;
+  if(withHistory) pushHistory();
+  item[key]=key==='imgBlur'?clamp(value,0,20):clamp(value,0,200);
+  const el=canvasWorld.querySelector(`[data-id="${item.id}"]`);
+  if(el) applyItemStyle(el,item);
+  updateProps(); scheduleSave(); scheduleThumb();
+}
+[
+  ['img-bright','imgBright','%'],
+  ['img-contrast','imgContrast','%'],
+  ['img-saturate','imgSaturate','%'],
+  ['img-blur','imgBlur','px']
+].forEach(([id,key,unit])=>{
+  $(id).addEventListener('input',e=>{
+    if(!imageAdjustDirty){pushHistory();imageAdjustDirty=true;}
+    const val=parseInt(e.target.value,10);
+    $(`${id}-val`).textContent=val+unit;
+    updateImageAdjustment(key,val,false);
+  });
+  $(id).addEventListener('change',e=>{
+    updateImageAdjustment(key,parseInt(e.target.value,10),false);
+    imageAdjustDirty=false;
+  });
+});
+$('img-reset-adjust').addEventListener('click',()=>{
+  const item=selFirst(); if(!item||item.type!=='image'||item.locked) return;
+  pushHistory();
+  item.imgBright=100; item.imgContrast=100; item.imgSaturate=100; item.imgBlur=0;
+  const el=canvasWorld.querySelector(`[data-id="${item.id}"]`);
+  if(el) applyItemStyle(el,item);
+  updateProps(); scheduleSave(); scheduleThumb();
+});
 $('img-crop-btn').addEventListener('click',()=>{
   const item=selFirst(); if(!item||item.type!=='image'||item.locked) return;
   pushHistory();
@@ -2356,6 +2462,16 @@ $('default-shape-stroke-width').addEventListener('change',e=>
 $('default-shape-fill-clear').addEventListener('click',()=>updateDefaultShapeProp('fill','transparent'));
 
 let layerDrag={id:null,startY:0};
+$('layer-search').addEventListener('input',e=>{
+  state.layerQuery=e.target.value;
+  renderLayers();
+});
+document.querySelectorAll('.layer-filter').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    state.layerFilter=btn.dataset.layerFilter;
+    renderLayers();
+  });
+});
 
 function layerThumb(item){
   if(item.type==='text') return 'T';
@@ -2371,9 +2487,25 @@ function layerThumb(item){
 
 function renderLayers(){
   const list=$('layers-list');
-  const items=[...ac().items].sort((a,b)=>b.z-a.z);
-  $('info-items').textContent=items.length;
-  if(!items.length){list.innerHTML='<div class="layer-empty">No layers</div>';return;}
+  const allItems=[...ac().items].sort((a,b)=>b.z-a.z);
+  const q=(state.layerQuery||'').trim().toLowerCase();
+  const filter=state.layerFilter||'all';
+  const matchesFilter=item=>{
+    if(filter==='all') return true;
+    if(filter==='hidden') return item.visible===false;
+    if(filter==='locked') return !!item.locked;
+    if(filter==='text') return item.type==='text'||item.type==='note';
+    if(filter==='shape') return item.type==='shape';
+    return item.type===filter;
+  };
+  const items=allItems.filter(item=>
+    matchesFilter(item)&&(!q||`${item.name||''} ${item.type||''} ${item.shape||''}`.toLowerCase().includes(q))
+  );
+  $('info-items').textContent=allItems.length;
+  $('layer-search').value=state.layerQuery||'';
+  document.querySelectorAll('.layer-filter').forEach(btn=>btn.classList.toggle('active',btn.dataset.layerFilter===filter));
+  if(!allItems.length){list.innerHTML='<div class="layer-empty">No layers</div>';return;}
+  if(!items.length){list.innerHTML='<div class="layer-empty">No matching layers</div>';return;}
 
   list.innerHTML=items.map(item=>`
     <div class="layer-item${state.selectedIds.includes(item.id)?' selected':''}"
