@@ -977,13 +977,10 @@ body{display:flex;flex-direction:column;}
   <div class="modal-box" style="width:300px;">
     <div class="modal-title">Export Canvas</div>
     <div class="modal-row">
-      <span>Preset</span>
-      <select class="modal-select" id="export-preset">
-        <option value="png-2x" selected>PNG 2x</option>
-        <option value="png-1x">PNG 1x</option>
-        <option value="png-3x">PNG 3x</option>
-        <option value="jpg-2x">JPEG 2x</option>
-        <option value="webp-2x">WebP 2x</option>
+      <span>Area</span>
+      <select class="modal-select" id="export-area">
+        <option value="canvas" selected>Whole canvas</option>
+        <option value="selection">Selection</option>
       </select>
     </div>
     <div class="modal-row">
@@ -1005,10 +1002,6 @@ body{display:flex;flex-direction:column;}
     <label class="prop-check" style="margin-top:8px;">
       <input type="checkbox" id="export-transparent">
       Transparent background
-    </label>
-    <label class="prop-check" style="margin-top:8px;">
-      <input type="checkbox" id="export-selected-only">
-      Export selection only
     </label>
     <div class="modal-actions">
       <button class="modal-btn" id="export-cancel">Cancel</button>
@@ -3657,23 +3650,9 @@ ctxMenu.querySelectorAll('.ctx-item').forEach(item=>{
 // ── EXPORT ────────────────────────────────────────────────────────
 $('export-btn').addEventListener('click',()=>{
   if(!ac().items.length){showToast('Nothing to export');return;}
-  $('export-selected-only').checked=state.selectedIds.length>0;
-  $('export-selected-only').disabled=state.selectedIds.length===0;
+  $('export-area').value=state.selectedIds.length>0?'selection':'canvas';
+  $('export-area').querySelector('option[value="selection"]').disabled=state.selectedIds.length===0;
   $('export-modal').classList.add('show');
-});
-$('export-preset').addEventListener('change',e=>{
-  const presets={
-    'png-1x':{scale:1,format:'png'},
-    'png-2x':{scale:2,format:'png'},
-    'png-3x':{scale:3,format:'png'},
-    'jpg-2x':{scale:2,format:'jpeg'},
-    'webp-2x':{scale:2,format:'webp'},
-  };
-  const preset=presets[e.target.value]||presets['png-2x'];
-  $('export-scale').value=String(preset.scale);
-  $('export-format').value=preset.format;
-  $('export-transparent').disabled=preset.format==='jpeg';
-  if(preset.format==='jpeg') $('export-transparent').checked=false;
 });
 $('export-format').addEventListener('change',e=>{
   $('export-transparent').disabled=e.target.value==='jpeg';
@@ -3682,7 +3661,7 @@ $('export-format').addEventListener('change',e=>{
 $('export-cancel').addEventListener('click',()=>$('export-modal').classList.remove('show'));
 $('export-confirm').addEventListener('click',async()=>{
   $('export-modal').classList.remove('show');
-  const selectedOnly=$('export-selected-only').checked&&state.selectedIds.length>0;
+  const selectedOnly=$('export-area').value==='selection'&&state.selectedIds.length>0;
   const exportIds=new Set(selectedOnly?state.selectedIds:ac().items.map(i=>i.id));
   const items=ac().items.filter(i=>i.visible&&exportIds.has(i.id));
   if(!items.length){showToast('No visible items');return;}
