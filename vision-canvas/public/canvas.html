@@ -3659,16 +3659,28 @@ $('export-format').addEventListener('change',e=>{
   if(e.target.value==='jpeg') $('export-transparent').checked=false;
 });
 $('export-cancel').addEventListener('click',()=>$('export-modal').classList.remove('show'));
+function exportSelectionIds(ids){
+  const expanded=new Set();
+  ids.forEach(id=>{
+    expanded.add(id);
+    const item=getItem(id);
+    if(item?.type==='frame') frameChildIds(item).forEach(childId=>expanded.add(childId));
+  });
+  return expanded;
+}
 $('export-confirm').addEventListener('click',async()=>{
   $('export-modal').classList.remove('show');
   const selectedOnly=$('export-area').value==='selection'&&state.selectedIds.length>0;
-  const exportIds=new Set(selectedOnly?state.selectedIds:ac().items.map(i=>i.id));
+  const exportIds=selectedOnly?exportSelectionIds(state.selectedIds):new Set(ac().items.map(i=>i.id));
   const items=ac().items.filter(i=>i.visible&&exportIds.has(i.id));
   if(!items.length){showToast('No visible items');return;}
   const pad=40,scale=parseInt($('export-scale').value)||2,fmt=$('export-format').value||'png';
   const transparent=$('export-transparent').checked&&fmt!=='jpeg';
-  const minX=Math.min(...items.map(i=>i.x))-pad,minY=Math.min(...items.map(i=>i.y))-pad;
-  const maxX=Math.max(...items.map(i=>i.x+i.w))+pad,maxY=Math.max(...items.map(i=>i.y+i.h))+pad;
+  const boundsItems=selectedOnly
+    ? ac().items.filter(i=>i.visible&&state.selectedIds.includes(i.id))
+    : items;
+  const minX=Math.min(...boundsItems.map(i=>i.x))-pad,minY=Math.min(...boundsItems.map(i=>i.y))-pad;
+  const maxX=Math.max(...boundsItems.map(i=>i.x+i.w))+pad,maxY=Math.max(...boundsItems.map(i=>i.y+i.h))+pad;
   const hidden=[];
   const saved={pan:{...state.pan},zoom:state.zoom,sel:[...state.selectedIds]};
   if(selectedOnly){
