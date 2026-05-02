@@ -1503,6 +1503,11 @@ function shapeMarkup(item){
     return `<svg class="shape-content" viewBox="0 0 100 100" preserveAspectRatio="none"><ellipse cx="50" cy="50" rx="46" ry="46" ${common}/></svg>`;
   }
   if(item.shape==='polygon'){
+    const r=Math.max(0,Math.min(18,item.radius||0));
+    if(r>0){
+      const d=`M 50 4 Q 50 4 ${50+r*.45} ${4+r*.9} L ${96-r*.45} ${94-r*.9} Q 96 94 ${96-r} 94 L ${4+r} 94 Q 4 94 ${4+r*.45} ${94-r*.9} L ${50-r*.45} ${4+r*.9} Q 50 4 50 4 Z`;
+      return `<svg class="shape-content" viewBox="0 0 100 100" preserveAspectRatio="none"><path d="${d}" ${common} stroke-linejoin="round"/></svg>`;
+    }
     return `<svg class="shape-content" viewBox="0 0 100 100" preserveAspectRatio="none"><polygon points="50,4 96,94 4,94" ${common} stroke-linejoin="round"/></svg>`;
   }
   if(item.shape==='star'){
