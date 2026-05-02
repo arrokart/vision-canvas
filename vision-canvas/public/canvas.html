@@ -189,13 +189,17 @@ body{display:flex;flex-direction:column;}
 .user-guide.h{height:1px;left:0;right:0;cursor:ns-resize;}
 .user-guide:hover{background:rgba(255,255,255,.9);}
 #ruler-x,#ruler-y,#ruler-corner{position:absolute;background:rgba(12,12,16,.92);border-color:var(--border);z-index:42;}
-#ruler-x{left:20px;right:0;top:0;height:20px;border-bottom:1px solid var(--border);
-  background-image:linear-gradient(90deg,rgba(255,255,255,.22) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.1) 1px,transparent 1px);
-  background-size:100px 100%,20px 100%;cursor:ns-resize;}
-#ruler-y{left:0;top:20px;bottom:0;width:20px;border-right:1px solid var(--border);
-  background-image:linear-gradient(0deg,rgba(255,255,255,.22) 1px,transparent 1px),linear-gradient(0deg,rgba(255,255,255,.1) 1px,transparent 1px);
-  background-size:100% 100px,100% 20px;cursor:ew-resize;}
+#ruler-x{left:20px;right:0;top:0;height:20px;border-bottom:1px solid var(--border);cursor:ns-resize;overflow:hidden;}
+#ruler-y{left:0;top:20px;bottom:0;width:20px;border-right:1px solid var(--border);cursor:ew-resize;overflow:hidden;}
 #ruler-corner{left:0;top:0;width:20px;height:20px;border-right:1px solid var(--border);border-bottom:1px solid var(--border);}
+.ruler-mark{position:absolute;color:var(--text3);font-size:9px;line-height:1;font-variant-numeric:tabular-nums;pointer-events:none;}
+.ruler-mark.major::before,.ruler-mark.minor::before{content:'';position:absolute;background:rgba(255,255,255,.22);}
+#ruler-x .ruler-mark.major::before{left:0;top:0;width:1px;height:9px;}
+#ruler-x .ruler-mark.minor::before{left:0;top:0;width:1px;height:5px;}
+#ruler-y .ruler-mark.major::before{left:0;top:0;width:9px;height:1px;}
+#ruler-y .ruler-mark.minor::before{left:0;top:0;width:5px;height:1px;}
+#ruler-x .ruler-mark span{position:absolute;left:3px;top:9px;}
+#ruler-y .ruler-mark span{position:absolute;left:2px;top:3px;transform:rotate(-90deg);transform-origin:left top;}
 #guide-layer{position:absolute;inset:0;pointer-events:none;z-index:38;}
 #guide-layer .user-guide{pointer-events:auto;}
 
@@ -1657,6 +1661,33 @@ function clearUserGuides(){
   guides.v=[]; guides.h=[];
   renderUserGuides(); scheduleSave(); showToast('Guides cleared');
 }
+function deleteUserGuide(type,idx){
+  const guides=canvasGuides();
+  if(!guides[type]||idx<0||idx>=guides[type].length) return;
+  pushHistory();
+  guides[type].splice(idx,1);
+  renderUserGuides(); scheduleSave(); showToast('Guide deleted');
+}
+function renderRulers(){
+  const rx=$('ruler-x'),ry=$('ruler-y');
+  if(!rx||!ry) return;
+  rx.innerHTML=''; ry.innerHTML='';
+  const step=state.zoom>=1.5?50:state.zoom>=.75?100:state.zoom>=.35?200:500;
+  const minor=step/5;
+  const r=canvasArea.getBoundingClientRect();
+  const start=screenToWorld(r.left,r.top);
+  const end=screenToWorld(r.right,r.bottom);
+  const addMark=(parent,axis,value,major)=>{
+    const pos=axis==='x'?value*state.zoom+state.pan.x-20:value*state.zoom+state.pan.y-20;
+    const el=document.createElement('div');
+    el.className='ruler-mark '+(major?'major':'minor');
+    if(axis==='x') el.style.left=pos+'px'; else el.style.top=pos+'px';
+    if(major) el.innerHTML=`<span>${Math.round(value)}</span>`;
+    parent.appendChild(el);
+  };
+  for(let x=Math.floor(start.x/minor)*minor;x<=end.x+minor;x+=minor) addMark(rx,'x',x,Math.abs(x%step)<.001);
+  for(let y=Math.floor(start.y/minor)*minor;y<=end.y+minor;y+=minor) addMark(ry,'y',y,Math.abs(y%step)<.001);
+}
 
 function snapItem(item, othersArr){
   if(!state.snapEnabled) return {dx:0,dy:0};
@@ -1707,6 +1738,7 @@ function applyTransform(){
   $('info-zoom').textContent=pct;
   updateMiniMap();
   renderUserGuides();
+  renderRulers();
   positionCommentPanel();
 }
 function screenToWorld(sx,sy){
@@ -2539,6 +2571,16 @@ guideLayer.addEventListener('mousedown',e=>{
   e.preventDefault(); e.stopPropagation();
   interaction={type:'guide',guideType:g.dataset.type,idx:parseInt(g.dataset.idx,10)};
 });
+guideLayer.addEventListener('dblclick',e=>{
+  const g=e.target.closest('.user-guide'); if(!g||!canEditAll()) return;
+  e.preventDefault(); e.stopPropagation();
+  deleteUserGuide(g.dataset.type,parseInt(g.dataset.idx,10));
+});
+guideLayer.addEventListener('contextmenu',e=>{
+  const g=e.target.closest('.user-guide'); if(!g||!canEditAll()) return;
+  e.preventDefault(); e.stopPropagation();
+  deleteUserGuide(g.dataset.type,parseInt(g.dataset.idx,10));
+});
 
 function onItemMousedown(e){
   if(state.editingId) return;
@@ -2823,7 +2865,14 @@ document.addEventListener('mousemove',e=>{
 });
 
 document.addEventListener('mouseup',e=>{
-  if(interaction&&interaction.type==='guide') scheduleSave();
+  if(interaction&&interaction.type==='guide'){
+    const r=canvasArea.getBoundingClientRect();
+    const remove=interaction.guideType==='h'
+      ? e.clientY<r.top+24||e.clientY>r.bottom-4
+      : e.clientX<r.left+24||e.clientX>r.right-4;
+    if(remove) deleteUserGuide(interaction.guideType,interaction.idx);
+    else scheduleSave();
+  }
   if(interaction&&interaction.type==='move') clearGuides();
   if(interaction&&interaction.type==='rubberband'){
     rubberBand.style.display='none';
