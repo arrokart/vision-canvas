@@ -2840,7 +2840,9 @@ canvasArea.addEventListener('mousedown',e=>{
         return;
       }
       const wp=screenToWorld(e.clientX,e.clientY);
-      addCommentItem(wp.x,wp.y); return;
+      addCommentItem(wp.x,wp.y);
+      returnToSelectTool();
+      return;
     }
     if(state.tool==='select'&&!e.target.closest('.canvas-item')&&!e.target.closest('#selection-overlay')){
       state.selectedIds=[];
@@ -3057,6 +3059,7 @@ document.addEventListener('mouseup',e=>{
     }else{
       addFrameItem(start.x-180,start.y-120);
     }
+    returnToSelectTool();
   }
   if(interaction&&interaction.type==='textcreate'){
     rubberBand.style.display='none';
@@ -3069,6 +3072,7 @@ document.addEventListener('mouseup',e=>{
     }else{
       addTextItem(start.x-110,start.y-35);
     }
+    returnToSelectTool();
   }
   if(interaction&&interaction.type==='notecreate'){
     rubberBand.style.display='none';
@@ -3081,6 +3085,7 @@ document.addEventListener('mouseup',e=>{
     }else{
       addNoteItem(start.x-110,start.y-80);
     }
+    returnToSelectTool();
   }
   if(interaction&&interaction.type==='shapecreate'){
     rubberBand.style.display='none';
@@ -3096,6 +3101,7 @@ document.addEventListener('mouseup',e=>{
       const [w,h]=defaults[interaction.shape]||defaults.rect;
       addShapeItem(interaction.shape,start.x-w/2,start.y-h/2,w,h);
     }
+    returnToSelectTool();
   }
   if(interaction&&(interaction.type==='resize'||interaction.type==='rotate')) scheduleThumb();
   if(interaction&&interaction.type==='imagecrop'&&interaction.moved){scheduleSave();scheduleThumb();}
@@ -3273,6 +3279,9 @@ function setTool(tool){
   if(tool!=='zoom') canvasArea.classList.remove('zoom-out');
   canvasArea.classList.toggle('text-tool',tool==='text'||tool==='note'||tool==='comment'||tool==='frame'||isShapeTool(tool));
   updateProps();
+}
+function returnToSelectTool(){
+  if(state.tool!=='select') setTool('select');
 }
 document.querySelectorAll('.tool-btn[data-tool]').forEach(b=>{
   b.addEventListener('click',()=>setTool(b.dataset.tool));
