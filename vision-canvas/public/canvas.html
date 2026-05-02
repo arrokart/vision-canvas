@@ -1000,8 +1000,8 @@ body{display:flex;flex-direction:column;}
       </select>
     </div>
     <label class="prop-check" style="margin-top:8px;">
-      <input type="checkbox" id="export-transparent">
-      Transparent background
+      <input type="checkbox" id="export-include-bg">
+      Include canvas background
     </label>
     <div class="modal-actions">
       <button class="modal-btn" id="export-cancel">Cancel</button>
@@ -3652,11 +3652,17 @@ $('export-btn').addEventListener('click',()=>{
   if(!ac().items.length){showToast('Nothing to export');return;}
   $('export-area').value=state.selectedIds.length>0?'selection':'canvas';
   $('export-area').querySelector('option[value="selection"]').disabled=state.selectedIds.length===0;
+  $('export-include-bg').checked=state.selectedIds.length===0;
+  $('export-include-bg').disabled=$('export-format').value==='jpeg';
   $('export-modal').classList.add('show');
 });
 $('export-format').addEventListener('change',e=>{
-  $('export-transparent').disabled=e.target.value==='jpeg';
-  if(e.target.value==='jpeg') $('export-transparent').checked=false;
+  $('export-include-bg').disabled=e.target.value==='jpeg';
+  if(e.target.value==='jpeg') $('export-include-bg').checked=true;
+});
+$('export-area').addEventListener('change',e=>{
+  if($('export-format').value==='jpeg') return;
+  $('export-include-bg').checked=e.target.value==='canvas';
 });
 $('export-cancel').addEventListener('click',()=>$('export-modal').classList.remove('show'));
 function exportSelectionIds(ids){
@@ -3674,8 +3680,9 @@ $('export-confirm').addEventListener('click',async()=>{
   const exportIds=selectedOnly?exportSelectionIds(state.selectedIds):new Set(ac().items.map(i=>i.id));
   const items=ac().items.filter(i=>i.visible&&exportIds.has(i.id));
   if(!items.length){showToast('No visible items');return;}
-  const pad=40,scale=parseInt($('export-scale').value)||2,fmt=$('export-format').value||'png';
-  const transparent=$('export-transparent').checked&&fmt!=='jpeg';
+  const scale=parseInt($('export-scale').value)||2,fmt=$('export-format').value||'png';
+  const includeBg=$('export-include-bg').checked||fmt==='jpeg';
+  const pad=selectedOnly?0:40;
   const selectedFrame=selectedOnly&&state.selectedIds.length===1?getItem(state.selectedIds[0]):null;
   const exportFrame=selectedFrame?.type==='frame'?selectedFrame:null;
   const boundsItems=selectedOnly
@@ -3699,7 +3706,7 @@ $('export-confirm').addEventListener('click',async()=>{
   await new Promise(r=>setTimeout(r,80));
   try{
     const c=await html2canvas(canvasWorld,{
-      backgroundColor:transparent?null:(ac().bgType==='gradient'?null:ac().bg),
+      backgroundColor:includeBg?(ac().bgType==='gradient'?null:ac().bg):null,
       scale,x:minX,y:minY,width:Math.max(1,maxX-minX),height:Math.max(1,maxY-minY),
       logging:false,useCORS:true,allowTaint:true,
     });
