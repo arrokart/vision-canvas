@@ -1071,6 +1071,7 @@ function addImageItem(src,x,y,w,h){
     flipH:false,flipV:false,z:maxZ()+1,
     fit:'contain',imgX:50,imgY:50,imgScale:100,
     blendMode:'normal',shadow:false,shadowBlur:18,shadowY:10,shadowColor:'rgba(0,0,0,.35)',radius:2});
+  assignInitialFrame(ac().items[ac().items.length-1]);
   state.selectedIds=[id];
   renderItems(); renderLayers();
   updateSelectionOverlay(); updateMultiSelBox();
@@ -1088,6 +1089,7 @@ function addTextItem(x,y,w=220,h=70){
     x,y,w:Math.max(40,w),h:Math.max(28,h),rot:0,opacity:100,
     visible:true,locked:false,flipH:false,flipV:false,z:maxZ()+1,
     blendMode:'normal',shadow:false,shadowBlur:18,shadowY:10,shadowColor:'rgba(0,0,0,.35)',radius:0});
+  assignInitialFrame(ac().items[ac().items.length-1]);
   state.selectedIds=[id];
   renderItems(); renderLayers();
   updateSelectionOverlay(); updateMultiSelBox();
@@ -1109,6 +1111,7 @@ function addNoteItem(x,y,w=220,h=160){
     x,y,w:Math.max(120,w),h:Math.max(90,h),rot:0,opacity:100,
     visible:true,locked:false,flipH:false,flipV:false,z:maxZ()+1,
     blendMode:'normal',shadow:true,shadowBlur:24,shadowY:10,shadowColor:'rgba(0,0,0,.28)',radius:6});
+  assignInitialFrame(ac().items[ac().items.length-1]);
   state.selectedIds=[id];
   renderItems(); renderLayers();
   updateSelectionOverlay(); updateMultiSelBox();
@@ -1151,6 +1154,7 @@ function addShapeItem(shape,x,y,w=160,h=110,flipH=false,flipV=false){
     blendMode:'normal',shadow:false,shadowBlur:18,shadowY:10,shadowColor:'rgba(0,0,0,.35)',radius:3,
     fill:isLine?'transparent':defaults.fill,
     stroke:defaults.stroke,strokeWidth:isLine?Math.max(3,defaults.strokeWidth):defaults.strokeWidth});
+  assignInitialFrame(ac().items[ac().items.length-1]);
   state.selectedIds=[id];
   renderItems(); renderLayers();
   updateSelectionOverlay(); updateMultiSelBox();
@@ -1550,6 +1554,11 @@ function assignFrameMembership(ids){
     else delete item.frameId;
   });
   applyFrameClipping();
+}
+function assignInitialFrame(item){
+  if(!item||item.type==='frame') return;
+  const frame=containingFrame(item);
+  if(frame) item.frameId=frame.id;
 }
 
 function shadowColorHex(item){
@@ -2302,7 +2311,6 @@ $('frame-clip').addEventListener('change',e=>{
   const item=selFirst(); if(!item||item.type!=='frame'||item.locked) return;
   pushHistory();
   item.clipContent=e.target.checked;
-  if(item.clipContent) frameChildIds(item).forEach(id=>{const child=getItem(id); if(child) child.frameId=item.id;});
   applyFrameClipping(); updateProps(); scheduleSave(); scheduleThumb();
 });
 
@@ -2733,12 +2741,13 @@ function onItemMousedown(e){
       ? [...new Set([...allSel.map(i=>i.id),...frameChildIds(item)])].map(id=>getItem(id)).filter(i=>i&&!i.locked)
       : allSel;
     interaction={type:'move',startMX:e.clientX,startMY:e.clientY,
+      primaryId:item.id,primaryType:item.type,
       items:moveItems.map(i=>({id:i.id,sx:i.x,sy:i.y})),moved:false};
   }
 }
 function frameChildIds(frame){
   if(!frame||frame.type!=='frame') return [];
-  return ac().items.filter(i=>i.frameId===frame.id||(!i.frameId&&isFrameChild(frame,i))).map(i=>i.id);
+  return ac().items.filter(i=>i.frameId===frame.id).map(i=>i.id);
 }
 function onItemDblclick(e){
   if(state.editingId) return;
@@ -3091,7 +3100,7 @@ document.addEventListener('mouseup',e=>{
   if(interaction&&(interaction.type==='resize'||interaction.type==='rotate')) scheduleThumb();
   if(interaction&&interaction.type==='imagecrop'&&interaction.moved){scheduleSave();scheduleThumb();}
   if(interaction&&interaction.type==='move'&&interaction.moved){
-    assignFrameMembership(interaction.items.map(i=>i.id));
+    if(interaction.primaryType!=='frame') assignFrameMembership(interaction.items.map(i=>i.id));
     scheduleSave(); scheduleThumb();
   }
   interaction=null;
