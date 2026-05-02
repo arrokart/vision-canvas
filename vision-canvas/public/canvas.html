@@ -2298,6 +2298,9 @@ function updateImageCropProp(key,value,withHistory=false){
   if(el) applyItemStyle(el,item);
   updateProps(); scheduleSave(); scheduleThumb();
 }
+function clearCropAdjustMode(){
+  if(state.cropAdjustId!==null) state.cropAdjustId=null;
+}
 function beginImageCropAdjust(item,clientX,clientY){
   if(!item||item.type!=='image'||item.locked||!canEditAll()) return false;
   if((item.fit||'contain')!=='cover'){
@@ -2896,6 +2899,7 @@ function onItemMousedown(e){
     scheduleSave(); scheduleThumb();
     return;
   }
+  if(!e.altKey) clearCropAdjustMode();
   if(item&&!item.locked){
     const allSel=selAll().filter(i=>!i.locked);
     const moveItems=item.type==='frame'
@@ -3006,6 +3010,7 @@ canvasArea.addEventListener('mousedown',e=>{
       return;
     }
     if(state.tool==='select'&&!e.target.closest('.canvas-item')&&!e.target.closest('#selection-overlay')){
+      clearCropAdjustMode();
       state.selectedIds=[];
       renderItemsHighlight(); updateSelectionOverlay(); updateMultiSelBox();
       updateProps(); renderLayers();
@@ -3265,7 +3270,10 @@ document.addEventListener('mouseup',e=>{
     returnToSelectTool();
   }
   if(interaction&&(interaction.type==='resize'||interaction.type==='rotate')) scheduleThumb();
-  if(interaction&&interaction.type==='imagecrop'&&interaction.moved){scheduleSave();scheduleThumb();}
+  if(interaction&&interaction.type==='imagecrop'){
+    clearCropAdjustMode();
+    if(interaction.moved){scheduleSave();scheduleThumb();}
+  }
   if(interaction&&interaction.type==='move'&&interaction.moved){
     if(interaction.primaryType!=='frame') assignFrameMembership(interaction.items.map(i=>i.id));
     scheduleSave(); scheduleThumb();
