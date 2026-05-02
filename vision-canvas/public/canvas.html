@@ -782,6 +782,7 @@ body{display:flex;flex-direction:column;}
                 <span class="lbl">W</span><input type="number" id="shape-stroke-width" step="1" min="0" max="40" value="2">
               </div>
             </div>
+            <label class="prop-check" id="frame-clip-row"><input type="checkbox" id="frame-clip"> Clip content</label>
           </div>
         </div>
         <!-- MULTI PROPS -->
@@ -1164,7 +1165,7 @@ function addFrameItem(x,y,w=360,h=240){
     x,y,w:Math.max(80,w),h:Math.max(60,h),rot:0,opacity:100,
     visible:true,locked:false,flipH:false,flipV:false,z:maxZ()+1,
     blendMode:'normal',shadow:false,shadowBlur:18,shadowY:10,shadowColor:'rgba(0,0,0,.35)',radius:8,
-    fill:'rgba(139,143,244,.06)',stroke:'#8b8ff4',strokeWidth:1.5});
+    fill:'rgba(139,143,244,.06)',stroke:'#8b8ff4',strokeWidth:1.5,clipContent:false});
   state.selectedIds=[id];
   renderItems(); renderLayers();
   updateSelectionOverlay(); updateMultiSelBox();
@@ -1445,6 +1446,7 @@ function renderItems(){
     }
     applyItemStyle(el,item);
   });
+  applyFrameClipping();
 }
 
 function applyItemStyle(el,item){
@@ -1513,6 +1515,24 @@ function applyItemStyle(el,item){
     if(pin) pin.textContent=item.number||'';
     if(pop) pop.textContent=item.text||'';
   }
+}
+
+function applyFrameClipping(){
+  const frames=ac().items.filter(i=>i.type==='frame'&&i.clipContent&&i.visible!==false);
+  ac().items.forEach(item=>{
+    const el=canvasWorld.querySelector(`[data-id="${item.id}"]`);
+    if(!el||item.type==='frame'){if(el) el.style.clipPath='';return;}
+    const frame=frames.find(f=>itemBoundsIntersect(item,f));
+    if(!frame){el.style.clipPath='';return;}
+    const top=Math.max(0,frame.y-item.y);
+    const left=Math.max(0,frame.x-item.x);
+    const right=Math.max(0,item.x+item.w-(frame.x+frame.w));
+    const bottom=Math.max(0,item.y+item.h-(frame.y+frame.h));
+    el.style.clipPath=`inset(${top}px ${right}px ${bottom}px ${left}px)`;
+  });
+}
+function itemBoundsIntersect(a,b){
+  return a.x<b.x+b.w&&a.x+a.w>b.x&&a.y<b.y+b.h&&a.y+a.h>b.y;
 }
 
 function shadowColorHex(item){
@@ -2042,6 +2062,8 @@ function updateProps(){
     setColorControl('shape-fill',item.fill,'#6c71f0');
     setColorControl('shape-stroke',item.stroke,'#8b8ff4');
     $('shape-stroke-width').value=item.strokeWidth??2;
+    $('frame-clip-row').style.display=item.type==='frame'?'flex':'none';
+    $('frame-clip').checked=!!item.clipContent;
   }
   if(isImage){
     $('img-fit').value=item.fit||'contain';
@@ -2081,6 +2103,7 @@ function bindPropNum(id,key){
     pushHistory(); item[key]=parseFloat(e.target.value)||0;
     const el=canvasWorld.querySelector(`[data-id="${item.id}"]`);
     if(el) applyItemStyle(el,item);
+    applyFrameClipping();
     updateSelectionOverlay(); updateMultiSelBox(); updateProps();
   });
 }
@@ -2258,6 +2281,12 @@ $('shape-stroke-width').addEventListener('change',e=>
   updateShapeProp('strokeWidth',Math.max(0,parseFloat(e.target.value)||0),true)
 );
 $('shape-fill-clear').addEventListener('click',()=>updateShapeProp('fill','transparent',true));
+$('frame-clip').addEventListener('change',e=>{
+  const item=selFirst(); if(!item||item.type!=='frame'||item.locked) return;
+  pushHistory();
+  item.clipContent=e.target.checked;
+  applyFrameClipping(); updateProps(); scheduleSave(); scheduleThumb();
+});
 
 function updateDefaultShapeProp(key,value){
   state.shapeDefaults[key]=value;
@@ -2914,6 +2943,7 @@ document.addEventListener('mousemove',e=>{
       const el=canvasWorld.querySelector(`[data-id="${id}"]`);
       if(el) applyItemStyle(el,item);
     });
+    applyFrameClipping();
     updateSelectionOverlay(); updateMultiSelBox(); updateProps(); return;
   }
   if(interaction.type==='imagecrop'){
@@ -2945,6 +2975,7 @@ document.addEventListener('mousemove',e=>{
     item.x=nx;item.y=ny;item.w=Math.max(20,nw);item.h=Math.max(20,nh);
     const el=canvasWorld.querySelector(`[data-id="${item.id}"]`);
     if(el) applyItemStyle(el,item);
+    applyFrameClipping();
     updateSelectionOverlay(); updateMultiSelBox(); updateProps(); return;
   }
   if(interaction.type==='rotate'){
