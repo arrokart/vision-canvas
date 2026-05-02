@@ -110,7 +110,8 @@ body{display:flex;flex-direction:column;}
 #canvas-area.panning{cursor:grabbing!important;}
 #canvas-area.hand-tool{cursor:grab;}
 #canvas-area.hand-tool.panning{cursor:grabbing!important;}
-#canvas-area.zoom-tool{cursor:zoom-in;}
+#canvas-area.zoom-tool{cursor:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='28' viewBox='0 0 28 28'%3E%3Ccircle cx='11' cy='11' r='7' fill='none' stroke='%23f4f4fb' stroke-width='2.2'/%3E%3Cpath d='M16.5 16.5L24 24' stroke='%23f4f4fb' stroke-width='2.4' stroke-linecap='round'/%3E%3Cpath d='M11 7.5v7M7.5 11h7' stroke='%238f91ff' stroke-width='2.2' stroke-linecap='round'/%3E%3C/svg%3E") 11 11, zoom-in;}
+#canvas-area.zoom-tool.zoom-out{cursor:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='28' viewBox='0 0 28 28'%3E%3Ccircle cx='11' cy='11' r='7' fill='none' stroke='%23f4f4fb' stroke-width='2.2'/%3E%3Cpath d='M16.5 16.5L24 24' stroke='%23f4f4fb' stroke-width='2.4' stroke-linecap='round'/%3E%3Cpath d='M7.5 11h7' stroke='%238f91ff' stroke-width='2.2' stroke-linecap='round'/%3E%3C/svg%3E") 11 11, zoom-out;}
 #canvas-area.text-tool{cursor:crosshair;}
 #canvas-world{position:absolute;transform-origin:0 0;will-change:transform;}
 
@@ -2802,6 +2803,12 @@ document.addEventListener('keydown',e=>{
 document.addEventListener('keyup',e=>{
   if(e.code==='Space'){state.spaceHeld=false;canvasArea.classList.remove('hand-tool');}
 });
+document.addEventListener('keydown',e=>{
+  if(e.key==='Alt'&&state.tool==='zoom') canvasArea.classList.add('zoom-out');
+});
+document.addEventListener('keyup',e=>{
+  if(e.key==='Alt') canvasArea.classList.remove('zoom-out');
+});
 
 // ── TOOLBAR ───────────────────────────────────────────────────────
 // COMMAND MENU
@@ -2885,6 +2892,8 @@ function setTool(tool){
   if(btn) btn.classList.add('active');
   canvasArea.classList.toggle('hand-tool',tool==='hand');
   canvasArea.classList.toggle('zoom-tool',tool==='zoom');
+  canvasArea.classList.toggle('zoom-out',tool==='zoom'&&window.event?.altKey);
+  if(tool!=='zoom') canvasArea.classList.remove('zoom-out');
   canvasArea.classList.toggle('text-tool',tool==='text'||tool==='note'||tool==='comment'||isShapeTool(tool));
   updateProps();
 }
