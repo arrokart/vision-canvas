@@ -2769,7 +2769,16 @@ function renderTabs(){
 $('add-canvas-btn').addEventListener('click',()=>addCanvas());
 
 // ── IMAGE LOADING ─────────────────────────────────────────────────
-function loadImage(src,px,py){
+function imageMimeFromSource(src,mime=''){
+  if(mime) return mime;
+  const dataMatch=String(src).match(/^data:(image\/[^;,]+)/i);
+  if(dataMatch) return dataMatch[1].toLowerCase();
+  const clean=String(src).split('?')[0].split('#')[0].toLowerCase();
+  if(/\.(png|webp|gif|svg)$/.test(clean)) return 'image/png';
+  if(/\.(jpe?g)$/.test(clean)) return 'image/jpeg';
+  return 'image/png';
+}
+function loadImage(src,px,py,mime=''){
   const img=new Image();
   img.crossOrigin='anonymous';
   img.onload=async()=>{
@@ -2782,15 +2791,19 @@ function loadImage(src,px,py){
     c.width=w;c.height=h;
     c.getContext('2d').drawImage(img,0,0,w,h);
 
-    // upload to Supabase Storage
-    const blob=await new Promise(r=>c.toBlob(r,'image/jpeg',0.75));
-    const filename=`${Date.now()}-${Math.random().toString(36).slice(2)}.jpg`;
+    // Preserve alpha for transparent formats. JPEG flattens transparent pixels.
+    const sourceMime=imageMimeFromSource(src,mime);
+    const preserveAlpha=sourceMime!=='image/jpeg'&&sourceMime!=='image/jpg';
+    const outputMime=preserveAlpha?'image/png':'image/jpeg';
+    const ext=preserveAlpha?'png':'jpg';
+    const blob=await new Promise(r=>c.toBlob(r,outputMime,preserveAlpha?undefined:0.75));
+    const filename=`${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
     const uploadRes=await fetch(`${SUPABASE_URL}/storage/v1/object/canvas-images/${filename}`,{
       method:'POST',
       headers:{
         'apikey':SUPABASE_KEY,
         'Authorization':`Bearer ${SUPABASE_KEY}`,
-        'Content-Type':'image/jpeg',
+        'Content-Type':outputMime,
       },
       body:blob
     });
@@ -2816,7 +2829,7 @@ function loadImage(src,px,py){
 function loadFiles(files,px,py){
   [...files].filter(f=>f.type.startsWith('image/')).forEach(f=>{
     const reader=new FileReader();
-    reader.onload=e=>loadImage(e.target.result,px,py);
+    reader.onload=e=>loadImage(e.target.result,px,py,f.type);
     reader.readAsDataURL(f);
   });
 }
@@ -2837,7 +2850,7 @@ document.addEventListener('paste',e=>{
   [...e.clipboardData.items].filter(i=>i.type.startsWith('image/')).forEach(i=>{
     const blob=i.getAsFile();
     const reader=new FileReader();
-    reader.onload=ev=>loadImage(ev.target.result);
+    reader.onload=ev=>loadImage(ev.target.result,undefined,undefined,blob?.type||'');
     reader.readAsDataURL(blob);
   });
 });
