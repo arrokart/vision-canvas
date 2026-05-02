@@ -1522,7 +1522,7 @@ function applyFrameClipping(){
   ac().items.forEach(item=>{
     const el=canvasWorld.querySelector(`[data-id="${item.id}"]`);
     if(!el||item.type==='frame'){if(el) el.style.clipPath='';return;}
-    const frame=frames.find(f=>itemBoundsIntersect(item,f));
+    const frame=frames.find(f=>isFrameChild(f,item));
     if(!frame){el.style.clipPath='';return;}
     const top=Math.max(0,frame.y-item.y);
     const left=Math.max(0,frame.x-item.x);
@@ -1531,8 +1531,10 @@ function applyFrameClipping(){
     el.style.clipPath=`inset(${top}px ${right}px ${bottom}px ${left}px)`;
   });
 }
-function itemBoundsIntersect(a,b){
-  return a.x<b.x+b.w&&a.x+a.w>b.x&&a.y<b.y+b.h&&a.y+a.h>b.y;
+function isFrameChild(frame,item){
+  if(!frame||!item||frame.id===item.id||item.type==='frame'||item.visible===false) return false;
+  const cx=item.x+item.w/2,cy=item.y+item.h/2;
+  return cx>=frame.x&&cx<=frame.x+frame.w&&cy>=frame.y&&cy<=frame.y+frame.h;
 }
 
 function shadowColorHex(item){
@@ -2720,7 +2722,7 @@ function onItemMousedown(e){
 }
 function frameChildIds(frame){
   if(!frame||frame.type!=='frame') return [];
-  return ac().items.filter(i=>i.id!==frame.id&&i.visible!==false&&i.x>=frame.x&&i.y>=frame.y&&i.x+i.w<=frame.x+frame.w&&i.y+i.h<=frame.y+frame.h).map(i=>i.id);
+  return ac().items.filter(i=>isFrameChild(frame,i)).map(i=>i.id);
 }
 function onItemDblclick(e){
   if(state.editingId) return;
