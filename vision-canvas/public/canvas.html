@@ -1005,7 +1005,7 @@ body.exporting-canvas .frame-label{display:none!important;}
     <div class="modal-row">
       <span>Background</span>
       <select class="modal-select" id="export-bg">
-        <option value="transparent" selected>No canvas background</option>
+        <option value="transparent" selected>Transparent background</option>
         <option value="white">White background</option>
         <option value="canvas">Canvas background</option>
       </select>
@@ -3665,6 +3665,9 @@ $('export-btn').addEventListener('click',()=>{
 });
 $('export-area').addEventListener('change',e=>{
   $('export-bg').value=e.target.value==='canvas'?'canvas':'transparent';
+});
+$('export-format').addEventListener('change',e=>{
+  if(e.target.value==='jpeg'&&$('export-bg').value==='transparent') $('export-bg').value='white';
 });
 $('export-cancel').addEventListener('click',()=>$('export-modal').classList.remove('show'));
 function exportSelectionIds(ids){
