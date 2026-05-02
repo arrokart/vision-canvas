@@ -3676,11 +3676,15 @@ $('export-confirm').addEventListener('click',async()=>{
   if(!items.length){showToast('No visible items');return;}
   const pad=40,scale=parseInt($('export-scale').value)||2,fmt=$('export-format').value||'png';
   const transparent=$('export-transparent').checked&&fmt!=='jpeg';
+  const selectedFrame=selectedOnly&&state.selectedIds.length===1?getItem(state.selectedIds[0]):null;
+  const exportFrame=selectedFrame?.type==='frame'?selectedFrame:null;
   const boundsItems=selectedOnly
     ? ac().items.filter(i=>i.visible&&state.selectedIds.includes(i.id))
     : items;
-  const minX=Math.min(...boundsItems.map(i=>i.x))-pad,minY=Math.min(...boundsItems.map(i=>i.y))-pad;
-  const maxX=Math.max(...boundsItems.map(i=>i.x+i.w))+pad,maxY=Math.max(...boundsItems.map(i=>i.y+i.h))+pad;
+  const minX=exportFrame?exportFrame.x:Math.min(...boundsItems.map(i=>i.x))-pad;
+  const minY=exportFrame?exportFrame.y:Math.min(...boundsItems.map(i=>i.y))-pad;
+  const maxX=exportFrame?exportFrame.x+exportFrame.w:Math.max(...boundsItems.map(i=>i.x+i.w))+pad;
+  const maxY=exportFrame?exportFrame.y+exportFrame.h:Math.max(...boundsItems.map(i=>i.y+i.h))+pad;
   const hidden=[];
   const saved={pan:{...state.pan},zoom:state.zoom,sel:[...state.selectedIds]};
   if(selectedOnly){
