@@ -946,6 +946,13 @@ body{display:flex;flex-direction:column;}
   <div class="ctx-item" data-action="send-backward"><span class="ci">↓</span>Send Backward</div>
   <div class="ctx-item" data-action="send-back"><span class="ci">⬇</span>Send to Back</div>
   <div class="ctx-sep"></div>
+  <div class="ctx-item" data-action="rename"><span class="ci">T</span>Rename</div>
+  <div class="ctx-item" data-action="group"><span class="ci">[]</span>Group</div>
+  <div class="ctx-item" data-action="ungroup"><span class="ci">][</span>Ungroup</div>
+  <div class="ctx-sep"></div>
+  <div class="ctx-item" data-action="copy-style"><span class="ci">C</span>Copy Style</div>
+  <div class="ctx-item" data-action="paste-style"><span class="ci">P</span>Paste Style</div>
+  <div class="ctx-sep"></div>
   <div class="ctx-item" data-action="lock"><span class="ci">🔒</span>Lock / Unlock</div>
   <div class="ctx-item" data-action="duplicate"><span class="ci">⧉</span>Duplicate</div>
   <div class="ctx-sep"></div>
@@ -970,6 +977,16 @@ body{display:flex;flex-direction:column;}
   <div class="modal-box" style="width:300px;">
     <div class="modal-title">Export Canvas</div>
     <div class="modal-row">
+      <span>Preset</span>
+      <select class="modal-select" id="export-preset">
+        <option value="png-2x" selected>PNG 2x</option>
+        <option value="png-1x">PNG 1x</option>
+        <option value="png-3x">PNG 3x</option>
+        <option value="jpg-2x">JPEG 2x</option>
+        <option value="webp-2x">WebP 2x</option>
+      </select>
+    </div>
+    <div class="modal-row">
       <span>Resolution</span>
       <select class="modal-select" id="export-scale">
         <option value="1">1× standard</option>
@@ -982,8 +999,13 @@ body{display:flex;flex-direction:column;}
       <select class="modal-select" id="export-format">
         <option value="png">PNG</option>
         <option value="jpeg">JPEG</option>
+        <option value="webp">WebP</option>
       </select>
     </div>
+    <label class="prop-check" style="margin-top:8px;">
+      <input type="checkbox" id="export-transparent">
+      Transparent background
+    </label>
     <label class="prop-check" style="margin-top:8px;">
       <input type="checkbox" id="export-selected-only">
       Export selection only
@@ -1084,6 +1106,7 @@ let state = {
   snapEnabled:true,
   layerQuery:'',
   layerFilter:'all',
+  styleClipboard:null,
   nextGroupId:1,
   shapeDefaults:{fill:'#6c71f0',stroke:'#8b8ff4',strokeWidth:2},
   minimapEnabled:true,
@@ -3325,6 +3348,13 @@ document.addEventListener('keydown',e=>{
       const el=canvasWorld.querySelector(`[data-id="${item.id}"]`);
       if(el) applyItemStyle(el,item);
       updateSelectionOverlay();updateProps();renderLayers();}}
+  if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.code)&&state.selectedIds.length){
+    e.preventDefault();
+    const step=e.shiftKey?10:1;
+    const dx=e.code==='ArrowLeft'?-step:e.code==='ArrowRight'?step:0;
+    const dy=e.code==='ArrowUp'?-step:e.code==='ArrowDown'?step:0;
+    nudgeSelection(dx,dy);
+  }
   if(e.code==='Delete'||e.code==='Backspace'){if(state.selectedIds.length) deleteItems([...state.selectedIds]);}
   if(e.code==='Escape'){
     flushActiveCommentEditor();
@@ -3388,6 +3418,8 @@ const COMMANDS=[
   {name:'Ungroup selection',group:'Selection',key:'Ctrl Shift G',run:ungroupSelection,enabled:()=>selAll().some(i=>i.groupId)},
   {name:'Duplicate selection',group:'Selection',key:'Ctrl D',run:()=>duplicateItems([...state.selectedIds]),enabled:()=>state.selectedIds.length>0},
   {name:'Delete selection',group:'Selection',key:'Del',run:()=>deleteItems([...state.selectedIds]),enabled:()=>state.selectedIds.length>0},
+  {name:'Copy style',group:'Selection',run:()=>copyItemStyle(state.selectedIds[0]),enabled:()=>state.selectedIds.length===1},
+  {name:'Paste style',group:'Selection',run:()=>pasteItemStyle([...state.selectedIds]),enabled:()=>state.selectedIds.length>0&&!!state.styleClipboard},
   {name:'Crop selected image',group:'Image',run:()=>$('img-crop-btn').click(),enabled:()=>selFirst()?.type==='image'},
   {name:'Reset image crop',group:'Image',run:()=>$('img-reset-crop-btn').click(),enabled:()=>selFirst()?.type==='image'},
   {name:'Bring forward',group:'Arrange',key:']',run:()=>bringForward(state.selectedIds[0]),enabled:()=>state.selectedIds.length===1},
@@ -3535,10 +3567,65 @@ function clearCanvas(){
   pushHistory(); ac().items=[]; state.selectedIds=[];
   renderAll();
 }
+function renameItem(id){
+  const item=getItem(id); if(!item||!canEditAll()) return;
+  const next=prompt('Rename layer',item.name||'');
+  if(next===null) return;
+  const name=next.trim();
+  if(!name||name===item.name) return;
+  pushHistory(); item.name=name;
+  renderLayers(); updateProps(); scheduleSave();
+}
+function copyItemStyle(id){
+  const item=getItem(id); if(!item) return;
+  const keys=['opacity','blendMode','shadow','shadowBlur','shadowY','shadowColor','radius',
+    'fill','stroke','strokeWidth','color','bgColor','fontSize','lineHeight','fontFamily','fontWeight','textAlign',
+    'fit','imgX','imgY','imgScale','imgBright','imgContrast','imgSaturate','imgBlur'];
+  state.styleClipboard={style:{}};
+  keys.forEach(key=>{if(item[key]!==undefined) state.styleClipboard.style[key]=item[key];});
+  showToast('Style copied');
+}
+function pasteItemStyle(ids){
+  if(!state.styleClipboard||!ids.length||!canEditAll()) return;
+  const targets=ids.map(id=>getItem(id)).filter(i=>i&&!i.locked);
+  if(!targets.length) return;
+  pushHistory();
+  targets.forEach(item=>{
+    Object.entries(state.styleClipboard.style).forEach(([key,value])=>{
+      const textOnly=['color','bgColor','fontSize','lineHeight','fontFamily','fontWeight','textAlign'];
+      const imageOnly=['fit','imgX','imgY','imgScale','imgBright','imgContrast','imgSaturate','imgBlur'];
+      const shapeOnly=['fill','stroke','strokeWidth'];
+      if(textOnly.includes(key)&&!(item.type==='text'||item.type==='note')) return;
+      if(imageOnly.includes(key)&&item.type!=='image') return;
+      if(shapeOnly.includes(key)&&!(item.type==='shape'||item.type==='frame')) return;
+      item[key]=value;
+    });
+    const el=canvasWorld.querySelector(`[data-id="${item.id}"]`);
+    if(el) applyItemStyle(el,item);
+  });
+  updateSelectionOverlay(); updateProps(); renderLayers(); scheduleSave(); scheduleThumb();
+  showToast('Style pasted');
+}
+function nudgeSelection(dx,dy){
+  if(!state.selectedIds.length||!canEditAll()) return;
+  const ids=[...new Set(state.selectedIds.flatMap(id=>{
+    const item=getItem(id);
+    return item?.type==='frame'?[id,...frameChildIds(item)]:[id];
+  }))];
+  const items=ids.map(id=>getItem(id)).filter(i=>i&&!i.locked);
+  if(!items.length) return;
+  pushHistory();
+  items.forEach(item=>{
+    item.x+=dx; item.y+=dy;
+    const el=canvasWorld.querySelector(`[data-id="${item.id}"]`);
+    if(el) applyItemStyle(el,item);
+  });
+  applyFrameClipping(); updateSelectionOverlay(); updateMultiSelBox(); updateProps(); scheduleSave(); scheduleThumb();
+}
 
 // ── CONTEXT MENU ──────────────────────────────────────────────────
 function showCtxMenu(x,y){
-  ctxMenu.style.cssText=`display:block;left:${Math.min(x,window.innerWidth-180)}px;top:${Math.min(y,window.innerHeight-260)}px;`;
+  ctxMenu.style.cssText=`display:block;left:${Math.min(x,window.innerWidth-220)}px;top:${Math.min(y,window.innerHeight-360)}px;`;
 }
 function hideCtxMenu(){ctxMenu.style.display='none';}
 document.addEventListener('click',hideCtxMenu);
@@ -3550,6 +3637,11 @@ ctxMenu.querySelectorAll('.ctx-item').forEach(item=>{
     else if(action==='bring-forward') bringForward(id);
     else if(action==='send-backward') sendBackward(id);
     else if(action==='send-back') sendToBack(id);
+    else if(action==='rename') renameItem(id);
+    else if(action==='group') groupSelection();
+    else if(action==='ungroup') ungroupSelection();
+    else if(action==='copy-style') copyItemStyle(id);
+    else if(action==='paste-style') pasteItemStyle(state.selectedIds.length?state.selectedIds:[id]);
     else if(action==='duplicate') duplicateItems([id]);
     else if(action==='delete') deleteItems([id]);
     else if(action==='lock'){
@@ -3569,6 +3661,24 @@ $('export-btn').addEventListener('click',()=>{
   $('export-selected-only').disabled=state.selectedIds.length===0;
   $('export-modal').classList.add('show');
 });
+$('export-preset').addEventListener('change',e=>{
+  const presets={
+    'png-1x':{scale:1,format:'png'},
+    'png-2x':{scale:2,format:'png'},
+    'png-3x':{scale:3,format:'png'},
+    'jpg-2x':{scale:2,format:'jpeg'},
+    'webp-2x':{scale:2,format:'webp'},
+  };
+  const preset=presets[e.target.value]||presets['png-2x'];
+  $('export-scale').value=String(preset.scale);
+  $('export-format').value=preset.format;
+  $('export-transparent').disabled=preset.format==='jpeg';
+  if(preset.format==='jpeg') $('export-transparent').checked=false;
+});
+$('export-format').addEventListener('change',e=>{
+  $('export-transparent').disabled=e.target.value==='jpeg';
+  if(e.target.value==='jpeg') $('export-transparent').checked=false;
+});
 $('export-cancel').addEventListener('click',()=>$('export-modal').classList.remove('show'));
 $('export-confirm').addEventListener('click',async()=>{
   $('export-modal').classList.remove('show');
@@ -3577,6 +3687,7 @@ $('export-confirm').addEventListener('click',async()=>{
   const items=ac().items.filter(i=>i.visible&&exportIds.has(i.id));
   if(!items.length){showToast('No visible items');return;}
   const pad=40,scale=parseInt($('export-scale').value)||2,fmt=$('export-format').value||'png';
+  const transparent=$('export-transparent').checked&&fmt!=='jpeg';
   const minX=Math.min(...items.map(i=>i.x))-pad,minY=Math.min(...items.map(i=>i.y))-pad;
   const maxX=Math.max(...items.map(i=>i.x+i.w))+pad,maxY=Math.max(...items.map(i=>i.y+i.h))+pad;
   const hidden=[];
@@ -3593,13 +3704,14 @@ $('export-confirm').addEventListener('click',async()=>{
   await new Promise(r=>setTimeout(r,80));
   try{
     const c=await html2canvas(canvasWorld,{
-      backgroundColor:ac().bgType==='gradient'?null:ac().bg,
+      backgroundColor:transparent?null:(ac().bgType==='gradient'?null:ac().bg),
       scale,x:minX,y:minY,width:Math.max(1,maxX-minX),height:Math.max(1,maxY-minY),
       logging:false,useCORS:true,allowTaint:true,
     });
     const link=document.createElement('a');
     link.download=`${ac().name||'canvas'}.${fmt}`;
-    link.href=c.toDataURL(fmt==='jpeg'?'image/jpeg':'image/png',0.95);
+    const mime=fmt==='jpeg'?'image/jpeg':fmt==='webp'?'image/webp':'image/png';
+    link.href=c.toDataURL(mime,0.95);
     link.click(); showToast('Exported!');
   }catch(err){showToast('Export failed');}
   hidden.forEach(i=>i.visible=true);
@@ -3640,6 +3752,8 @@ const SHORTCUTS=[
   {action:'Deselect',keys:['Esc']},
   {section:'Items'},
   {action:'Duplicate',keys:['Ctrl','D']},
+  {action:'Nudge 1px',keys:['Arrow']},
+  {action:'Nudge 10px',keys:['Shift','Arrow']},
   {action:'Group',keys:['Ctrl','G']},
   {action:'Ungroup',keys:['Ctrl','Shift','G']},
   {action:'Delete',keys:['Del']},
