@@ -261,12 +261,19 @@ body{display:flex;flex-direction:column;}
   padding:11px 14px 8px;cursor:pointer;}
 .panel-title{font-size:11px;font-weight:700;color:#a7a7ba;
   text-transform:uppercase;letter-spacing:1px;}
+.panel-head-actions{display:flex;align-items:center;gap:6px;}
 .panel-toggle{font-size:10px;color:var(--text3);}
+.panel-mini-btn{height:20px;min-width:24px;border:1px solid rgba(255,255,255,.1);
+  background:#17171d;color:var(--text2);border-radius:5px;font-size:10px;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;transition:.15s;}
+.panel-title + .panel-mini-btn{margin-left:auto;margin-right:6px;}
+.panel-mini-btn:hover,.panel-mini-btn.active{background:rgba(108,113,240,.16);border-color:rgba(139,143,244,.34);color:var(--accent2);}
 .panel-body{padding:8px 12px 12px;display:flex;flex-direction:column;gap:8px;}
 .panel-body.collapsed{display:none;}
 
 /* LAYERS */
-#layers-list{display:flex;flex-direction:column;gap:4px;max-height:260px;overflow-y:auto;padding-right:2px;}
+#layers-list{display:flex;flex-direction:column;gap:4px;max-height:260px;overflow-y:auto;padding-right:2px;transition:max-height .18s;}
+#layers-section.layers-expanded #layers-list{max-height:calc(100vh - 190px);}
 .layer-item{display:flex;align-items:center;gap:9px;padding:6px 8px;
   border-radius:7px;cursor:pointer;border:1px solid transparent;transition:.15s;background:transparent;}
 .layer-item:hover{background:rgba(255,255,255,.035);}
@@ -614,9 +621,10 @@ body{display:flex;flex-direction:column;}
   <div id="panels">
 
     <!-- LAYERS -->
-    <div class="panel-section" style="flex:0 0 auto">
+    <div class="panel-section" id="layers-section" style="flex:0 0 auto">
       <div class="panel-header" id="ph-layers">
         <span class="panel-title">Layers</span>
+        <button class="panel-mini-btn" id="layers-expand-btn" title="Expand layers">↕</button>
         <span class="panel-toggle" id="pt-layers">▲</span>
       </div>
       <div class="panel-body" id="pb-layers">
@@ -3319,6 +3327,13 @@ $('shortcuts-close').addEventListener('click',()=>$('shortcuts-modal').classList
 });
 
 // ── TOAST ─────────────────────────────────────────────────────────
+$('layers-expand-btn').addEventListener('click',e=>{
+  e.stopPropagation();
+  const expanded=$('layers-section').classList.toggle('layers-expanded');
+  $('layers-expand-btn').classList.toggle('active',expanded);
+  $('layers-expand-btn').title=expanded?'Collapse layers':'Expand layers';
+});
+
 let toastT;
 function showToast(msg){
   const t=$('toast'); t.textContent=msg; t.classList.add('show');
