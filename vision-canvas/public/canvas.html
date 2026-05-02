@@ -122,6 +122,8 @@ body{display:flex;flex-direction:column;}
 .canvas-item img{width:100%;height:100%;object-fit:contain;display:block;
   pointer-events:none;border-radius:2px;}
 .shape-content{width:100%;height:100%;display:block;pointer-events:none;overflow:visible;}
+.frame-content{position:absolute;inset:0;border:1.5px solid rgba(139,143,244,.85);background:rgba(139,143,244,.06);pointer-events:none;}
+.frame-label{position:absolute;left:0;top:-22px;color:var(--accent2);font-size:12px;font-weight:600;pointer-events:none;white-space:nowrap;}
 .canvas-item.multi-sel{outline:1.5px solid var(--accent2);}
 .canvas-item.locked-item{cursor:not-allowed;}
 
@@ -543,6 +545,8 @@ body{display:flex;flex-direction:column;}
     <button class="tool-btn" data-tool="comment"><span class="tool-tip">Comment Pin (C)</span>
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 11.5a8.4 8.4 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7a8.4 8.4 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.4 8.4 0 0 1 3.8-.9h.5A8.5 8.5 0 0 1 21 11z"/></svg></button>
     <div class="tool-sep"></div>
+    <button class="tool-btn" data-tool="frame"><span class="tool-tip">Frame (F)</span>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="5" width="16" height="14" rx="1"/><path d="M8 5v14M16 5v14M4 9h16M4 15h16"/></svg></button>
     <button class="tool-btn" data-tool="rect"><span class="tool-tip">Rectangle (R)</span>
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="5" width="16" height="14" rx="1"/></svg></button>
     <button class="tool-btn" data-tool="line"><span class="tool-tip">Line (L)</span>
@@ -1152,6 +1156,21 @@ function addShapeItem(shape,x,y,w=160,h=110,flipH=false,flipV=false){
   updateProps(); updateCanvasHint(); scheduleThumb();
 }
 
+function addFrameItem(x,y,w=360,h=240){
+  if(!canEditAll()) return;
+  pushHistory();
+  const id=++state.nextId;
+  ac().items.push({id,type:'frame',name:`Frame ${id}`,
+    x,y,w:Math.max(80,w),h:Math.max(60,h),rot:0,opacity:100,
+    visible:true,locked:false,flipH:false,flipV:false,z:maxZ()+1,
+    blendMode:'normal',shadow:false,shadowBlur:18,shadowY:10,shadowColor:'rgba(0,0,0,.35)',radius:8,
+    fill:'rgba(139,143,244,.06)',stroke:'#8b8ff4',strokeWidth:1.5});
+  state.selectedIds=[id];
+  renderItems(); renderLayers();
+  updateSelectionOverlay(); updateMultiSelBox();
+  updateProps(); updateCanvasHint(); scheduleThumb();
+}
+
 function deleteItems(ids){
   if(!ids.length) return;
   if(ACCESS_MODE==='comment') ids=ids.filter(id=>getItem(id)?.type==='comment');
@@ -1412,6 +1431,8 @@ function renderItems(){
         const sc=document.createElement('div');
         sc.className='shape-content';
         el.appendChild(sc);
+      } else if(item.type==='frame'){
+        el.innerHTML='<div class="frame-label"></div><div class="frame-content"></div>';
       } else {
         const img=document.createElement('img');
         img.src=item.src; img.draggable=false;
@@ -1463,6 +1484,16 @@ function applyItemStyle(el,item){
   if(item.type==='shape'){
     const sc=el.querySelector('.shape-content');
     if(sc) sc.innerHTML=shapeMarkup(item);
+  }
+  if(item.type==='frame'){
+    const fc=el.querySelector('.frame-content'),fl=el.querySelector('.frame-label');
+    if(fc){
+      fc.style.background=item.fill||'rgba(139,143,244,.06)';
+      fc.style.borderColor=item.stroke||'#8b8ff4';
+      fc.style.borderWidth=(item.strokeWidth??1.5)+'px';
+      fc.style.borderRadius=(item.radius||0)+'px';
+    }
+    if(fl) fl.textContent=item.name||`Frame ${item.id}`;
   }
   if(item.type==='image'){
     const img=el.querySelector('img');
@@ -1991,7 +2022,7 @@ function updateProps(){
   $('fx-radius').value=item.radius??0;
   setColorControl('fx-shadow-color',shadowColorHex(item),'#000000');
   const isText=item.type==='text'||item.type==='note';
-  const isShape=item.type==='shape';
+  const isShape=item.type==='shape'||item.type==='frame';
   const isImage=item.type==='image';
   $('effect-props').style.display=item.type==='comment'?'none':'flex';
   $('text-props').style.display=isText?'flex':'none';
@@ -2213,7 +2244,7 @@ document.querySelectorAll('.align-btn-ui').forEach(btn=>{
 
 // ── LAYERS PANEL (with drag-to-reorder + double-click rename) ─────
 function updateShapeProp(key,value,withHistory=false){
-  const item=selFirst(); if(!item||item.type!=='shape'||item.locked) return;
+  const item=selFirst(); if(!item||!['shape','frame'].includes(item.type)||item.locked) return;
   if(withHistory) pushHistory();
   item[key]=value;
   if(state.shapeDefaults) state.shapeDefaults[key]=value;
@@ -2246,6 +2277,7 @@ function layerThumb(item){
   if(item.type==='text') return 'T';
   if(item.type==='note') return 'N';
   if(item.type==='comment') return item.number||'C';
+  if(item.type==='frame') return 'F';
   if(item.type==='shape'){
     const icons={rect:'▭',line:'╱',arrow:'↗',ellipse:'○',polygon:'△',star:'☆'};
     return icons[item.shape]||'□';
@@ -2263,7 +2295,7 @@ function renderLayers(){
     <div class="layer-item${state.selectedIds.includes(item.id)?' selected':''}"
          data-id="${item.id}" draggable="true">
       <div class="layer-drag-handle" title="Drag to reorder">⠿</div>
-      <div class="layer-thumb ${(item.type==='text'||item.type==='note'||item.type==='comment')?'text-thumb':item.type==='shape'?'shape-thumb':''}">
+      <div class="layer-thumb ${(item.type==='text'||item.type==='note'||item.type==='comment'||item.type==='frame')?'text-thumb':item.type==='shape'?'shape-thumb':''}">
         ${layerThumb(item)}
       </div>
       <div class="layer-name-el" data-name="${item.id}" contenteditable="false">${item.name}</div>
@@ -2650,9 +2682,16 @@ function onItemMousedown(e){
   }
   if(item&&!item.locked){
     const allSel=selAll().filter(i=>!i.locked);
+    const moveItems=item.type==='frame'
+      ? [...new Set([...allSel.map(i=>i.id),...frameChildIds(item)])].map(id=>getItem(id)).filter(i=>i&&!i.locked)
+      : allSel;
     interaction={type:'move',startMX:e.clientX,startMY:e.clientY,
-      items:allSel.map(i=>({id:i.id,sx:i.x,sy:i.y})),moved:false};
+      items:moveItems.map(i=>({id:i.id,sx:i.x,sy:i.y})),moved:false};
   }
+}
+function frameChildIds(frame){
+  if(!frame||frame.type!=='frame') return [];
+  return ac().items.filter(i=>i.id!==frame.id&&i.visible!==false&&i.x>=frame.x&&i.y>=frame.y&&i.x+i.w<=frame.x+frame.w&&i.y+i.h<=frame.y+frame.h).map(i=>i.id);
 }
 function onItemDblclick(e){
   if(state.editingId) return;
@@ -2713,6 +2752,11 @@ canvasArea.addEventListener('mousedown',e=>{
     canvasArea.classList.add('panning'); return;
   }
   if(e.button===0){
+    if(state.tool==='frame'&&!e.target.closest('.canvas-item')){
+      interaction={type:'framecreate',startMX:e.clientX,startMY:e.clientY,lastMX:e.clientX,lastMY:e.clientY};
+      rubberBand.style.display='none';
+      return;
+    }
     if(state.tool==='zoom'&&!e.target.closest('.canvas-item')&&!e.target.closest('#selection-overlay')){
       interaction={type:'zoomrect',startMX:e.clientX,startMY:e.clientY,lastMX:e.clientX,lastMY:e.clientY,alt:e.altKey};
       rubberBand.style.display='none';
@@ -2790,6 +2834,19 @@ document.addEventListener('mousemove',e=>{
     if(w>4||h>4){
       rubberBand.style.display='block';
       rubberBand.style.cssText=`display:block;position:absolute;left:${x}px;top:${y}px;width:${w}px;height:${h}px;border:1.5px solid var(--accent2);background:rgba(108,113,240,0.08);pointer-events:none;z-index:45;`;
+    }
+    return;
+  }
+  if(interaction.type==='framecreate'){
+    interaction.lastMX=e.clientX; interaction.lastMY=e.clientY;
+    const r=canvasArea.getBoundingClientRect();
+    const x=Math.min(e.clientX,interaction.startMX)-r.left;
+    const y=Math.min(e.clientY,interaction.startMY)-r.top;
+    const w=Math.abs(e.clientX-interaction.startMX);
+    const h=Math.abs(e.clientY-interaction.startMY);
+    if(w>4||h>4){
+      rubberBand.style.display='block';
+      rubberBand.style.cssText=`display:block;position:absolute;left:${x}px;top:${y}px;width:${w}px;height:${h}px;border:1.5px solid var(--accent2);background:rgba(139,143,244,0.08);pointer-events:none;z-index:45;`;
     }
     return;
   }
@@ -2932,6 +2989,17 @@ document.addEventListener('mouseup',e=>{
     if(dragged&&!interaction.alt) zoomToScreenRect(interaction.startMX,interaction.startMY,interaction.lastMX,interaction.lastMY);
     else zoomAt(interaction.lastMX,interaction.lastMY,interaction.alt?-1:1);
   }
+  if(interaction&&interaction.type==='framecreate'){
+    rubberBand.style.display='none';
+    const start=screenToWorld(interaction.startMX,interaction.startMY);
+    const end=screenToWorld(interaction.lastMX,interaction.lastMY);
+    const dragged=Math.abs(interaction.lastMX-interaction.startMX)>4||Math.abs(interaction.lastMY-interaction.startMY)>4;
+    if(dragged){
+      addFrameItem(Math.min(start.x,end.x),Math.min(start.y,end.y),Math.abs(end.x-start.x),Math.abs(end.y-start.y));
+    }else{
+      addFrameItem(start.x-180,start.y-120);
+    }
+  }
   if(interaction&&interaction.type==='textcreate'){
     rubberBand.style.display='none';
     const start=screenToWorld(interaction.startMX,interaction.startMY);
@@ -3031,6 +3099,7 @@ document.addEventListener('keydown',e=>{
     updateProps(); renderLayers();}
   if(e.code==='KeyV'&&!e.ctrlKey&&!e.metaKey) setTool('select');
   if(e.code==='KeyH') setTool('hand');
+  if(e.code==='KeyF'&&!e.ctrlKey&&!e.metaKey) setTool('frame');
   if(e.code==='KeyZ'&&!e.ctrlKey&&!e.metaKey) setTool('zoom');
   if(e.code==='KeyT') setTool('text');
   if(e.code==='KeyC'&&!e.ctrlKey&&!e.metaKey) setTool('comment');
@@ -3061,6 +3130,7 @@ let commandIndex=0,visibleCommands=[];
 const COMMANDS=[
   {name:'Select tool',group:'Tools',key:'V',run:()=>setTool('select')},
   {name:'Hand tool',group:'Tools',key:'H',run:()=>setTool('hand')},
+  {name:'Frame tool',group:'Tools',key:'F',run:()=>setTool('frame')},
   {name:'Zoom tool',group:'Tools',key:'Z',run:()=>setTool('zoom')},
   {name:'Text tool',group:'Tools',key:'T',run:()=>setTool('text')},
   {name:'Comment pin tool',group:'Tools',key:'C',run:()=>setTool('comment')},
@@ -3140,7 +3210,7 @@ function setTool(tool){
   canvasArea.classList.toggle('zoom-tool',tool==='zoom');
   canvasArea.classList.toggle('zoom-out',tool==='zoom'&&window.event?.altKey);
   if(tool!=='zoom') canvasArea.classList.remove('zoom-out');
-  canvasArea.classList.toggle('text-tool',tool==='text'||tool==='note'||tool==='comment'||isShapeTool(tool));
+  canvasArea.classList.toggle('text-tool',tool==='text'||tool==='note'||tool==='comment'||tool==='frame'||isShapeTool(tool));
   updateProps();
 }
 document.querySelectorAll('.tool-btn[data-tool]').forEach(b=>{
@@ -3271,6 +3341,7 @@ const SHORTCUTS=[
   {action:'Command menu',keys:['Ctrl','K']},
   {action:'Select tool',keys:['V']},
   {action:'Hand / Pan tool',keys:['H']},
+  {action:'Frame tool',keys:['F']},
   {action:'Zoom tool',keys:['Z']},
   {action:'Text tool',keys:['T']},
   {action:'Comment pin tool',keys:['C']},
