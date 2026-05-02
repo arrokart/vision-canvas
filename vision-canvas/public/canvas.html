@@ -999,10 +999,13 @@ body{display:flex;flex-direction:column;}
         <option value="webp">WebP</option>
       </select>
     </div>
-    <label class="prop-check" style="margin-top:8px;">
-      <input type="checkbox" id="export-include-bg">
-      Include canvas background
-    </label>
+    <div class="modal-row">
+      <span>Background</span>
+      <select class="modal-select" id="export-bg">
+        <option value="transparent" selected>Transparent</option>
+        <option value="canvas">Canvas background</option>
+      </select>
+    </div>
     <div class="modal-actions">
       <button class="modal-btn" id="export-cancel">Cancel</button>
       <button class="modal-btn accent" id="export-confirm">Download</button>
@@ -3652,17 +3655,17 @@ $('export-btn').addEventListener('click',()=>{
   if(!ac().items.length){showToast('Nothing to export');return;}
   $('export-area').value=state.selectedIds.length>0?'selection':'canvas';
   $('export-area').querySelector('option[value="selection"]').disabled=state.selectedIds.length===0;
-  $('export-include-bg').checked=state.selectedIds.length===0;
-  $('export-include-bg').disabled=$('export-format').value==='jpeg';
+  $('export-bg').value=$('export-format').value==='jpeg'?'canvas':state.selectedIds.length>0?'transparent':'canvas';
+  $('export-bg').disabled=$('export-format').value==='jpeg';
   $('export-modal').classList.add('show');
 });
 $('export-format').addEventListener('change',e=>{
-  $('export-include-bg').disabled=e.target.value==='jpeg';
-  if(e.target.value==='jpeg') $('export-include-bg').checked=true;
+  $('export-bg').disabled=e.target.value==='jpeg';
+  if(e.target.value==='jpeg') $('export-bg').value='canvas';
 });
 $('export-area').addEventListener('change',e=>{
   if($('export-format').value==='jpeg') return;
-  $('export-include-bg').checked=e.target.value==='canvas';
+  $('export-bg').value=e.target.value==='canvas'?'canvas':'transparent';
 });
 $('export-cancel').addEventListener('click',()=>$('export-modal').classList.remove('show'));
 function exportSelectionIds(ids){
@@ -3681,7 +3684,7 @@ $('export-confirm').addEventListener('click',async()=>{
   const items=ac().items.filter(i=>i.visible&&exportIds.has(i.id));
   if(!items.length){showToast('No visible items');return;}
   const scale=parseInt($('export-scale').value)||2,fmt=$('export-format').value||'png';
-  const includeBg=$('export-include-bg').checked||fmt==='jpeg';
+  const includeBg=$('export-bg').value==='canvas'||fmt==='jpeg';
   const pad=selectedOnly?0:40;
   const selectedFrame=selectedOnly&&state.selectedIds.length===1?getItem(state.selectedIds[0]):null;
   const exportFrame=selectedFrame?.type==='frame'?selectedFrame:null;
