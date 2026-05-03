@@ -564,6 +564,15 @@ body.exporting-canvas .frame-label{display:none!important;}
   color:var(--text2);font-family:'Outfit',sans-serif;font-size:11px;cursor:pointer;}
 .mini-btn.approve{background:rgba(82,201,122,.12);border-color:rgba(82,201,122,.32);color:#a9ffc5;}
 .mini-btn.reject{background:rgba(239,95,103,.1);border-color:rgba(239,95,103,.28);color:#ffadb2;}
+.access-status-pill{font-size:10px;padding:3px 6px;border-radius:999px;border:1px solid var(--border);color:var(--text3);}
+.access-status-pill.approved{color:#a9ffc5;border-color:rgba(82,201,122,.28);background:rgba(82,201,122,.08);}
+.access-status-pill.rejected{color:#ffadb2;border-color:rgba(239,95,103,.28);background:rgba(239,95,103,.08);}
+.access-section{display:flex;flex-direction:column;gap:7px;}
+.access-activity-row{display:flex;justify-content:space-between;gap:10px;font-size:11px;color:var(--text2);
+  border-top:1px solid var(--border);padding-top:7px;}
+.access-activity-row:first-child{border-top:none;padding-top:0;}
+.access-activity-row strong{color:var(--text);font-weight:600;}
+.access-activity-time{color:var(--text3);white-space:nowrap;}
 .access-empty{font-size:11px;color:var(--text3);}
 
 /* SHORTCUTS MODAL */
@@ -5387,9 +5396,12 @@ async function renderAccessRequests(){
   if(!box||!CANVAS_ID) return
   try{
     const rows=await fetchAccessRequests()
+    const activity=await fetchAccessActivity().catch(()=>[])
     const pending=(rows||[]).filter(r=>r.status==='pending')
+    const approved=(rows||[]).filter(r=>r.status==='approved')
+    const rejected=(rows||[]).filter(r=>r.status==='rejected')
     updateShareRequestBadge(pending.length)
-    box.innerHTML=`<h4>Access requests</h4>${
+    box.innerHTML=`<h4>Pending requests</h4>${
       pending.length ? pending.map(r=>`
         <div class="access-request-row" data-request-id="${r.id}">
           <div>
@@ -5402,6 +5414,24 @@ async function renderAccessRequests(){
           </div>
         </div>`).join('') : '<div class="access-empty">No pending requests.</div>'
     }`
+    box.insertAdjacentHTML('beforeend',`
+      <div class="access-section">
+        <h4>Approved people</h4>
+        ${approved.length ? approved.map(r=>accessRowHtml(r,`
+          <button class="mini-btn reject" data-access-action="rejected">Revoke</button>
+        `,'approved')).join('') : '<div class="access-empty">No approved people yet.</div>'}
+      </div>
+      <div class="access-section">
+        <h4>Rejected</h4>
+        ${rejected.length ? rejected.map(r=>accessRowHtml(r,`
+          <button class="mini-btn approve" data-access-action="approved">Approve</button>
+        `,'rejected')).join('') : '<div class="access-empty">No rejected people.</div>'}
+      </div>
+      <div class="access-section">
+        <h4>History</h4>
+        ${activity.length ? activity.map(accessActivityHtml).join('') : '<div class="access-empty">No activity yet.</div>'}
+      </div>
+    `)
     box.querySelectorAll('[data-access-action]').forEach(btn=>{
       btn.addEventListener('click',()=>setAccessRequestStatus(
         btn.closest('[data-request-id]').dataset.requestId,
@@ -5411,6 +5441,31 @@ async function renderAccessRequests(){
   }catch(e){
     box.innerHTML='<h4>Access requests</h4><div class="access-empty">Run the access approval SQL to enable requests.</div>'
   }
+}
+
+function accessRowHtml(r,actions,statusClass=''){
+  const stamp=r.updated_at||r.created_at
+  return `<div class="access-request-row" data-request-id="${r.id}">
+    <div>
+      <div class="access-request-name">${escapeHtml(r.guest_name||'Guest')} ${statusClass?`<span class="access-status-pill ${statusClass}">${statusClass}</span>`:''}</div>
+      <div class="access-request-meta">${shareLabel(r.requested_permission)} · ${new Date(stamp).toLocaleString()}</div>
+    </div>
+    <div class="access-request-actions">${actions}</div>
+  </div>`
+}
+
+function accessActivityHtml(a){
+  const verb={
+    requested:'requested access',
+    approved:'was approved',
+    revoked:'access was revoked',
+    saved:'saved changes'
+  }[a.action]||a.action
+  const detail=a.detail?` · ${shareLabel(a.detail)||a.detail}`:''
+  return `<div class="access-activity-row">
+    <span><strong>${escapeHtml(a.guest_name||'Guest')}</strong> ${escapeHtml(verb)}${escapeHtml(detail)}</span>
+    <span class="access-activity-time">${new Date(a.created_at).toLocaleString()}</span>
+  </div>`
 }
 
 async function fetchAccessRequests(){
@@ -5424,6 +5479,20 @@ async function fetchAccessRequests(){
     body:JSON.stringify({p_canvas_id:CANVAS_ID})
   })
   if(!res.ok) throw new Error('request list failed')
+  return res.json()
+}
+
+async function fetchAccessActivity(){
+  const res=await fetch(`${SUPABASE_URL}/rest/v1/rpc/list_canvas_access_activity`,{
+    method:'POST',
+    headers:{
+      'Content-Type':'application/json',
+      'apikey':SUPABASE_KEY,
+      'Authorization':`Bearer ${apiBearer()}`
+    },
+    body:JSON.stringify({p_canvas_id:CANVAS_ID})
+  })
+  if(!res.ok) throw new Error('activity list failed')
   return res.json()
 }
 

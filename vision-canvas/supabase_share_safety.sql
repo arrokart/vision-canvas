@@ -44,10 +44,22 @@ create table if not exists public.canvas_access_requests (
   unique (canvas_id, guest_key)
 );
 
+create table if not exists public.canvas_access_activity (
+  id uuid primary key default gen_random_uuid(),
+  canvas_id uuid not null references public.canvases(id) on delete cascade,
+  guest_key text,
+  guest_name text,
+  action text not null,
+  detail text,
+  created_at timestamptz not null default now()
+);
+
 alter table public.canvas_access_requests enable row level security;
+alter table public.canvas_access_activity enable row level security;
 
 drop policy if exists "Owners can read access requests" on public.canvas_access_requests;
 drop policy if exists "Owners can update access requests" on public.canvas_access_requests;
+drop policy if exists "Owners can read access activity" on public.canvas_access_activity;
 
 create policy "Owners can read access requests"
 on public.canvas_access_requests
@@ -78,12 +90,24 @@ with check (
   )
 );
 
+create policy "Owners can read access activity"
+on public.canvas_access_activity
+for select
+using (
+  exists (
+    select 1 from public.canvases c
+    where c.id = canvas_id
+      and c.user_id = auth.uid()
+  )
+);
+
 drop function if exists public.get_shared_canvas(text);
 drop function if exists public.update_shared_canvas(text, jsonb);
 drop function if exists public.update_shared_canvas(text, text, jsonb);
 drop function if exists public.request_canvas_access(text, text, text, text);
 drop function if exists public.get_canvas_access_status(text, text);
 drop function if exists public.list_canvas_access_requests(uuid);
+drop function if exists public.list_canvas_access_activity(uuid);
 drop function if exists public.set_canvas_access_request(uuid, text);
 
 create or replace function public.get_shared_canvas(p_token text)
@@ -144,6 +168,9 @@ begin
     requested_permission = excluded.requested_permission,
     updated_at = now();
 
+  insert into public.canvas_access_activity (canvas_id, guest_key, guest_name, action, detail)
+  values (target_canvas_id, p_guest_key, coalesce(nullif(trim(p_guest_name),''),'Guest'), 'requested', p_permission);
+
   return query
     select r.status
     from public.canvas_access_requests r
@@ -151,6 +178,27 @@ begin
       and r.guest_key = p_guest_key
     limit 1;
 end;
+$$;
+
+create or replace function public.list_canvas_access_activity(p_canvas_id uuid)
+returns table (
+  id uuid,
+  guest_name text,
+  action text,
+  detail text,
+  created_at timestamptz
+)
+language sql
+security definer
+set search_path = public
+as $$
+  select a.id, a.guest_name, a.action, a.detail, a.created_at
+  from public.canvas_access_activity a
+  join public.canvases c on c.id = a.canvas_id
+  where a.canvas_id = p_canvas_id
+    and c.user_id = auth.uid()
+  order by a.created_at desc
+  limit 30;
 $$;
 
 create or replace function public.get_canvas_access_status(p_token text, p_guest_key text)
@@ -172,13 +220,14 @@ returns table (
   guest_name text,
   requested_permission text,
   status text,
-  created_at timestamptz
+  created_at timestamptz,
+  updated_at timestamptz
 )
 language sql
 security definer
 set search_path = public
 as $$
-  select r.id, r.guest_name, r.requested_permission, r.status, r.created_at
+  select r.id, r.guest_name, r.requested_permission, r.status, r.created_at, r.updated_at
   from public.canvas_access_requests r
   join public.canvases c on c.id = r.canvas_id
   where r.canvas_id = p_canvas_id
@@ -208,6 +257,14 @@ begin
     and c.user_id = auth.uid();
 
   get diagnostics updated_count = row_count;
+  if updated_count > 0 then
+    insert into public.canvas_access_activity (canvas_id, guest_key, guest_name, action, detail)
+    select r.canvas_id, r.guest_key, r.guest_name,
+      case when p_status = 'approved' then 'approved' else 'revoked' end,
+      r.requested_permission
+    from public.canvas_access_requests r
+    where r.id = p_request_id;
+  end if;
   return updated_count > 0;
 end;
 $$;
@@ -240,6 +297,15 @@ begin
     );
 
   get diagnostics updated_count = row_count;
+  if updated_count > 0 then
+    insert into public.canvas_access_activity (canvas_id, guest_key, guest_name, action, detail)
+    select c.id, r.guest_key, r.guest_name, 'saved', c.share_permission
+    from public.canvases c
+    join public.canvas_access_requests r on r.canvas_id = c.id
+    where c.share_token = p_token
+      and r.guest_key = p_guest_key
+    limit 1;
+  end if;
   return updated_count > 0;
 end;
 $$;
@@ -249,4 +315,5 @@ grant execute on function public.update_shared_canvas(text, text, jsonb) to anon
 grant execute on function public.request_canvas_access(text, text, text, text) to anon, authenticated;
 grant execute on function public.get_canvas_access_status(text, text) to anon, authenticated;
 grant execute on function public.list_canvas_access_requests(uuid) to anon, authenticated;
+grant execute on function public.list_canvas_access_activity(uuid) to anon, authenticated;
 grant execute on function public.set_canvas_access_request(uuid, text) to anon, authenticated;
