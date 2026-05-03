@@ -1297,7 +1297,7 @@ let paperScope=null;
 function getPaperScope(){
   if(!window.paper) return null;
   if(!paperScope){
-    paperScope=new paper.PaperScope();
+    paperScope=new window.paper.PaperScope();
     paperScope.setup(document.createElement('canvas'));
   }
   paperScope.project.clear();
@@ -1337,6 +1337,9 @@ function ensureBooleanChildren(item){
     childId:s.childId||`${item.id}-${idx+1}`,
     name:s.name||`${SHAPE_LABELS[s.shape]||'Shape'} ${idx+1}`,
     z:s.z??idx,
+    rot:s.rot||0,
+    flipH:!!s.flipH,
+    flipV:!!s.flipV,
     ...s
   }));
   item.booleanShapes.sort((a,b)=>(b.z??0)-(a.z??0));
@@ -1368,15 +1371,22 @@ function pointInPoly(px,py,pts){
 }
 function paperPathForShape(scope,s){
   const x=s.x,y=s.y,w=Math.max(1,s.w),h=Math.max(1,s.h);
-  if(s.shape==='ellipse') return new scope.Path.Ellipse(new scope.Rectangle(x,y,w,h));
-  if(s.shape==='polygon') return new scope.Path({segments:[[x+w/2,y],[x+w,y+h],[x,y+h]],closed:true});
+  let path;
+  if(s.shape==='ellipse') path=new scope.Path.Ellipse(new scope.Rectangle(x,y,w,h));
+  else if(s.shape==='polygon') path=new scope.Path({segments:[[x+w/2,y],[x+w,y+h],[x,y+h]],closed:true});
   if(s.shape==='star'){
     const pts=[[.5,0],[.61,.36],[.95,.36],[.67,.56],[.78,.9],[.5,.7],[.22,.9],[.33,.56],[.05,.36],[.39,.36]]
       .map(p=>[x+p[0]*w,y+p[1]*h]);
-    return new scope.Path({segments:pts,closed:true});
+    path=new scope.Path({segments:pts,closed:true});
   }
-  const r=Math.max(0,Math.min(s.radius||0,w/2,h/2));
-  return new scope.Path.Rectangle(new scope.Rectangle(x,y,w,h),new scope.Size(r,r));
+  if(!path){
+    const r=Math.max(0,Math.min(s.radius||0,w/2,h/2));
+    path=new scope.Path.Rectangle(new scope.Rectangle(x,y,w,h),new scope.Size(r,r));
+  }
+  const center=new scope.Point(x+w/2,y+h/2);
+  if(s.flipH||s.flipV) path.scale(s.flipH?-1:1,s.flipV?-1:1,center);
+  if(s.rot) path.rotate(s.rot,center);
+  return path;
 }
 function paperBooleanResult(shapes,op){
   const scope=getPaperScope();
@@ -1497,7 +1507,7 @@ function releaseBooleanShape(item){
     const id=++state.nextId;
     return {id,type:'shape',shape:s.shape,name:s.name||`${SHAPE_LABELS[s.shape]||'Shape'} ${id}`,
       x:item.x+s.x/100*item.w,y:item.y+s.y/100*item.h,w:s.w/100*item.w,h:s.h/100*item.h,
-      rot:item.rot||0,opacity:item.opacity??100,visible:item.visible!==false,locked:false,flipH:false,flipV:false,
+      rot:s.rot||0,opacity:item.opacity??100,visible:item.visible!==false,locked:false,flipH:!!s.flipH,flipV:!!s.flipV,
       z:maxZ()+1+(s.z||0),blendMode:item.blendMode||'normal',shadow:false,shadowBlur:18,shadowY:10,
       shadowColor:'rgba(0,0,0,.35)',radius:s.radius||0,fill:item.fill,stroke:item.stroke,strokeWidth:item.strokeWidth};
   });
@@ -1554,7 +1564,7 @@ function addBooleanShape(op,sourceItems){
   const boolShapes=items.map(i=>({
     childId:`${id}-${i.id}`,name:i.name||`${SHAPE_LABELS[i.shape]||'Shape'} ${i.id}`,z:i.z,
     shape:i.shape,x:(i.x-minX)/bw*100,y:(i.y-minY)/bh*100,
-    w:i.w/bw*100,h:i.h/bh*100,radius:i.radius||0
+    w:i.w/bw*100,h:i.h/bh*100,radius:i.radius||0,rot:i.rot||0,flipH:!!i.flipH,flipV:!!i.flipV
   }));
   ac().items=ac().items.filter(i=>!items.some(s=>s.id===i.id));
   const isFlatten=op==='flatten';
@@ -2014,6 +2024,7 @@ function booleanShapeMarkup(item,common){
     return `<svg class="shape-content" viewBox="0 0 100 100" preserveAspectRatio="none">${paths.map(d=>`<path d="${d}" ${common}/>`).join('')}</svg>`;
   }
   ensureBooleanChildren(item);
+  if(!item.resultPath) normalizeBooleanBounds(item);
   if(item.resultPath){
     return `<svg class="shape-content" viewBox="0 0 100 100" preserveAspectRatio="none"><path d="${item.resultPath}" ${common}/></svg>`;
   }
