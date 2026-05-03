@@ -2524,7 +2524,7 @@ $('default-shape-stroke-width').addEventListener('change',e=>
 );
 $('default-shape-fill-clear').addEventListener('click',()=>updateDefaultShapeProp('fill','transparent'));
 
-let layerDrag={id:null,startY:0};
+let layerDrag={ids:null,startY:0};
 $('layer-search').addEventListener('input',e=>{
   state.layerQuery=e.target.value;
   renderLayers();
@@ -2594,7 +2594,7 @@ function renderLayers(){
       const collapsed=!!state.collapsedGroups[gid];
       const selected=members.length&&members.every(i=>state.selectedIds.includes(i.id));
       rows.push(`
-        <div class="layer-item group-row${selected?' selected':''}" data-group="${gid}">
+        <div class="layer-item group-row${selected?' selected':''}" data-group="${gid}" draggable="true">
           <div class="layer-caret">${collapsed?'+':'-'}</div>
           <div class="layer-thumb text-thumb">[]</div>
           <div class="layer-name-el">Group ${gid}</div>
@@ -2638,8 +2638,9 @@ function renderLayers(){
 
     // Drag to reorder
     el.addEventListener('dragstart',e=>{
-      if(!el.dataset.id){e.preventDefault();return;}
-      layerDrag.id=parseInt(el.dataset.id);
+      const ids=layerUnitIds(el);
+      if(!ids.length){e.preventDefault();return;}
+      layerDrag.ids=ids;
       el.style.opacity='.5';
     });
     el.addEventListener('dragend',()=>{ el.style.opacity=''; clearLayerDragOver(); });
@@ -2650,17 +2651,8 @@ function renderLayers(){
     });
     el.addEventListener('drop',e=>{
       e.preventDefault();
-      if(!el.dataset.id){clearLayerDragOver();return;}
-      const targetId=parseInt(el.dataset.id);
-      if(layerDrag.id&&layerDrag.id!==targetId){
-        pushHistory();
-        const dragItem=getItem(layerDrag.id);
-        const targetItem=getItem(targetId);
-        if(dragItem&&targetItem){
-          const tmp=dragItem.z; dragItem.z=targetItem.z; targetItem.z=tmp;
-        }
-        renderItems(); renderLayers();
-      }
+      const targetIds=layerUnitIds(el);
+      if(layerDrag.ids?.length&&targetIds.length) moveLayerUnit(layerDrag.ids,targetIds);
       clearLayerDragOver();
     });
   });
@@ -2720,7 +2712,29 @@ function renderLayers(){
 
 function clearLayerDragOver(){
   document.querySelectorAll('.layer-item.drag-over').forEach(el=>el.classList.remove('drag-over'));
-  layerDrag.id=null;
+  layerDrag.ids=null;
+}
+function layerUnitIds(el){
+  if(el.dataset.group){
+    const gid=parseInt(el.dataset.group,10);
+    return ac().items.filter(i=>i.groupId===gid).sort((a,b)=>b.z-a.z).map(i=>i.id);
+  }
+  return el.dataset.id?[parseInt(el.dataset.id,10)]:[];
+}
+function moveLayerUnit(dragIds,targetIds){
+  const dragSet=new Set(dragIds), targetSet=new Set(targetIds);
+  if([...dragSet].some(id=>targetSet.has(id))) return;
+  const ordered=[...ac().items].sort((a,b)=>b.z-a.z);
+  const dragged=ordered.filter(i=>dragSet.has(i.id));
+  if(!dragged.length) return;
+  const remaining=ordered.filter(i=>!dragSet.has(i.id));
+  const targetIndex=remaining.findIndex(i=>targetSet.has(i.id));
+  if(targetIndex<0) return;
+  pushHistory();
+  const next=[...remaining.slice(0,targetIndex),...dragged,...remaining.slice(targetIndex)];
+  const zValues=ordered.map(i=>i.z).sort((a,b)=>b-a);
+  next.forEach((item,idx)=>{item.z=zValues[idx];});
+  renderItems(); renderLayers(); scheduleSave(); scheduleThumb();
 }
 
 // ── BACKGROUND ────────────────────────────────────────────────────
