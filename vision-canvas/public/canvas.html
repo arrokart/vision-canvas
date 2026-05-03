@@ -3205,7 +3205,7 @@ function renderLayers(){
       }
       const ids=layerUnitIds(el);
       if(!ids.length){e.preventDefault();return;}
-      layerDrag.ids=ids;
+      layerDrag.ids=layerDragIdsForUnit(ids);
       el.style.opacity='.5';
     });
     el.addEventListener('dragend',()=>{ el.style.opacity=''; clearLayerDragOver(); });
@@ -3291,6 +3291,11 @@ function layerUnitIds(el){
     return ac().items.filter(i=>i.groupId===gid).sort((a,b)=>b.z-a.z).map(i=>i.id);
   }
   return el.dataset.id?[parseInt(el.dataset.id,10)]:[];
+}
+function layerDragIdsForUnit(unitIds){
+  const selected=new Set(state.selectedIds);
+  if(!unitIds.length||!unitIds.every(id=>selected.has(id))) return unitIds;
+  return [...new Set(state.selectedIds)].filter(id=>getItem(id));
 }
 function moveLayerUnit(dragIds,targetIds){
   const dragSet=new Set(dragIds), targetSet=new Set(targetIds);
