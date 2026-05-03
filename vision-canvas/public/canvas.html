@@ -501,6 +501,9 @@ body.exporting-canvas .frame-label{display:none!important;}
   padding:7px 10px;color:var(--text);font-family:'Outfit',sans-serif;font-size:13px;
   outline:none;width:100%;}
 .modal-input:focus{border-color:var(--accent);}
+.guest-summary{font-size:12px;color:var(--text2);line-height:1.45;margin-top:-4px;}
+.guest-summary strong{color:var(--text);font-weight:600;}
+.guest-skip{font-size:11px;color:var(--text3);text-align:center;margin-top:-4px;}
 .modal-actions{display:flex;gap:8px;margin-top:4px;}
 .modal-btn{flex:1;height:34px;border-radius:7px;border:1px solid var(--border2);
   background:var(--bg3);color:var(--text2);cursor:pointer;font-family:'Outfit',sans-serif;
@@ -1190,6 +1193,20 @@ body.exporting-canvas .frame-label{display:none!important;}
   </div>
 </div>
 
+<!-- GUEST MODAL -->
+<div class="modal-overlay" id="guest-modal">
+  <div class="modal-box" style="width:340px;">
+    <div class="modal-title">Join Canvas</div>
+    <div class="guest-summary" id="guest-summary">Add your name so comments and shared activity are easier to recognize.</div>
+    <input class="modal-input" id="guest-name-input" maxlength="32" placeholder="Your name">
+    <div class="modal-actions">
+      <button class="modal-btn" id="guest-skip-btn">Continue as Guest</button>
+      <button class="modal-btn accent" id="guest-save-btn">Continue</button>
+    </div>
+    <div class="guest-skip">No account required.</div>
+  </div>
+</div>
+
 <!-- COMMAND MENU -->
 <div class="modal-overlay" id="command-modal">
   <div class="modal-box">
@@ -1217,6 +1234,32 @@ const URL_PARAMS = new URLSearchParams(window.location.search);
 const ACCESS_MODE = URL_PARAMS.get('readonly') ? 'view' : (URL_PARAMS.get('mode') || 'edit');
 function canEditAll(){return ACCESS_MODE==='edit';}
 function canComment(){return ACCESS_MODE==='edit'||ACCESS_MODE==='comment';}
+const GUEST_STORAGE_KEY = URL_PARAMS.get('share') ? `vision-guest-${URL_PARAMS.get('share')}` : 'vision-owner';
+let guestName = '';
+function guestDisplayName(){
+  return URL_PARAMS.get('share') ? (guestName || 'Guest') : 'You';
+}
+function loadGuestName(){
+  try{ guestName = localStorage.getItem(GUEST_STORAGE_KEY) || ''; }catch(e){ guestName=''; }
+}
+function saveGuestName(name){
+  guestName = (name || '').trim().slice(0,32);
+  try{ localStorage.setItem(GUEST_STORAGE_KEY, guestName); }catch(e){}
+  updateActivityBadge();
+}
+function requestGuestName(){
+  if(!URL_PARAMS.get('share') || ACCESS_MODE==='view' || guestName) return;
+  const modal=$('guest-modal'), input=$('guest-name-input'), summary=$('guest-summary');
+  if(!modal||!input) return;
+  summary.innerHTML = 'Add your name so comments and edits are easier to recognize.';
+  input.value='';
+  modal.classList.add('show');
+  setTimeout(()=>input.focus(),80);
+}
+function closeGuestModal(name){
+  saveGuestName(name || 'Guest');
+  $('guest-modal')?.classList.remove('show');
+}
 if(ACCESS_MODE==='view') {
   document.addEventListener('contextmenu', e=>e.preventDefault(), true);
 }
@@ -1262,6 +1305,7 @@ let state = {
   shareToken:null,
   sharePermission:'view',
   shareName:'',
+  sharedActivity:null,
   cropAdjustId:null,
   booleanAdjustId:null,
   booleanPartIndex:null,
@@ -1387,7 +1431,7 @@ function addCommentItem(x,y,text){
   const id=++state.nextId;
   const number=nextCommentNumber();
   ac().items.push({id,type:'comment',name:`Comment ${number}`,
-    text:(text||'').trim(),number,x,y,w:210,h:64,rot:0,opacity:100,
+    text:(text||'').trim(),author:guestDisplayName(),number,x,y,w:210,h:64,rot:0,opacity:100,
     visible:true,locked:false,flipH:false,flipV:false,z:maxZ()+1});
   state.selectedIds=[id];
   renderItems(); renderLayers();
@@ -2261,13 +2305,13 @@ function renderCommentPanel(){
     <div class="comment-row">
       <div class="comment-avatar">${item.number||''}</div>
       <div>
-        <div class="comment-meta"><span class="comment-author">You</span><span class="comment-time">note</span></div>
+        <div class="comment-meta"><span class="comment-author">${escapeHtml(item.author||'Guest')}</span><span class="comment-time">note</span></div>
         ${canComment()?`<textarea class="comment-body-edit" id="comment-main-input" placeholder="Add a comment">${escapeHtml(item.text||'')}</textarea>`:`<div class="comment-body">${escapeHtml(item.text||'')}</div>`}
       </div>
     </div>
     ${replies.map(r=>`<div class="comment-row">
       <div class="comment-avatar">↳</div>
-      <div><div class="comment-meta"><span class="comment-author">You</span><span class="comment-time">reply</span></div>
+      <div><div class="comment-meta"><span class="comment-author">${escapeHtml(r.author||'Guest')}</span><span class="comment-time">reply</span></div>
       <div class="comment-body">${escapeHtml(r.text||'')}</div></div>
     </div>`).join('')}
     ${canComment()?`<div class="comment-reply">
@@ -2298,7 +2342,7 @@ function escapeHtml(value){
 function addCommentReply(item,text){
   if(!canComment()||!text.trim()) return;
   pushHistory();
-  item.replies=[...(item.replies||[]),{text:text.trim(),at:Date.now()}];
+  item.replies=[...(item.replies||[]),{text:text.trim(),author:guestDisplayName(),at:Date.now()}];
   renderCommentPanel(); renderLayers(); scheduleThumb();
 }
 function autoSizeCommentInput(input){
@@ -4799,7 +4843,11 @@ function buildPersistedState(){
   const nextState = {
     canvases:state.canvases,nextId:state.nextId,
     nextGroupId:state.nextGroupId,shapeDefaults:state.shapeDefaults,
-    minimapEnabled:state.minimapEnabled
+    minimapEnabled:state.minimapEnabled,
+    sharedActivity:state.sharedActivity
+  }
+  if(SHARE_TOKEN&&ACCESS_MODE==='edit'){
+    nextState.sharedActivity={lastEditor:guestDisplayName(),lastEditedAt:Date.now()}
   }
   if(SHARE_TOKEN&&ACCESS_MODE==='comment'&&lastPersistedState?.canvases){
     const commentCanvases = JSON.parse(JSON.stringify(lastPersistedState.canvases))
@@ -4936,6 +4984,7 @@ async function loadCanvas(){
     state.minimapEnabled=saved.minimapEnabled!==false
     state.collapsedGroups=saved.collapsedGroups||{}
     state.lockAspect=!!saved.lockAspect
+    state.sharedActivity=saved.sharedActivity||null
     state.activeId=state.canvases[0]?.id||1
     state.canvases.forEach(c=>{
       if(!c.history) c.history=[]
@@ -4986,19 +5035,21 @@ function updateActivityBadge(){
   if(!el) return
   el.classList.remove('owner','view','comment','edit')
   if(!SHARE_TOKEN){
-    el.textContent='Owner'
+    el.textContent=state.sharedActivity?.lastEditor ? `Owner · Last: ${state.sharedActivity.lastEditor}` : 'Owner'
     el.classList.add('owner')
-    el.title='You own this canvas'
+    el.title=state.sharedActivity?.lastEditedAt
+      ? `Last shared edit by ${state.sharedActivity.lastEditor} at ${new Date(state.sharedActivity.lastEditedAt).toLocaleString()}`
+      : 'You own this canvas'
   }else if(ACCESS_MODE==='view'){
-    el.textContent='Viewing link'
+    el.textContent=guestName ? `Viewing: ${guestName}` : 'Viewing link'
     el.classList.add('view')
     el.title='Shared view-only mode'
   }else if(ACCESS_MODE==='comment'){
-    el.textContent='Commenting link'
+    el.textContent=guestName ? `Commenting: ${guestName}` : 'Commenting link'
     el.classList.add('comment')
     el.title='Shared comment mode'
   }else{
-    el.textContent='Editing link'
+    el.textContent=guestName ? `Editing: ${guestName}` : 'Editing link'
     el.classList.add('edit')
     el.title='Shared edit mode'
   }
@@ -5040,10 +5091,12 @@ document.addEventListener('mouseup', () => {
 
 // ── INIT ──────────────────────────────────────────────────────────
 async function init(){
+  loadGuestName();
   initBgPresets(); buildAlignTools();
   await loadCanvas();
   updateActivityBadge();
   renderAll();
+  requestGuestName();
   if(ac().items.length) setTimeout(fitAll, 300);
   
   // Shared permission modes
@@ -5098,6 +5151,11 @@ $('share-btn').addEventListener('click', () => {
   if(!CANVAS_ID) return
   renderShareModal()
   $('share-modal').classList.add('show')
+})
+$('guest-save-btn')?.addEventListener('click',()=>closeGuestModal($('guest-name-input').value))
+$('guest-skip-btn')?.addEventListener('click',()=>closeGuestModal('Guest'))
+$('guest-name-input')?.addEventListener('keydown',e=>{
+  if(e.key==='Enter') closeGuestModal(e.currentTarget.value)
 })
 $('share-mode').addEventListener('change',renderSharePreview)
 $('share-cancel').addEventListener('click', ()=>$('share-modal').classList.remove('show'))
