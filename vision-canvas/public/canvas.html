@@ -3677,6 +3677,7 @@ function onItemMousedown(e){
   }
   renderItemsHighlight(); updateSelectionOverlay(); updateMultiSelBox();
   updateProps(); renderLayers();
+  if(ACCESS_MODE==='view') return;
   const item=clicked;
   if(item&&item.type==='image'&&state.tool==='select'&&(e.altKey||state.cropAdjustId===item.id)){
     beginImageCropAdjust(item,e.clientX,e.clientY,true,state.cropAdjustId===item.id&&!e.altKey);
@@ -3808,6 +3809,7 @@ canvasArea.addEventListener('mousedown',e=>{
       state.selectedIds=[];
       renderItemsHighlight(); updateSelectionOverlay(); updateMultiSelBox();
       updateProps(); renderLayers();
+      if(ACCESS_MODE==='view') return;
       interaction={type:'rubberband',startMX:e.clientX,startMY:e.clientY,lastMX:e.clientX,lastMY:e.clientY};
       rubberBand.style.display='none';
     }
@@ -4271,7 +4273,7 @@ commandList.addEventListener('mousedown',e=>{
 commandModal.addEventListener('mousedown',e=>{if(e.target===commandModal) closeCommandMenu();});
 
 function setTool(tool){
-  if(ACCESS_MODE==='view') return;
+  if(ACCESS_MODE==='view'&&!['select','hand','zoom'].includes(tool)) return;
   if(ACCESS_MODE==='comment'&&!['select','hand','zoom','comment'].includes(tool)) return;
   flushActiveCommentEditor();
   state.tool=tool;
@@ -4886,15 +4888,21 @@ async function init(){
     $('export-btn').style.display='none'
     $('share-btn').style.display='none'
     $('add-canvas-btn').style.display='none'
-    $('toolbar').style.display='none'
     $('panels').style.display='none'
+    $('delete-btn').style.display='none'
+    document.querySelectorAll('.tool-btn[data-tool]').forEach(btn=>{
+      if(!['select','hand','zoom'].includes(btn.dataset.tool)) btn.style.display='none'
+    })
+    document.querySelectorAll('.tool-group').forEach(group=>{
+      const visibleTools=[...group.querySelectorAll('.tool-btn[data-tool]')].filter(btn=>btn.style.display!=='none')
+      if(!visibleTools.length) group.style.display='none'
+      else group.querySelector('.tool-btn[data-primary-tool]').dataset.primaryTool=visibleTools[0].dataset.tool
+    })
     // hide context menu permanently
     document.getElementById('ctx-menu').style.display='none'
-    // block ALL mouse interaction except scroll zoom
+    // keep viewer navigation, block edit-only context actions
     document.addEventListener('contextmenu', e=>e.preventDefault(), true)
-    document.addEventListener('mousedown', e=>e.stopPropagation(), true)
-    document.addEventListener('dblclick', e=>e.stopPropagation(), true)
-    document.addEventListener('keydown', e=>e.stopPropagation(), true)
+    setTool('hand')
     showToast('View-only — zoom and pan only')
   } else if(ACCESS_MODE==='comment') {
     $('undo-btn').style.display='none'
