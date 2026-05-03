@@ -513,6 +513,14 @@ body.exporting-canvas .frame-label{display:none!important;}
 .share-link-box input{flex:1;min-width:0;background:var(--bg3);border:1px solid var(--border);
   border-radius:6px;padding:7px 9px;color:var(--text2);font-family:'Outfit',sans-serif;font-size:12px;outline:none;}
 .share-status{font-size:11px;color:var(--text2);margin-top:8px;line-height:1.4;}
+.share-preview{border:1px solid rgba(139,143,244,.24);background:rgba(108,113,240,.1);
+  border-radius:10px;padding:10px 11px;display:flex;flex-direction:column;gap:3px;}
+.share-preview strong{font-size:12px;color:var(--text);font-weight:600;}
+.share-preview span{font-size:11px;color:var(--text2);line-height:1.4;}
+.save-indicator{font-size:11px;color:var(--text3);margin-left:8px;display:flex;align-items:center;gap:4px;
+  min-width:76px;font-variant-numeric:tabular-nums;}
+.save-indicator.failed{color:var(--danger);font-weight:600;}
+.save-indicator.offline{color:var(--warn);font-weight:600;}
 
 /* SHORTCUTS MODAL */
 #shortcuts-modal .modal-box{width:480px;max-height:80vh;overflow-y:auto;}
@@ -592,7 +600,7 @@ body.exporting-canvas .frame-label{display:none!important;}
     <button class="tb-btn" id="reset-btn">Reset</button>
     <div class="tb-sep"></div>
     <button class="tb-btn" id="url-btn">🔗 URL</button>
-    <span id="save-indicator" style="font-size:11px;color:#4a4a60;margin-left:8px;">Saved</span>
+    <span id="save-indicator" class="save-indicator">Saved</span>
     <button class="tb-btn" id="share-btn">🔗 Share</button>
     <button class="tb-btn" id="export-btn">⬇ Export</button>
     <button class="tb-btn primary" id="upload-btn">+ Image</button>
@@ -1126,6 +1134,7 @@ body.exporting-canvas .frame-label{display:none!important;}
         <option value="edit">Can edit</option>
       </select>
     </div>
+    <div class="share-preview" id="share-preview"></div>
     <div class="share-link-box">
       <input id="share-link-input" readonly placeholder="No shared link yet">
       <button class="modal-btn" id="share-copy-existing" style="padding:7px 10px;">Copy</button>
@@ -4682,22 +4691,27 @@ async function saveStateOnly(){
   if(SHARE_TOKEN&&ACCESS_MODE==='view') return
   const filter = canvasRestFilter()
   if(!filter) return
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/canvases?${filter}`,{
-    method:'PATCH',
-    headers:{
-      'Content-Type':'application/json',
-      'apikey':SUPABASE_KEY,
-      'Authorization':`Bearer ${SUPABASE_KEY}`,
-      'Prefer':'return=minimal'
-    },
-    body:JSON.stringify({state:{
-      canvases:state.canvases,nextId:state.nextId,
-      nextGroupId:state.nextGroupId,shapeDefaults:state.shapeDefaults,
-      minimapEnabled:state.minimapEnabled
-    }})
-  })
-  if(res.ok) showSaveIndicator('saved')
-  else showSaveIndicator('error')
+  if(!navigator.onLine){showSaveIndicator('offline');return}
+  try{
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/canvases?${filter}`,{
+      method:'PATCH',
+      headers:{
+        'Content-Type':'application/json',
+        'apikey':SUPABASE_KEY,
+        'Authorization':`Bearer ${SUPABASE_KEY}`,
+        'Prefer':'return=minimal'
+      },
+      body:JSON.stringify({state:{
+        canvases:state.canvases,nextId:state.nextId,
+        nextGroupId:state.nextGroupId,shapeDefaults:state.shapeDefaults,
+        minimapEnabled:state.minimapEnabled
+      }})
+    })
+    if(res.ok) showSaveIndicator('saved')
+    else showSaveIndicator('error')
+  }catch(err){
+    showSaveIndicator(navigator.onLine?'error':'offline')
+  }
 }
 
 // Thumbnail work is intentionally separate from the 2s state autosave.
@@ -4823,10 +4837,14 @@ async function loadCanvas(){
 function showSaveIndicator(status){
   const el=document.getElementById('save-indicator')
   if(!el) return
-  if(status==='saving'){el.textContent='● Saving...';el.style.color='#f0a840'}
-  if(status==='saved') {el.textContent='✓ Saved';el.style.color='#52c97a'}
-  if(status==='error') {el.textContent='✕ Error';el.style.color='#e05252'}
+  el.classList.remove('failed','offline')
+  if(status==='saving'){el.textContent='Saving...';el.style.color='#f0a840'}
+  if(status==='saved') {el.textContent='Saved';el.style.color='#52c97a'}
+  if(status==='error') {el.textContent='Save failed';el.style.color='';el.classList.add('failed')}
+  if(status==='offline') {el.textContent='Offline';el.style.color='';el.classList.add('offline')}
 }
+window.addEventListener('offline',()=>showSaveIndicator('offline'))
+window.addEventListener('online',()=>showSaveIndicator('saving'))
 
 // Panel resize
 const panelResize = document.getElementById('panel-resize')
@@ -4906,6 +4924,7 @@ $('share-btn').addEventListener('click', () => {
   renderShareModal()
   $('share-modal').classList.add('show')
 })
+$('share-mode').addEventListener('change',renderSharePreview)
 $('share-cancel').addEventListener('click', ()=>$('share-modal').classList.remove('show'))
 $('share-copy-existing').addEventListener('click',()=>{
   if(!state.shareToken){showToast('No shared link yet');return}
@@ -4941,11 +4960,21 @@ function renderShareModal(){
   $('share-status').textContent=token
     ? `Sharing is on. Current permission: ${shareLabel(state.sharePermission)}.`
     : 'Create a link to share this canvas.'
+  renderSharePreview()
   $('share-disable').disabled=!token
   $('share-copy-existing').disabled=!token
 }
 function shareLabel(mode){
   return mode==='comment'?'Can comment':mode==='edit'?'Can edit':'View only'
+}
+function shareDescription(mode){
+  if(mode==='edit') return 'Anyone with the link can open and edit this canvas.'
+  if(mode==='comment') return 'Anyone with the link can view and add comment pins only.'
+  return 'Anyone with the link can view this canvas without logging in.'
+}
+function renderSharePreview(){
+  const mode=validSharePermission($('share-mode').value)
+  $('share-preview').innerHTML=`<strong>${shareLabel(mode)}</strong><span>${shareDescription(mode)}</span>`
 }
 async function updateShareSettings(token,permission){
   return fetch(`${SUPABASE_URL}/rest/v1/canvases?id=eq.${CANVAS_ID}`, {
