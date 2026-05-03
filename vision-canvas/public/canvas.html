@@ -1161,6 +1161,7 @@ let state = {
   shareName:'',
   cropAdjustId:null,
   booleanAdjustId:null,
+  booleanPartIndex:null,
 };
 
 function ac(){ return state.canvases.find(c=>c.id===state.activeId); }
@@ -1293,7 +1294,8 @@ function isShapeTool(tool){
 function booleanSelection(op){
   const selected=selAll();
   if(selected.length===1&&selected[0].type==='shape'&&selected[0].shape==='boolean'){
-    updateBooleanOperation(selected[0],op,true);
+    if(op==='flatten') flattenBooleanShape(selected[0],true);
+    else updateBooleanOperation(selected[0],op,true);
     return;
   }
   addBooleanShape(op,selected);
@@ -1301,10 +1303,11 @@ function booleanSelection(op){
 function booleanSelectionReady(){
   const selected=selAll();
   return (selected.length===1&&selected[0].type==='shape'&&selected[0].shape==='boolean')||
-    selected.filter(i=>i.type==='shape'&&!['line','arrow','boolean'].includes(i.shape)).length>1;
+    selected.filter(i=>i.type==='shape'&&!['line','arrow','boolean','booleanFlat'].includes(i.shape)).length>1;
 }
 function updateBooleanOperation(item,op,withHistory=false){
   if(!item||item.type!=='shape'||item.shape!=='boolean'||item.locked||!canEditAll()) return;
+  if(op==='flatten'){flattenBooleanShape(item,withHistory);return;}
   if(withHistory) pushHistory();
   item.booleanOp=op;
   item.name=`${op[0].toUpperCase()+op.slice(1)} ${item.id}`;
@@ -1312,10 +1315,22 @@ function updateBooleanOperation(item,op,withHistory=false){
   if(el) applyItemStyle(el,item);
   renderLayers(); updateProps(); scheduleSave(); scheduleThumb();
 }
+function ensureBooleanChildren(item){
+  if(!item||item.shape!=='boolean') return [];
+  item.booleanShapes=(item.booleanShapes||[]).map((s,idx)=>({
+    childId:s.childId||`${item.id}-${idx+1}`,
+    name:s.name||`${SHAPE_LABELS[s.shape]||'Shape'} ${idx+1}`,
+    z:s.z??idx,
+    ...s
+  }));
+  item.booleanShapes.sort((a,b)=>(b.z??0)-(a.z??0));
+  return item.booleanShapes;
+}
 function clearBooleanAdjustMode(){
   const id=state.booleanAdjustId;
   if(id!==null){
     state.booleanAdjustId=null;
+    state.booleanPartIndex=null;
     const item=getItem(id),el=canvasWorld.querySelector(`[data-id="${id}"]`);
     if(item&&el) applyItemStyle(el,item);
   }
@@ -1336,16 +1351,52 @@ function pickBooleanPart(item,clientX,clientY){
 }
 function beginBooleanPartAdjust(item,clientX,clientY,withHistory=true,keepMode=false){
   if(!item||item.type!=='shape'||item.shape!=='boolean'||item.locked||!canEditAll()) return false;
-  const idx=pickBooleanPart(item,clientX,clientY);
+  ensureBooleanChildren(item);
+  const idx=state.booleanAdjustId===item.id&&state.booleanPartIndex!==null
+    ? state.booleanPartIndex
+    : pickBooleanPart(item,clientX,clientY);
   if(idx<0) return false;
   if(withHistory) pushHistory();
   state.booleanAdjustId=item.id;
+  state.booleanPartIndex=idx;
   interaction={type:'booleanpart',itemId:item.id,partIndex:idx,startMX:clientX,startMY:clientY,
     startShapes:item.booleanShapes.map(s=>({...s})),moved:false,keepMode};
   const el=canvasWorld.querySelector(`[data-id="${item.id}"]`);
   if(el) applyItemStyle(el,item);
   updateProps(); showToast('Drag boolean part to adjust');
   return true;
+}
+function releaseBooleanShape(item){
+  if(!item||item.type!=='shape'||item.shape!=='boolean'||!canEditAll()) return;
+  pushHistory();
+  ensureBooleanChildren(item);
+  const children=item.booleanShapes.map(s=>{
+    const id=++state.nextId;
+    return {id,type:'shape',shape:s.shape,name:s.name||`${SHAPE_LABELS[s.shape]||'Shape'} ${id}`,
+      x:item.x+s.x/100*item.w,y:item.y+s.y/100*item.h,w:s.w/100*item.w,h:s.h/100*item.h,
+      rot:item.rot||0,opacity:item.opacity??100,visible:item.visible!==false,locked:false,flipH:false,flipV:false,
+      z:maxZ()+1+(s.z||0),blendMode:item.blendMode||'normal',shadow:false,shadowBlur:18,shadowY:10,
+      shadowColor:'rgba(0,0,0,.35)',radius:s.radius||0,fill:item.fill,stroke:item.stroke,strokeWidth:item.strokeWidth};
+  });
+  ac().items=ac().items.filter(i=>i.id!==item.id).concat(children);
+  state.selectedIds=children.map(i=>i.id);
+  clearBooleanAdjustMode();
+  renderItems(); renderLayers(); updateSelectionOverlay(); updateMultiSelBox(); updateProps(); scheduleSave(); scheduleThumb();
+  showToast('Boolean released');
+}
+function flattenBooleanShape(item,withHistory=false){
+  if(!item||item.type!=='shape'||item.shape!=='boolean'||!canEditAll()) return;
+  if(withHistory) pushHistory();
+  item.shape='booleanFlat';
+  item.name=`Flattened ${item.id}`;
+  item.flattenedPaths=(item.booleanShapes||[]).map(boolShapePath);
+  delete item.booleanShapes;
+  delete item.booleanOp;
+  clearBooleanAdjustMode();
+  const el=canvasWorld.querySelector(`[data-id="${item.id}"]`);
+  if(el) applyItemStyle(el,item);
+  renderLayers(); updateProps(); scheduleSave(); scheduleThumb();
+  showToast('Flattened');
 }
 function addShapeItem(shape,x,y,w=160,h=110,flipH=false,flipV=false){
   if(!canEditAll()) return;
@@ -1367,7 +1418,7 @@ function addShapeItem(shape,x,y,w=160,h=110,flipH=false,flipV=false){
 }
 function addBooleanShape(op,sourceItems){
   if(!canEditAll()) return;
-  const items=sourceItems.filter(i=>i.type==='shape'&&!['line','arrow','boolean'].includes(i.shape));
+  const items=sourceItems.filter(i=>i.type==='shape'&&!['line','arrow','boolean','booleanFlat'].includes(i.shape));
   if(items.length<2){showToast('Select 2+ filled shapes');return;}
   pushHistory();
   const minX=Math.min(...items.map(i=>i.x)),minY=Math.min(...items.map(i=>i.y));
@@ -1376,11 +1427,14 @@ function addBooleanShape(op,sourceItems){
   const id=++state.nextId;
   const base=[...items].sort((a,b)=>a.z-b.z)[0];
   const boolShapes=items.map(i=>({
+    childId:`${id}-${i.id}`,name:i.name||`${SHAPE_LABELS[i.shape]||'Shape'} ${i.id}`,z:i.z,
     shape:i.shape,x:(i.x-minX)/bw*100,y:(i.y-minY)/bh*100,
     w:i.w/bw*100,h:i.h/bh*100,radius:i.radius||0
   }));
   ac().items=ac().items.filter(i=>!items.some(s=>s.id===i.id));
-  ac().items.push({id,type:'shape',shape:'boolean',booleanOp:op,booleanShapes:boolShapes,
+  const isFlatten=op==='flatten';
+  ac().items.push({id,type:'shape',shape:isFlatten?'booleanFlat':'boolean',booleanOp:isFlatten?undefined:op,
+    booleanShapes:isFlatten?undefined:boolShapes,flattenedPaths:isFlatten?boolShapes.map(boolShapePath):undefined,
     name:`${op[0].toUpperCase()+op.slice(1)} ${id}`,
     x:minX,y:minY,w:bw,h:bh,rot:0,opacity:100,visible:true,locked:false,
     flipH:false,flipV:false,z:maxZ()+1,blendMode:'normal',shadow:false,shadowBlur:18,shadowY:10,
@@ -1410,6 +1464,7 @@ function deleteItems(ids){
   if(!ids.length) return;
   pushHistory();
   ids.forEach(id=>{ ac().items=ac().items.filter(i=>i.id!==id); });
+  if(ids.includes(state.booleanAdjustId)) clearBooleanAdjustMode();
   state.selectedIds=state.selectedIds.filter(id=>!ids.includes(id));
   renderItems(); renderLayers();
   updateSelectionOverlay(); updateMultiSelBox();
@@ -1427,6 +1482,8 @@ function duplicateItems(ids){
     const nid=++state.nextId;
     const copy={...src,id:nid,x:src.x+20,y:src.y+20,
       z:maxZ()+1,name:src.name+' copy'};
+    if(src.booleanShapes) copy.booleanShapes=src.booleanShapes.map(s=>({...s,childId:`${nid}-${s.childId||s.name||Math.random()}`}));
+    if(src.flattenedPaths) copy.flattenedPaths=[...src.flattenedPaths];
     if(src.groupId){
       groupMap[src.groupId]=groupMap[src.groupId]||state.nextGroupId++;
       copy.groupId=groupMap[src.groupId];
@@ -1451,6 +1508,11 @@ function groupSelection(){
 }
 
 function ungroupSelection(){
+  const bool=selFirst();
+  if(bool?.type==='shape'&&bool.shape==='boolean'){
+    releaseBooleanShape(bool);
+    return;
+  }
   const groups=new Set(selAll().map(i=>i.groupId).filter(Boolean));
   if(!groups.size){showToast('No group selected');return;}
   pushHistory();
@@ -1812,6 +1874,11 @@ function boolShapePath(s){
   return `M ${x} ${y} H ${x+w} V ${y+h} H ${x} Z`;
 }
 function booleanShapeMarkup(item,common){
+  if(item.shape==='booleanFlat'){
+    const paths=item.flattenedPaths||[];
+    return `<svg class="shape-content" viewBox="0 0 100 100" preserveAspectRatio="none">${paths.map(d=>`<path d="${d}" ${common}/>`).join('')}</svg>`;
+  }
+  ensureBooleanChildren(item);
   const paths=(item.booleanShapes||[]).map(boolShapePath);
   const id=`bool-${item.id}`;
   if((item.booleanOp==='subtract'||item.booleanOp==='exclude')&&paths.length){
@@ -1827,7 +1894,7 @@ function shapeMarkup(item){
   const fill=item.fill||'transparent';
   const sw=item.strokeWidth||2;
   const common=`fill="${fill}" stroke="${stroke}" stroke-width="${sw}" vector-effect="non-scaling-stroke"`;
-  if(item.shape==='boolean') return booleanShapeMarkup(item,common);
+  if(item.shape==='boolean'||item.shape==='booleanFlat') return booleanShapeMarkup(item,common);
   if(item.shape==='line'){
     return `<svg class="shape-content" viewBox="0 0 100 100" preserveAspectRatio="none"><line x1="4" y1="96" x2="96" y2="4" ${common} stroke-linecap="round"/></svg>`;
   }
@@ -2329,8 +2396,16 @@ function updateProps(){
   if(showDefaults) updateShapeDefaultsUI();
   if(count>1) $('multi-sel-msg').textContent=`${count} items selected`;
   if(!item) return;
-  $('px').value=Math.round(item.x); $('py').value=Math.round(item.y);
-  $('pw').value=Math.round(item.w); $('ph_').value=Math.round(item.h);
+  const boolPart=item.shape==='boolean'&&state.booleanAdjustId===item.id&&state.booleanPartIndex!==null
+    ? ensureBooleanChildren(item)[state.booleanPartIndex]
+    : null;
+  if(boolPart){
+    $('px').value=Math.round(item.x+boolPart.x/100*item.w); $('py').value=Math.round(item.y+boolPart.y/100*item.h);
+    $('pw').value=Math.round(boolPart.w/100*item.w); $('ph_').value=Math.round(boolPart.h/100*item.h);
+  }else{
+    $('px').value=Math.round(item.x); $('py').value=Math.round(item.y);
+    $('pw').value=Math.round(item.w); $('ph_').value=Math.round(item.h);
+  }
   $('pr').value=Math.round(item.rot); $('pz').value=item.z;
   $('ratio-btn').classList.toggle('active',!!state.lockAspect);
   $('popacity').value=item.opacity; $('opacity-val').textContent=item.opacity+'%';
@@ -2420,6 +2495,17 @@ function bindPropNum(id,key){
     const item=selFirst(); if(!item||item.locked) return;
     pushHistory();
     const next=parseFloat(e.target.value)||0;
+    if(item.shape==='boolean'&&state.booleanAdjustId===item.id&&state.booleanPartIndex!==null&&['x','y','w','h'].includes(key)){
+      const part=ensureBooleanChildren(item)[state.booleanPartIndex]; if(!part) return;
+      if(key==='x') part.x=(next-item.x)/Math.max(1,item.w)*100;
+      if(key==='y') part.y=(next-item.y)/Math.max(1,item.h)*100;
+      if(key==='w') part.w=Math.max(1,next)/Math.max(1,item.w)*100;
+      if(key==='h') part.h=Math.max(1,next)/Math.max(1,item.h)*100;
+      const el=canvasWorld.querySelector(`[data-id="${item.id}"]`);
+      if(el) applyItemStyle(el,item);
+      updateSelectionOverlay(); updateMultiSelBox(); updateProps(); renderLayers(); scheduleSave(); scheduleThumb();
+      return;
+    }
     if(state.lockAspect&&(key==='w'||key==='h')&&item.w>0&&item.h>0){
       const ratio=item.w/item.h;
       if(key==='w'){item.w=Math.max(10,next); item.h=Math.max(10,item.w/ratio);}
@@ -2724,6 +2810,7 @@ function layerThumb(item){
   if(item.type==='frame') return 'F';
   if(item.type==='shape'){
     if(item.shape==='boolean') return 'B';
+    if(item.shape==='booleanFlat') return 'F';
     const icons={rect:'▭',line:'╱',arrow:'↗',ellipse:'○',polygon:'△',star:'☆'};
     return icons[item.shape]||'□';
   }
@@ -2766,8 +2853,32 @@ function renderLayers(){
       </div>
     </div>
   `;
+  const booleanChildRow=(parent,part,idx)=>`
+    <div class="layer-item group-child boolean-child${state.booleanAdjustId===parent.id&&state.booleanPartIndex===idx?' selected':''}"
+         data-bool-parent="${parent.id}" data-bool-part="${idx}" draggable="true">
+      <div class="layer-drag-handle" title="Drag to reorder">â ¿</div>
+      <div class="layer-thumb shape-thumb">${layerThumb({type:'shape',shape:part.shape})}</div>
+      <div class="layer-name-el">${part.name||`${SHAPE_LABELS[part.shape]||'Shape'} ${idx+1}`}</div>
+      <div class="layer-actions"><span class="layer-icon">${idx+1}</span></div>
+    </div>
+  `;
   const renderedGroups=new Set(), rows=[];
   items.forEach(item=>{
+    if(item.type==='shape'&&item.shape==='boolean'){
+      const children=ensureBooleanChildren(item);
+      const key=`bool-${item.id}`;
+      const collapsed=!!state.collapsedGroups[key];
+      rows.push(`
+        <div class="layer-item group-row${state.selectedIds.includes(item.id)?' selected':''}" data-bool="${item.id}" draggable="true">
+          <div class="layer-caret">${collapsed?'+':'-'}</div>
+          <div class="layer-thumb shape-thumb">B</div>
+          <div class="layer-name-el" data-name="${item.id}" contenteditable="false">${item.name}</div>
+          <div class="layer-actions"><span class="layer-icon">${children.length}</span></div>
+        </div>
+      `);
+      if(!collapsed) children.forEach((child,idx)=>rows.push(booleanChildRow(item,child,idx)));
+      return;
+    }
     if(item.groupId){
       const gid=item.groupId;
       if(renderedGroups.has(gid)) return;
@@ -2792,6 +2903,31 @@ function renderLayers(){
   list.querySelectorAll('.layer-item').forEach(el=>{
     el.addEventListener('click',e=>{
       if(e.target.closest('.layer-actions')||e.target.closest('[data-name]')) return;
+      if(el.dataset.bool){
+        const id=parseInt(el.dataset.bool,10);
+        if(e.target.closest('.layer-caret')){
+          const key=`bool-${id}`;
+          state.collapsedGroups[key]=!state.collapsedGroups[key];
+          renderLayers();
+          return;
+        }
+        state.selectedIds=[id];
+        clearBooleanAdjustMode();
+        renderItemsHighlight(); updateSelectionOverlay();
+        updateMultiSelBox(); updateProps(); renderLayers();
+        return;
+      }
+      if(el.dataset.boolParent){
+        const id=parseInt(el.dataset.boolParent,10),idx=parseInt(el.dataset.boolPart,10);
+        state.selectedIds=[id];
+        state.booleanAdjustId=id;
+        state.booleanPartIndex=idx;
+        const item=getItem(id),node=canvasWorld.querySelector(`[data-id="${id}"]`);
+        if(item&&node) applyItemStyle(node,item);
+        renderItemsHighlight(); updateSelectionOverlay();
+        updateMultiSelBox(); updateProps(); renderLayers();
+        return;
+      }
       if(el.dataset.group){
         const gid=parseInt(el.dataset.group,10);
         if(e.target.closest('.layer-caret')){
@@ -2820,6 +2956,11 @@ function renderLayers(){
 
     // Drag to reorder
     el.addEventListener('dragstart',e=>{
+      if(el.dataset.boolParent){
+        layerDrag={boolParent:parseInt(el.dataset.boolParent,10),partIndex:parseInt(el.dataset.boolPart,10)};
+        el.style.opacity='.5';
+        return;
+      }
       const ids=layerUnitIds(el);
       if(!ids.length){e.preventDefault();return;}
       layerDrag.ids=ids;
@@ -2833,6 +2974,11 @@ function renderLayers(){
     });
     el.addEventListener('drop',e=>{
       e.preventDefault();
+      if(layerDrag.boolParent&&el.dataset.boolParent&&parseInt(el.dataset.boolParent,10)===layerDrag.boolParent){
+        moveBooleanPart(layerDrag.boolParent,layerDrag.partIndex,parseInt(el.dataset.boolPart,10));
+        clearLayerDragOver();
+        return;
+      }
       const targetIds=layerUnitIds(el);
       if(layerDrag.ids?.length&&targetIds.length) moveLayerUnit(layerDrag.ids,targetIds);
       clearLayerDragOver();
@@ -2894,9 +3040,10 @@ function renderLayers(){
 
 function clearLayerDragOver(){
   document.querySelectorAll('.layer-item.drag-over').forEach(el=>el.classList.remove('drag-over'));
-  layerDrag.ids=null;
+  layerDrag={ids:null,startY:0};
 }
 function layerUnitIds(el){
+  if(el.dataset.bool) return [parseInt(el.dataset.bool,10)];
   if(el.dataset.group){
     const gid=parseInt(el.dataset.group,10);
     return ac().items.filter(i=>i.groupId===gid).sort((a,b)=>b.z-a.z).map(i=>i.id);
@@ -2917,6 +3064,21 @@ function moveLayerUnit(dragIds,targetIds){
   const zValues=ordered.map(i=>i.z).sort((a,b)=>b-a);
   next.forEach((item,idx)=>{item.z=zValues[idx];});
   renderItems(); renderLayers(); scheduleSave(); scheduleThumb();
+}
+function moveBooleanPart(parentId,fromIdx,toIdx){
+  const item=getItem(parentId);
+  if(!item||item.shape!=='boolean'||fromIdx===toIdx) return;
+  pushHistory();
+  const parts=ensureBooleanChildren(item);
+  const [moved]=parts.splice(fromIdx,1);
+  parts.splice(toIdx,0,moved);
+  parts.forEach((part,idx)=>part.z=parts.length-idx);
+  item.booleanShapes=parts;
+  state.booleanAdjustId=parentId;
+  state.booleanPartIndex=toIdx;
+  const el=canvasWorld.querySelector(`[data-id="${parentId}"]`);
+  if(el) applyItemStyle(el,item);
+  renderLayers(); updateProps(); scheduleSave(); scheduleThumb();
 }
 
 // ── BACKGROUND ────────────────────────────────────────────────────
