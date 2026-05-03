@@ -521,6 +521,29 @@ body.exporting-canvas .frame-label{display:none!important;}
   min-width:76px;font-variant-numeric:tabular-nums;}
 .save-indicator.failed{color:var(--danger);font-weight:600;}
 .save-indicator.offline{color:var(--warn);font-weight:600;}
+.activity-badge{height:24px;padding:0 8px;border-radius:999px;border:1px solid var(--border);
+  background:rgba(255,255,255,.035);color:var(--text2);font-size:10.5px;font-weight:600;
+  display:flex;align-items:center;gap:5px;white-space:nowrap;}
+.activity-badge::before{content:'';width:6px;height:6px;border-radius:50%;background:var(--accent3);
+  box-shadow:0 0 0 3px rgba(34,211,238,.12);}
+.activity-badge.view{color:#8fdcff;border-color:rgba(34,211,238,.28);background:rgba(34,211,238,.08);}
+.activity-badge.comment{color:#ffd36a;border-color:rgba(240,168,64,.28);background:rgba(240,168,64,.08);}
+.activity-badge.edit{color:#a9ffc5;border-color:rgba(82,201,122,.28);background:rgba(82,201,122,.08);}
+.activity-badge.owner{color:#c9c7ff;border-color:rgba(139,143,244,.28);background:rgba(108,113,240,.1);}
+.activity-badge.comment::before{background:var(--warn);box-shadow:0 0 0 3px rgba(240,168,64,.12);}
+.activity-badge.edit::before{background:var(--success);box-shadow:0 0 0 3px rgba(82,201,122,.12);}
+.activity-badge.owner::before{background:var(--accent2);box-shadow:0 0 0 3px rgba(108,113,240,.16);}
+.share-modal-box{width:420px;max-width:calc(100vw - 28px);}
+.share-mode-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:12px 0;}
+.share-mode-card{border:1px solid var(--border);background:rgba(255,255,255,.025);color:var(--text2);
+  border-radius:10px;padding:10px;cursor:pointer;text-align:left;font-family:'Outfit',sans-serif;
+  transition:.15s;min-height:94px;display:flex;flex-direction:column;gap:6px;}
+.share-mode-card:hover{background:rgba(255,255,255,.055);border-color:rgba(255,255,255,.18);}
+.share-mode-card.active{border-color:rgba(139,143,244,.55);background:linear-gradient(135deg,rgba(108,113,240,.22),rgba(34,211,238,.08));color:var(--text);}
+.share-mode-card strong{font-size:12px;color:inherit;font-weight:700;}
+.share-mode-card span{font-size:10.5px;line-height:1.35;color:var(--text2);}
+.share-mode-card .share-mode-icon{font-size:15px;line-height:1;}
+.share-link-box input.has-link{color:var(--text);border-color:rgba(82,201,122,.28);}
 
 /* SHORTCUTS MODAL */
 #shortcuts-modal .modal-box{width:480px;max-height:80vh;overflow-y:auto;}
@@ -600,6 +623,7 @@ body.exporting-canvas .frame-label{display:none!important;}
     <button class="tb-btn" id="reset-btn">Reset</button>
     <div class="tb-sep"></div>
     <button class="tb-btn" id="url-btn">🔗 URL</button>
+    <span id="activity-badge" class="activity-badge owner">Owner</span>
     <span id="save-indicator" class="save-indicator">Saved</span>
     <button class="tb-btn" id="share-btn">🔗 Share</button>
     <button class="tb-btn" id="export-btn">⬇ Export</button>
@@ -1124,7 +1148,7 @@ body.exporting-canvas .frame-label{display:none!important;}
 
 <!-- SHARE MODAL -->
 <div class="modal-overlay" id="share-modal">
-  <div class="modal-box" style="width:340px;">
+  <div class="modal-box share-modal-box">
     <div class="modal-title">Share Canvas</div>
     <div class="modal-row">
       <span>Permission</span>
@@ -1133,6 +1157,23 @@ body.exporting-canvas .frame-label{display:none!important;}
         <option value="comment">Can comment</option>
         <option value="edit">Can edit</option>
       </select>
+    </div>
+    <div class="share-mode-grid" id="share-mode-grid">
+      <button class="share-mode-card" data-share-card="view">
+        <span class="share-mode-icon">View</span>
+        <strong>View only</strong>
+        <span>Open without login. Pan, zoom, and inspect only.</span>
+      </button>
+      <button class="share-mode-card" data-share-card="comment">
+        <span class="share-mode-icon">Comment</span>
+        <strong>Can comment</strong>
+        <span>Add comment pins without changing design content.</span>
+      </button>
+      <button class="share-mode-card" data-share-card="edit">
+        <span class="share-mode-icon">Edit</span>
+        <strong>Can edit</strong>
+        <span>Trusted people can change and save this canvas.</span>
+      </button>
     </div>
     <div class="share-preview" id="share-preview"></div>
     <div class="share-link-box">
@@ -4940,6 +4981,28 @@ function showSaveIndicator(status){
   if(status==='error') {el.textContent='Save failed';el.style.color='';el.classList.add('failed')}
   if(status==='offline') {el.textContent='Offline';el.style.color='';el.classList.add('offline')}
 }
+function updateActivityBadge(){
+  const el=$('activity-badge')
+  if(!el) return
+  el.classList.remove('owner','view','comment','edit')
+  if(!SHARE_TOKEN){
+    el.textContent='Owner'
+    el.classList.add('owner')
+    el.title='You own this canvas'
+  }else if(ACCESS_MODE==='view'){
+    el.textContent='Viewing link'
+    el.classList.add('view')
+    el.title='Shared view-only mode'
+  }else if(ACCESS_MODE==='comment'){
+    el.textContent='Commenting link'
+    el.classList.add('comment')
+    el.title='Shared comment mode'
+  }else{
+    el.textContent='Editing link'
+    el.classList.add('edit')
+    el.title='Shared edit mode'
+  }
+}
 window.addEventListener('offline',()=>showSaveIndicator('offline'))
 window.addEventListener('online',()=>{
   if(hasUnsavedChanges) saveStateOnly()
@@ -4979,6 +5042,7 @@ document.addEventListener('mouseup', () => {
 async function init(){
   initBgPresets(); buildAlignTools();
   await loadCanvas();
+  updateActivityBadge();
   renderAll();
   if(ac().items.length) setTimeout(fitAll, 300);
   
@@ -5037,6 +5101,12 @@ $('share-btn').addEventListener('click', () => {
 })
 $('share-mode').addEventListener('change',renderSharePreview)
 $('share-cancel').addEventListener('click', ()=>$('share-modal').classList.remove('show'))
+document.querySelectorAll('[data-share-card]').forEach(card=>{
+  card.addEventListener('click',()=>{
+    $('share-mode').value=card.dataset.shareCard
+    renderSharePreview()
+  })
+})
 $('share-copy-existing').addEventListener('click',()=>{
   if(!state.shareToken){showToast('No shared link yet');return}
   navigator.clipboard.writeText(shareUrlForToken(state.shareToken))
@@ -5047,7 +5117,7 @@ $('share-disable').addEventListener('click',async()=>{
   const res=await updateShareSettings(null,'view')
   if(res.ok){
     state.shareToken=null; state.sharePermission='view'
-    renderShareModal(); showToast('Sharing disabled')
+    renderShareModal(); updateActivityBadge(); showToast('Sharing disabled')
   }else showToast('Could not disable sharing')
 })
 $('share-copy').addEventListener('click', async () => {
@@ -5060,6 +5130,7 @@ $('share-copy').addEventListener('click', async () => {
     state.shareToken=token; state.sharePermission=mode
     const shareUrl = shareUrlForToken(token)
     navigator.clipboard.writeText(shareUrl)
+    updateActivityBadge()
     renderShareModal()
     showToast(`${mode==='view'?'View':mode==='comment'?'Comment':'Edit'} link copied!`)
   }else showToast('Could not update share link')
@@ -5069,9 +5140,10 @@ function renderShareModal(){
   const token=state.shareToken
   $('share-mode').value=validSharePermission(state.sharePermission)
   $('share-link-input').value=shareUrlForToken(token)
+  $('share-link-input').classList.toggle('has-link',!!token)
   $('share-status').textContent=token
-    ? `Sharing is on. Current permission: ${shareLabel(state.sharePermission)}.`
-    : 'Create a link to share this canvas.'
+    ? `Link is active as ${shareLabel(state.sharePermission)}. Changing permission updates the same link.`
+    : 'Choose a permission, then Save & Copy to create a link.'
   renderSharePreview()
   $('share-disable').disabled=!token
   $('share-copy-existing').disabled=!token
@@ -5080,12 +5152,15 @@ function shareLabel(mode){
   return mode==='comment'?'Can comment':mode==='edit'?'Can edit':'View only'
 }
 function shareDescription(mode){
-  if(mode==='edit') return 'Anyone with the link can open and edit this canvas.'
-  if(mode==='comment') return 'Anyone with the link can view and add comment pins only.'
-  return 'Anyone with the link can view this canvas without logging in.'
+  if(mode==='edit') return 'Best for trusted collaborators. Anyone with this link can change and save the canvas.'
+  if(mode==='comment') return 'Good for feedback. Link holders can add comment pins without normal editing tools.'
+  return 'Best for review. Anyone with this link can view, pan, and zoom without logging in.'
 }
 function renderSharePreview(){
   const mode=validSharePermission($('share-mode').value)
+  document.querySelectorAll('[data-share-card]').forEach(card=>{
+    card.classList.toggle('active',card.dataset.shareCard===mode)
+  })
   $('share-preview').innerHTML=`<strong>${shareLabel(mode)}</strong><span>${shareDescription(mode)}</span>`
 }
 async function updateShareSettings(token,permission){
