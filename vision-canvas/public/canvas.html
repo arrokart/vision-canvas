@@ -3145,7 +3145,8 @@ function renderLayers(){
   // Click to select
   list.querySelectorAll('.layer-item').forEach(el=>{
     el.addEventListener('click',e=>{
-      if(e.target.closest('.layer-actions')||e.target.closest('[data-name]')) return;
+      const nameEl=e.target.closest('[data-name]');
+      if(e.target.closest('.layer-actions')||(nameEl&&nameEl.contentEditable==='true')) return;
       if(el.dataset.bool){
         const id=parseInt(el.dataset.bool,10);
         if(e.target.closest('.layer-caret')){
@@ -3307,6 +3308,7 @@ function applyLayerSelection(el,ids,e){
   if(!cleanIds.length) return;
   if(e.shiftKey){
     state.selectedIds=layerRangeIds(el);
+    lastLayerSelectIds=cleanIds;
   }else if(e.ctrlKey||e.metaKey){
     const selected=new Set(state.selectedIds);
     const allSelected=cleanIds.every(id=>selected.has(id));
@@ -3317,6 +3319,7 @@ function applyLayerSelection(el,ids,e){
     state.selectedIds=cleanIds;
     lastLayerSelectIds=cleanIds;
   }
+  state.selectedIds=state.selectedIds.filter(id=>getItem(id));
 }
 function layerDragIdsForUnit(unitIds){
   const selected=new Set(state.selectedIds);
