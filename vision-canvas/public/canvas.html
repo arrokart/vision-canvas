@@ -1235,6 +1235,13 @@ function selectionIdsForItem(item){ return item&&item.groupId?groupMembers(item.
 function clamp(value,min,max){ return Math.max(min,Math.min(max,Number(value)||0)); }
 function validSharePermission(value){ return ['view','comment','edit'].includes(value) ? value : 'view'; }
 function shareUrlForToken(token){ return token ? `${window.location.origin}/shared/${token}` : ''; }
+function createShareToken(){
+  if(window.crypto?.randomUUID) return window.crypto.randomUUID().replace(/-/g,'')
+  const bytes = new Uint8Array(24)
+  window.crypto?.getRandomValues?.(bytes)
+  if(bytes.some(Boolean)) return [...bytes].map(b=>b.toString(16).padStart(2,'0')).join('')
+  return `${Date.now().toString(36)}${Math.random().toString(36).slice(2)}${Math.random().toString(36).slice(2)}`
+}
 
 // ── HISTORY ───────────────────────────────────────────────────────
 function pushHistory(){
@@ -4677,13 +4684,17 @@ const SUPABASE_URL = 'https://tzzbinwvtuvjhynlmjzo.supabase.co'
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR6emJpbnd2dHV2amh5bmxtanpvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzcyMTQwNDgsImV4cCI6MjA5Mjc5MDA0OH0.J5evLhHjvW3hn280SelzkenehL1qj7uHjW8uG-3HvZY'
 
 const THUMB_SAVE_INTERVAL = 30000
-let saveTimer, thumbTimer, thumbInProgress = false, thumbDirty = false, lastThumbSave = 0
+let saveTimer, retrySaveTimer, thumbTimer, thumbInProgress = false, thumbDirty = false, lastThumbSave = 0
+let hasUnsavedChanges = false, saveInProgress = false, lastSaveAttempt = 0, saveFailureCount = 0
+let lastPersistedState = null
 function canvasRestFilter(){
   if(CANVAS_ID) return `id=eq.${encodeURIComponent(CANVAS_ID)}`
   if(SHARE_TOKEN) return `share_token=eq.${encodeURIComponent(SHARE_TOKEN)}`
   return ''
 }
 function scheduleSave(){
+  if(SHARE_TOKEN&&ACCESS_MODE==='view') return
+  hasUnsavedChanges = true
   clearTimeout(saveTimer)
   saveTimer = setTimeout(saveStateOnly, 2000)
   showSaveIndicator('saving')
@@ -4691,29 +4702,86 @@ function scheduleSave(){
 
 async function saveStateOnly(){
   if(SHARE_TOKEN&&ACCESS_MODE==='view') return
+  if(saveInProgress) return
   const filter = canvasRestFilter()
   if(!filter) return
-  if(!navigator.onLine){showSaveIndicator('offline');return}
+  if(!navigator.onLine){queueSaveRetry('offline');return}
+  saveInProgress = true
+  lastSaveAttempt = Date.now()
   try{
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/canvases?${filter}`,{
-      method:'PATCH',
+    const res = await patchCanvasState(buildPersistedState(), filter)
+    if(res.ok){
+      hasUnsavedChanges = false
+      saveFailureCount = 0
+      lastPersistedState = buildPersistedState()
+      clearSaveRetry()
+      showSaveIndicator('saved')
+    }
+    else queueSaveRetry('error')
+  }catch(err){
+    queueSaveRetry(navigator.onLine?'error':'offline')
+  }finally{
+    saveInProgress = false
+  }
+}
+
+async function patchCanvasState(nextState, filter){
+  if(SHARE_TOKEN&&ACCESS_MODE==='edit'){
+    const rpcRes = await fetch(`${SUPABASE_URL}/rest/v1/rpc/update_shared_canvas`,{
+      method:'POST',
       headers:{
         'Content-Type':'application/json',
         'apikey':SUPABASE_KEY,
-        'Authorization':`Bearer ${SUPABASE_KEY}`,
-        'Prefer':'return=minimal'
+        'Authorization':`Bearer ${SUPABASE_KEY}`
       },
-      body:JSON.stringify({state:{
-        canvases:state.canvases,nextId:state.nextId,
-        nextGroupId:state.nextGroupId,shapeDefaults:state.shapeDefaults,
-        minimapEnabled:state.minimapEnabled
-      }})
+      body:JSON.stringify({p_token:SHARE_TOKEN,p_state:nextState})
     })
-    if(res.ok) showSaveIndicator('saved')
-    else showSaveIndicator('error')
-  }catch(err){
-    showSaveIndicator(navigator.onLine?'error':'offline')
+    if(rpcRes.ok) return rpcRes
   }
+  return fetch(`${SUPABASE_URL}/rest/v1/canvases?${filter}`,{
+    method:'PATCH',
+    headers:{
+      'Content-Type':'application/json',
+      'apikey':SUPABASE_KEY,
+      'Authorization':`Bearer ${SUPABASE_KEY}`,
+      'Prefer':'return=minimal'
+    },
+    body:JSON.stringify({state:nextState})
+  })
+}
+
+function buildPersistedState(){
+  const nextState = {
+    canvases:state.canvases,nextId:state.nextId,
+    nextGroupId:state.nextGroupId,shapeDefaults:state.shapeDefaults,
+    minimapEnabled:state.minimapEnabled
+  }
+  if(SHARE_TOKEN&&ACCESS_MODE==='comment'&&lastPersistedState?.canvases){
+    const commentCanvases = JSON.parse(JSON.stringify(lastPersistedState.canvases))
+    state.canvases.forEach(canvas=>{
+      const target = commentCanvases.find(c=>c.id===canvas.id)
+      if(!target) return
+      const nonComments = (target.items||[]).filter(i=>i.type!=='comment')
+      const comments = (canvas.items||[]).filter(i=>i.type==='comment')
+      target.items = [...nonComments, ...comments]
+    })
+    return {...nextState, canvases:commentCanvases}
+  }
+  return nextState
+}
+
+function queueSaveRetry(status='error'){
+  hasUnsavedChanges = true
+  saveFailureCount += 1
+  showSaveIndicator(status)
+  clearTimeout(retrySaveTimer)
+  const delay = status==='offline' ? 5000 : Math.min(15000, 2000 * saveFailureCount)
+  retrySaveTimer = setTimeout(()=>{ if(hasUnsavedChanges) saveStateOnly() }, delay)
+}
+
+function clearSaveRetry(){
+  clearTimeout(retrySaveTimer)
+  retrySaveTimer = null
 }
 
 // Thumbnail work is intentionally separate from the 2s state autosave.
@@ -4806,11 +4874,7 @@ async function saveCanvasThumbnail(){
 async function loadCanvas(){
   const query = canvasRestFilter()
   if(!query) return
-  const res=await fetch(`${SUPABASE_URL}/rest/v1/canvases?${query}&select=state,name,share_token,share_permission`,{
-    headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${SUPABASE_KEY}`}
-  })
-  const data=await res.json()
-  const row=data[0]
+  const row=await fetchCanvasRow(query)
   if(row){
     state.shareToken=row.share_token||null
     state.sharePermission=validSharePermission(row.share_permission)
@@ -4833,7 +4897,34 @@ async function loadCanvas(){
       if(!c.future) c.future=[]
       if(!c.guides) c.guides={v:[],h:[]}
     })
+    lastPersistedState = buildPersistedState()
+    hasUnsavedChanges = false
   }
+}
+
+async function fetchCanvasRow(query){
+  if(SHARE_TOKEN){
+    try{
+      const rpcRes=await fetch(`${SUPABASE_URL}/rest/v1/rpc/get_shared_canvas`,{
+        method:'POST',
+        headers:{
+          'Content-Type':'application/json',
+          'apikey':SUPABASE_KEY,
+          'Authorization':`Bearer ${SUPABASE_KEY}`
+        },
+        body:JSON.stringify({p_token:SHARE_TOKEN})
+      })
+      if(rpcRes.ok){
+        const rpcData=await rpcRes.json()
+        return Array.isArray(rpcData)?rpcData[0]:rpcData
+      }
+    }catch(e){}
+  }
+  const res=await fetch(`${SUPABASE_URL}/rest/v1/canvases?${query}&select=state,name,share_token,share_permission`,{
+    headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${SUPABASE_KEY}`}
+  })
+  const data=await res.json()
+  return data[0]
 }
 
 function showSaveIndicator(status){
@@ -4846,7 +4937,15 @@ function showSaveIndicator(status){
   if(status==='offline') {el.textContent='Offline';el.style.color='';el.classList.add('offline')}
 }
 window.addEventListener('offline',()=>showSaveIndicator('offline'))
-window.addEventListener('online',()=>showSaveIndicator('saving'))
+window.addEventListener('online',()=>{
+  if(hasUnsavedChanges) saveStateOnly()
+  else showSaveIndicator('saved')
+})
+window.addEventListener('beforeunload',e=>{
+  if(!hasUnsavedChanges) return
+  e.preventDefault()
+  e.returnValue=''
+})
 
 // Panel resize
 const panelResize = document.getElementById('panel-resize')
@@ -4950,7 +5049,8 @@ $('share-disable').addEventListener('click',async()=>{
 $('share-copy').addEventListener('click', async () => {
   if(!CANVAS_ID) return
   const mode = validSharePermission($('share-mode').value)
-  const token = state.shareToken || Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2)
+  if(mode==='edit'&&!window.confirm('Anyone with this link can edit the canvas. Continue?')) return
+  const token = state.shareToken || createShareToken()
   const res = await updateShareSettings(token,mode)
   if(res.ok) {
     state.shareToken=token; state.sharePermission=mode
