@@ -240,7 +240,12 @@ export default function Dashboard({ user }: { user: any }) {
   }
 
   const deleteCanvas = async (id: string) => {
-    await supabase.from('canvases').update({ is_deleted: true }).eq('id', id)
+    const { error } = await supabase
+      .from('canvases')
+      .update({ is_deleted: true })
+      .eq('id', id)
+      .eq('user_id', user.id)
+    if (error) return console.warn('Could not delete canvas:', error.message)
     setCanvases(prev => prev.filter(c => c.id !== id))
     setStarredIds(prev => {
       const next = prev.filter(starredId => starredId !== id)
@@ -458,7 +463,12 @@ export default function Dashboard({ user }: { user: any }) {
                         onBlur={async e => {
                           const newName = e.currentTarget.textContent?.trim()
                           if (!newName || newName === c.name) return
-                          await supabase.from('canvases').update({ name: newName }).eq('id', c.id)
+                          const { error } = await supabase
+                            .from('canvases')
+                            .update({ name: newName })
+                            .eq('id', c.id)
+                            .eq('user_id', user.id)
+                          if (error) return console.warn('Could not rename canvas:', error.message)
                           setCanvases(prev => prev.map(x => x.id === c.id ? { ...x, name: newName } : x))
                         }}
                         onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); e.currentTarget.blur() } }}

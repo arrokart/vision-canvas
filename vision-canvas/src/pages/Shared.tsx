@@ -14,11 +14,16 @@ export default function Shared() {
         setNotFound(true)
         return
       }
-      const { data } = await supabase
-        .from('canvases')
-        .select('id, share_permission')
-        .eq('share_token', token)
-        .single()
+      let { data } = await supabase.rpc('get_shared_canvas', { p_token: token })
+      if (Array.isArray(data)) data = data[0]
+      if (!data) {
+        const fallback = await supabase
+          .from('canvases')
+          .select('id, share_permission')
+          .eq('share_token', token)
+          .single()
+        data = fallback.data
+      }
       if (data) {
         const permission = data.share_permission
         setMode(permission === 'comment' || permission === 'edit' ? permission : 'view')
