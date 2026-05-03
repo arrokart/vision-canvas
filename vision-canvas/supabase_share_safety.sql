@@ -39,7 +39,7 @@ using (auth.uid() = user_id);
 create or replace function public.get_shared_canvas(p_token text)
 returns table (
   id uuid,
-  state jsonb,
+  state text,
   name text,
   share_token text,
   share_permission text
@@ -56,18 +56,22 @@ as $$
 $$;
 
 create or replace function public.update_shared_canvas(p_token text, p_state jsonb)
-returns void
+returns boolean
 language plpgsql
 security definer
 set search_path = public
 as $$
+declare
+  updated_count integer;
 begin
   update public.canvases
-  set state = p_state,
+  set state = p_state::text,
       updated_at = now()
   where share_token = p_token
     and share_permission = 'edit'
     and coalesce(is_deleted, false) = false;
+  get diagnostics updated_count = row_count;
+  return updated_count > 0;
 end;
 $$;
 
