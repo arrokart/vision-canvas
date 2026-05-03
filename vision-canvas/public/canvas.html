@@ -5,6 +5,7 @@
 <title>Vision Canvas</title>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600&family=Syne:wght@600;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="/paper-full.min.js"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box;}
 :root{
@@ -1292,6 +1293,16 @@ function addCommentItem(x,y,text){
 
 const SHAPE_LABELS={rect:'Rectangle',line:'Line',arrow:'Arrow',ellipse:'Ellipse',polygon:'Polygon',star:'Star'};
 const SHAPE_TOOLS=new Set(Object.keys(SHAPE_LABELS));
+let paperScope=null;
+function getPaperScope(){
+  if(!window.paper) return null;
+  if(!paperScope){
+    paperScope=new paper.PaperScope();
+    paperScope.setup(document.createElement('canvas'));
+  }
+  paperScope.project.clear();
+  return paperScope;
+}
 function isShapeTool(tool){
   return SHAPE_TOOLS.has(tool);
 }
@@ -1355,6 +1366,42 @@ function pointInPoly(px,py,pts){
   }
   return inside;
 }
+function paperPathForShape(scope,s){
+  const x=s.x,y=s.y,w=Math.max(1,s.w),h=Math.max(1,s.h);
+  if(s.shape==='ellipse') return new scope.Path.Ellipse(new scope.Rectangle(x,y,w,h));
+  if(s.shape==='polygon') return new scope.Path({segments:[[x+w/2,y],[x+w,y+h],[x,y+h]],closed:true});
+  if(s.shape==='star'){
+    const pts=[[.5,0],[.61,.36],[.95,.36],[.67,.56],[.78,.9],[.5,.7],[.22,.9],[.33,.56],[.05,.36],[.39,.36]]
+      .map(p=>[x+p[0]*w,y+p[1]*h]);
+    return new scope.Path({segments:pts,closed:true});
+  }
+  const r=Math.max(0,Math.min(s.radius||0,w/2,h/2));
+  return new scope.Path.Rectangle(new scope.Rectangle(x,y,w,h),new scope.Size(r,r));
+}
+function paperBooleanResult(shapes,op){
+  const scope=getPaperScope();
+  if(!scope||!shapes.length) return null;
+  try{
+    const ordered=[...shapes].sort((a,b)=>(a.z??0)-(b.z??0));
+    const paths=ordered.map(s=>paperPathForShape(scope,s));
+    let result=paths[0];
+    if(op==='subtract') paths.slice(1).forEach(p=>{result=result.subtract(p);});
+    else if(op==='intersect') paths.slice(1).forEach(p=>{result=result.intersect(p);});
+    else if(op==='exclude') paths.slice(1).forEach(p=>{result=result.exclude(p);});
+    else paths.slice(1).forEach(p=>{result=result.unite(p);});
+    if(!result||result.isEmpty?.()) return null;
+    result.reduce?.();
+    const b=result.bounds;
+    if(!b||b.width<=0||b.height<=0) return null;
+    const normalized=result.clone();
+    normalized.translate(new scope.Point(-b.x,-b.y));
+    normalized.scale(100/b.width,100/b.height,new scope.Point(0,0));
+    return {bounds:{x:b.x,y:b.y,w:b.width,h:b.height},path:normalized.pathData};
+  }catch(err){
+    console.warn('Boolean engine fallback',err);
+    return null;
+  }
+}
 function booleanHit(shapes,op,x,y){
   const hits=shapes.map(s=>pointInBooleanShape(s,x,y));
   if(op==='subtract') return !!hits[0]&&!hits.slice(1).some(Boolean);
@@ -1389,10 +1436,12 @@ function normalizeBooleanBounds(item){
     x:item.x+s.x/100*item.w,y:item.y+s.y/100*item.h,
     w:s.w/100*item.w,h:s.h/100*item.h
   }));
-  const bounds=booleanResultBounds(abs,item.booleanOp||'union');
+  const result=paperBooleanResult(abs,item.booleanOp||'union');
+  const bounds=result?.bounds||booleanResultBounds(abs,item.booleanOp||'union');
   if(!bounds) return;
   const nx=bounds.x,ny=bounds.y,nw=Math.max(1,bounds.w),nh=Math.max(1,bounds.h);
   item.x=nx; item.y=ny; item.w=nw; item.h=nh;
+  item.resultPath=result?.path||'';
   item.booleanShapes=abs.map(s=>({
     ...s,
     x:(s.x-nx)/nw*100,y:(s.y-ny)/nh*100,
@@ -1464,9 +1513,10 @@ function flattenBooleanShape(item,withHistory=false){
   normalizeBooleanBounds(item);
   item.shape='booleanFlat';
   item.name=`Flattened ${item.id}`;
-  item.flattenedPaths=(item.booleanShapes||[]).map(boolShapePath);
+  item.flattenedPaths=[item.resultPath||paperBooleanResult(item.booleanShapes||[],item.booleanOp||'union')?.path||''];
   delete item.booleanShapes;
   delete item.booleanOp;
+  delete item.resultPath;
   clearBooleanAdjustMode();
   const el=canvasWorld.querySelector(`[data-id="${item.id}"]`);
   if(el) applyItemStyle(el,item);
@@ -1508,13 +1558,20 @@ function addBooleanShape(op,sourceItems){
   }));
   ac().items=ac().items.filter(i=>!items.some(s=>s.id===i.id));
   const isFlatten=op==='flatten';
-  const boolItem={id,type:'shape',shape:isFlatten?'booleanFlat':'boolean',booleanOp:isFlatten?undefined:op,
-    booleanShapes:isFlatten?undefined:boolShapes,flattenedPaths:isFlatten?boolShapes.map(boolShapePath):undefined,
+  const boolItem={id,type:'shape',shape:'boolean',booleanOp:isFlatten?'union':op,
+    booleanShapes:boolShapes,
     name:`${op[0].toUpperCase()+op.slice(1)} ${id}`,
     x:minX,y:minY,w:bw,h:bh,rot:0,opacity:100,visible:true,locked:false,
     flipH:false,flipV:false,z:maxZ()+1,blendMode:'normal',shadow:false,shadowBlur:18,shadowY:10,
     shadowColor:'rgba(0,0,0,.35)',radius:0,fill:base.fill||'#6c71f0',stroke:base.stroke||'#8b8ff4',strokeWidth:base.strokeWidth??2};
-  if(!isFlatten) normalizeBooleanBounds(boolItem);
+  normalizeBooleanBounds(boolItem);
+  if(isFlatten){
+    boolItem.shape='booleanFlat';
+    boolItem.flattenedPaths=[boolItem.resultPath||boolShapes.map(boolShapePath).join(' ')];
+    delete boolItem.booleanShapes;
+    delete boolItem.booleanOp;
+    delete boolItem.resultPath;
+  }
   ac().items.push(boolItem);
   state.selectedIds=[id];
   renderItems(); renderLayers(); updateSelectionOverlay(); updateMultiSelBox(); updateProps(); scheduleSave(); scheduleThumb();
@@ -1561,6 +1618,7 @@ function duplicateItems(ids){
       z:maxZ()+1,name:src.name+' copy'};
     if(src.booleanShapes) copy.booleanShapes=src.booleanShapes.map(s=>({...s,childId:`${nid}-${s.childId||s.name||Math.random()}`}));
     if(src.flattenedPaths) copy.flattenedPaths=[...src.flattenedPaths];
+    if(src.resultPath) copy.resultPath=src.resultPath;
     if(src.groupId){
       groupMap[src.groupId]=groupMap[src.groupId]||state.nextGroupId++;
       copy.groupId=groupMap[src.groupId];
@@ -1956,6 +2014,9 @@ function booleanShapeMarkup(item,common){
     return `<svg class="shape-content" viewBox="0 0 100 100" preserveAspectRatio="none">${paths.map(d=>`<path d="${d}" ${common}/>`).join('')}</svg>`;
   }
   ensureBooleanChildren(item);
+  if(item.resultPath){
+    return `<svg class="shape-content" viewBox="0 0 100 100" preserveAspectRatio="none"><path d="${item.resultPath}" ${common}/></svg>`;
+  }
   const paths=(item.booleanShapes||[]).map(boolShapePath);
   const id=`bool-${item.id}`;
   if((item.booleanOp==='subtract'||item.booleanOp==='exclude')&&paths.length){
