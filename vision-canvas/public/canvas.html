@@ -2066,12 +2066,12 @@ function boolShapePath(s){
 function booleanShapeMarkup(item,common){
   if(item.shape==='booleanFlat'){
     const paths=item.flattenedPaths||[];
-    return `<svg class="shape-content" viewBox="0 0 100 100" preserveAspectRatio="none">${paths.map(d=>`<path d="${d}" ${common}/>`).join('')}</svg>`;
+    return `<svg class="shape-content" viewBox="0 0 100 100" preserveAspectRatio="none">${paths.map(d=>`<path d="${d}" ${common} fill-rule="evenodd"/>`).join('')}</svg>`;
   }
   ensureBooleanChildren(item);
   if(!item.resultPath) normalizeBooleanBounds(item);
   if(item.resultPath){
-    return `<svg class="shape-content" viewBox="0 0 100 100" preserveAspectRatio="none"><path d="${item.resultPath}" ${common}/></svg>`;
+    return `<svg class="shape-content" viewBox="0 0 100 100" preserveAspectRatio="none"><path d="${item.resultPath}" ${common} fill-rule="evenodd"/></svg>`;
   }
   const paths=(item.booleanShapes||[]).map(boolShapePath);
   const id=`bool-${item.id}`;
