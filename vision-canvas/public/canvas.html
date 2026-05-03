@@ -977,6 +977,12 @@ body.exporting-canvas .frame-label{display:none!important;}
   <div class="ctx-item" data-action="copy-style"><span class="ci">C</span>Copy Style</div>
   <div class="ctx-item" data-action="paste-style"><span class="ci">P</span>Paste Style</div>
   <div class="ctx-sep"></div>
+  <div class="ctx-item" data-action="bool-union"><span class="ci">U</span>Union</div>
+  <div class="ctx-item" data-action="bool-subtract"><span class="ci">S</span>Subtract</div>
+  <div class="ctx-item" data-action="bool-intersect"><span class="ci">I</span>Intersect</div>
+  <div class="ctx-item" data-action="bool-exclude"><span class="ci">E</span>Exclude</div>
+  <div class="ctx-item" data-action="bool-flatten"><span class="ci">F</span>Flatten</div>
+  <div class="ctx-sep"></div>
   <div class="ctx-item" data-action="lock"><span class="ci">🔒</span>Lock / Unlock</div>
   <div class="ctx-item" data-action="duplicate"><span class="ci">⧉</span>Duplicate</div>
   <div class="ctx-sep"></div>
@@ -1271,6 +1277,12 @@ const SHAPE_TOOLS=new Set(Object.keys(SHAPE_LABELS));
 function isShapeTool(tool){
   return SHAPE_TOOLS.has(tool);
 }
+function booleanSelection(op){
+  addBooleanShape(op,selAll());
+}
+function booleanSelectionReady(){
+  return selAll().filter(i=>i.type==='shape'&&!['line','arrow','boolean'].includes(i.shape)).length>1;
+}
 function addShapeItem(shape,x,y,w=160,h=110,flipH=false,flipV=false){
   if(!canEditAll()) return;
   pushHistory();
@@ -1288,6 +1300,29 @@ function addShapeItem(shape,x,y,w=160,h=110,flipH=false,flipV=false){
   renderItems(); renderLayers();
   updateSelectionOverlay(); updateMultiSelBox();
   updateProps(); updateCanvasHint(); scheduleThumb();
+}
+function addBooleanShape(op,sourceItems){
+  if(!canEditAll()) return;
+  const items=sourceItems.filter(i=>i.type==='shape'&&!['line','arrow','boolean'].includes(i.shape));
+  if(items.length<2){showToast('Select 2+ filled shapes');return;}
+  pushHistory();
+  const minX=Math.min(...items.map(i=>i.x)),minY=Math.min(...items.map(i=>i.y));
+  const maxX=Math.max(...items.map(i=>i.x+i.w)),maxY=Math.max(...items.map(i=>i.y+i.h));
+  const bw=Math.max(1,maxX-minX),bh=Math.max(1,maxY-minY);
+  const id=++state.nextId;
+  const base=[...items].sort((a,b)=>a.z-b.z)[0];
+  const boolShapes=items.map(i=>({
+    shape:i.shape,x:(i.x-minX)/bw*100,y:(i.y-minY)/bh*100,
+    w:i.w/bw*100,h:i.h/bh*100,radius:i.radius||0
+  }));
+  ac().items=ac().items.filter(i=>!items.some(s=>s.id===i.id));
+  ac().items.push({id,type:'shape',shape:'boolean',booleanOp:op,booleanShapes:boolShapes,
+    name:`${op[0].toUpperCase()+op.slice(1)} ${id}`,
+    x:minX,y:minY,w:bw,h:bh,rot:0,opacity:100,visible:true,locked:false,
+    flipH:false,flipV:false,z:maxZ()+1,blendMode:'normal',shadow:false,shadowBlur:18,shadowY:10,
+    shadowColor:'rgba(0,0,0,.35)',radius:0,fill:base.fill||'#6c71f0',stroke:base.stroke||'#8b8ff4',strokeWidth:base.strokeWidth??2});
+  state.selectedIds=[id];
+  renderItems(); renderLayers(); updateSelectionOverlay(); updateMultiSelBox(); updateProps(); scheduleSave(); scheduleThumb();
 }
 
 function addFrameItem(x,y,w=360,h=240){
@@ -1616,7 +1651,7 @@ function applyItemStyle(el,item){
     tc.style.lineHeight=item.lineHeight||1.4;
     tc.style.padding='8px';
   }
-}
+  }
   if(item.type==='shape'){
     const sc=el.querySelector('.shape-content');
     if(sc) sc.innerHTML=shapeMarkup(item);
@@ -1696,11 +1731,38 @@ function shadowColorHex(item){
   return colorToHex(item.shadowColor||'rgba(0,0,0,.35)','#000000');
 }
 
+function boolShapePath(s){
+  const x=s.x,y=s.y,w=s.w,h=s.h;
+  if(s.shape==='ellipse'){
+    const cx=x+w/2,cy=y+h/2,rx=w/2,ry=h/2;
+    return `M ${cx-rx} ${cy} A ${rx} ${ry} 0 1 0 ${cx+rx} ${cy} A ${rx} ${ry} 0 1 0 ${cx-rx} ${cy} Z`;
+  }
+  if(s.shape==='polygon') return `M ${x+w/2} ${y} L ${x+w} ${y+h} L ${x} ${y+h} Z`;
+  if(s.shape==='star'){
+    const pts=[[.5,0],[.61,.36],[.95,.36],[.67,.56],[.78,.9],[.5,.7],[.22,.9],[.33,.56],[.05,.36],[.39,.36]];
+    return pts.map((p,i)=>`${i?'L':'M'} ${x+p[0]*w} ${y+p[1]*h}`).join(' ')+' Z';
+  }
+  const r=Math.min((s.radius||0),w/2,h/2);
+  if(r>0) return `M ${x+r} ${y} H ${x+w-r} Q ${x+w} ${y} ${x+w} ${y+r} V ${y+h-r} Q ${x+w} ${y+h} ${x+w-r} ${y+h} H ${x+r} Q ${x} ${y+h} ${x} ${y+h-r} V ${y+r} Q ${x} ${y} ${x+r} ${y} Z`;
+  return `M ${x} ${y} H ${x+w} V ${y+h} H ${x} Z`;
+}
+function booleanShapeMarkup(item,common){
+  const paths=(item.booleanShapes||[]).map(boolShapePath);
+  const id=`bool-${item.id}`;
+  if((item.booleanOp==='subtract'||item.booleanOp==='exclude')&&paths.length){
+    return `<svg class="shape-content" viewBox="0 0 100 100" preserveAspectRatio="none"><path d="${paths.join(' ')}" ${common} fill-rule="evenodd"/></svg>`;
+  }
+  if(item.booleanOp==='intersect'&&paths.length>1){
+    return `<svg class="shape-content" viewBox="0 0 100 100" preserveAspectRatio="none"><defs><clipPath id="${id}"><path d="${paths.slice(1).join(' ')}"/></clipPath></defs><path d="${paths[0]}" ${common} clip-path="url(#${id})"/></svg>`;
+  }
+  return `<svg class="shape-content" viewBox="0 0 100 100" preserveAspectRatio="none">${paths.map(d=>`<path d="${d}" ${common}/>`).join('')}</svg>`;
+}
 function shapeMarkup(item){
   const stroke=item.stroke||'#8b8ff4';
   const fill=item.fill||'transparent';
   const sw=item.strokeWidth||2;
   const common=`fill="${fill}" stroke="${stroke}" stroke-width="${sw}" vector-effect="non-scaling-stroke"`;
+  if(item.shape==='boolean') return booleanShapeMarkup(item,common);
   if(item.shape==='line'){
     return `<svg class="shape-content" viewBox="0 0 100 100" preserveAspectRatio="none"><line x1="4" y1="96" x2="96" y2="4" ${common} stroke-linecap="round"/></svg>`;
   }
@@ -2578,6 +2640,7 @@ function layerThumb(item){
   if(item.type==='comment') return item.number||'C';
   if(item.type==='frame') return 'F';
   if(item.type==='shape'){
+    if(item.shape==='boolean') return 'B';
     const icons={rect:'▭',line:'╱',arrow:'↗',ellipse:'○',polygon:'△',star:'☆'};
     return icons[item.shape]||'□';
   }
@@ -3485,6 +3548,11 @@ document.addEventListener('keydown',e=>{
       const el=canvasWorld.querySelector(`[data-id="${item.id}"]`);
       if(el) applyItemStyle(el,item);
       updateSelectionOverlay();updateProps();renderLayers();}}
+  if(e.altKey&&e.shiftKey&&e.code==='KeyU'){e.preventDefault();booleanSelection('union');}
+  if(e.altKey&&e.shiftKey&&e.code==='KeyS'){e.preventDefault();booleanSelection('subtract');}
+  if(e.altKey&&e.shiftKey&&e.code==='KeyI'){e.preventDefault();booleanSelection('intersect');}
+  if(e.altKey&&e.shiftKey&&e.code==='KeyE'){e.preventDefault();booleanSelection('exclude');}
+  if(e.altKey&&e.shiftKey&&e.code==='KeyF'){e.preventDefault();booleanSelection('flatten');}
   if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.code)&&state.selectedIds.length){
     e.preventDefault();
     const step=e.shiftKey?10:1;
@@ -3557,6 +3625,11 @@ const COMMANDS=[
   {name:'Delete selection',group:'Selection',key:'Del',run:()=>deleteItems([...state.selectedIds]),enabled:()=>state.selectedIds.length>0},
   {name:'Copy style',group:'Selection',run:()=>copyItemStyle(state.selectedIds[0]),enabled:()=>state.selectedIds.length===1},
   {name:'Paste style',group:'Selection',run:()=>pasteItemStyle([...state.selectedIds]),enabled:()=>state.selectedIds.length>0&&!!state.styleClipboard},
+  {name:'Union shapes',group:'Shapes',key:'Alt Shift U',run:()=>booleanSelection('union'),enabled:booleanSelectionReady},
+  {name:'Subtract shapes',group:'Shapes',key:'Alt Shift S',run:()=>booleanSelection('subtract'),enabled:booleanSelectionReady},
+  {name:'Intersect shapes',group:'Shapes',key:'Alt Shift I',run:()=>booleanSelection('intersect'),enabled:booleanSelectionReady},
+  {name:'Exclude shapes',group:'Shapes',key:'Alt Shift E',run:()=>booleanSelection('exclude'),enabled:booleanSelectionReady},
+  {name:'Flatten shapes',group:'Shapes',key:'Alt Shift F',run:()=>booleanSelection('flatten'),enabled:booleanSelectionReady},
   {name:'Crop selected image',group:'Image',run:()=>$('img-crop-btn').click(),enabled:()=>selFirst()?.type==='image'},
   {name:'Reset image crop',group:'Image',run:()=>$('img-reset-crop-btn').click(),enabled:()=>selFirst()?.type==='image'},
   {name:'Bring forward',group:'Arrange',key:']',run:()=>bringForward(state.selectedIds[0]),enabled:()=>state.selectedIds.length===1},
@@ -3779,6 +3852,11 @@ ctxMenu.querySelectorAll('.ctx-item').forEach(item=>{
     else if(action==='ungroup') ungroupSelection();
     else if(action==='copy-style') copyItemStyle(id);
     else if(action==='paste-style') pasteItemStyle(state.selectedIds.length?state.selectedIds:[id]);
+    else if(action==='bool-union') booleanSelection('union');
+    else if(action==='bool-subtract') booleanSelection('subtract');
+    else if(action==='bool-intersect') booleanSelection('intersect');
+    else if(action==='bool-exclude') booleanSelection('exclude');
+    else if(action==='bool-flatten') booleanSelection('flatten');
     else if(action==='edit-mask'){
       const i=getItem(id); if(i?.type==='image') {state.selectedIds=[id]; state.cropAdjustId=id; beginImageCropAdjust(i,0,0,true); interaction=null;}
     }
@@ -3922,6 +4000,12 @@ const SHORTCUTS=[
   {action:'Constrain resize',keys:['Shift','drag corner']},
   {action:'Constrain shape while drawing',keys:['Shift','drag']},
   {action:'Snap rotation 15°',keys:['Shift','rotate']},
+  {section:'Shapes'},
+  {action:'Union shapes',keys:['Alt','Shift','U']},
+  {action:'Subtract shapes',keys:['Alt','Shift','S']},
+  {action:'Intersect shapes',keys:['Alt','Shift','I']},
+  {action:'Exclude shapes',keys:['Alt','Shift','E']},
+  {action:'Flatten shapes',keys:['Alt','Shift','F']},
   {section:'Text'},
   {action:'Create text block',keys:['T','or dbl-click']},
   {action:'Create sticky note',keys:['N','drag']},
