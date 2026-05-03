@@ -5,6 +5,7 @@
 <title>Vision Canvas</title>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600&family=Syne:wght@600;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="/paper-full.min.js"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box;}
 :root{
@@ -85,22 +86,46 @@ body{display:flex;flex-direction:column;}
 #main{display:flex;flex:1;min-height:0;overflow:hidden;}
 
 /* TOOLBAR */
-#toolbar{width:var(--toolbar-w);background:rgba(8,9,13,.96);border-right:1px solid rgba(255,255,255,.08);
-  display:flex;flex-direction:column;align-items:center;padding:8px 5px;gap:3px;
+#toolbar{width:var(--toolbar-w);background:#fbfbff;border-right:1px solid rgba(20,20,32,.08);
+  display:flex;flex-direction:column;align-items:center;padding:8px 5px;gap:5px;
   backdrop-filter:blur(20px);z-index:50;box-shadow:inset -1px 0 0 rgba(0,0,0,.35);}
-.tool-btn{width:38px;height:38px;border-radius:9px;border:none;background:transparent;
-  color:#9a9bad;cursor:pointer;display:flex;align-items:center;justify-content:center;
+.tool-btn{width:38px;height:38px;border-radius:10px;border:none;background:transparent;
+  color:#565866;cursor:pointer;display:flex;align-items:center;justify-content:center;
   font-size:16px;transition:background .14s,color .14s,box-shadow .14s,transform .14s;position:relative;}
-.tool-btn:hover{background:rgba(255,255,255,.055);color:#f1f1f7;}
+.tool-btn:hover{background:#f0f0f8;color:#202033;}
 .tool-btn:active{transform:scale(.97);}
-.tool-btn.active{background:#242454;color:#8f91ff;box-shadow:0 8px 22px rgba(0,0,0,.28),inset 0 0 0 1px rgba(143,145,255,.12);}
-.tool-btn svg{width:18px;height:18px;fill:currentColor;stroke-linecap:round;stroke-linejoin:round;}
-.tool-sep{width:31px;height:1px;background:rgba(255,255,255,.075);margin:7px 0;}
+.tool-btn.active{background:#eee7ff;color:#5b2bbd;box-shadow:0 8px 18px rgba(75,54,130,.12),inset 0 0 0 1px rgba(112,83,190,.08);}
+.tool-btn svg{width:20px;height:20px;fill:currentColor;stroke-linecap:round;stroke-linejoin:round;}
+.tool-btn[data-tool="select"]{color:#5d2ca8;}
+.tool-btn[data-tool="comment"]{color:#ff3d57;}
+.tool-btn[data-tool="note"]{color:#f8b800;}
+.tool-btn[data-tool="text"]{color:#b033ff;}
+.tool-btn[data-tool="frame"],#minimap-btn{color:#213f9a;}
+.tool-btn[data-tool="line"],.tool-btn[data-tool="arrow"]{color:#1688f8;}
+.tool-btn[data-tool="rect"],.tool-btn[data-tool="ellipse"],.tool-btn[data-tool="polygon"],.tool-btn[data-tool="star"]{color:#626876;}
+.tool-btn[data-primary-tool="text"]{color:#b033ff;}
+.tool-btn[data-primary-tool="rect"]{color:#f8b800;}
+.tool-btn[data-primary-tool="line"]{color:#1688f8;}
+.tool-group{position:relative;width:38px;height:38px;}
+.tool-group>.tool-btn::after{content:'';position:absolute;right:5px;bottom:5px;width:0;height:0;
+  border-left:4px solid transparent;border-top:4px solid currentColor;opacity:.72;}
+.tool-group.active>.tool-btn{background:#eee7ff;box-shadow:0 8px 18px rgba(75,54,130,.12),inset 0 0 0 1px rgba(112,83,190,.08);}
+.tool-flyout{position:absolute;left:calc(100% + 9px);top:0;display:none;gap:5px;padding:6px;
+  background:#fbfbff;border:1px solid rgba(20,20,32,.1);border-radius:12px;
+  box-shadow:0 18px 36px rgba(20,20,35,.18);backdrop-filter:blur(18px);z-index:1001;}
+.tool-group.open .tool-flyout{display:flex;}
+.tool-group.open>.tool-btn{background:#f0f0f8;color:#202033;}
+.tool-flyout .tool-btn{background:#f7f7fc;}
+.tool-flyout .tool-btn:hover{background:#efeff8;}
+.tool-flyout .tool-btn.active{background:#eee7ff;color:#5b2bbd;}
+.tool-sep{width:31px;height:1px;background:rgba(20,20,32,.1);margin:7px 0;}
 .tool-tip{position:absolute;left:calc(100% + 10px);background:#202027;
   border:1px solid rgba(255,255,255,.11);color:#f4f4fb;font-size:11px;padding:5px 8px;
   border-radius:6px;white-space:nowrap;pointer-events:none;opacity:0;transform:translateX(-3px);
   transition:opacity .12s,transform .12s;z-index:1000;box-shadow:0 10px 28px rgba(0,0,0,.32);}
 .tool-btn:hover .tool-tip{opacity:1;transform:translateX(0);}
+.tool-btn#delete-btn{color:#7d8292;}
+.tool-btn#help-btn{color:#7d8292;}
 
 /* CANVAS */
 #canvas-area{flex:1;min-width:0;min-height:0;position:relative;overflow:hidden;cursor:default;
@@ -118,10 +143,18 @@ body{display:flex;flex-direction:column;}
 
 .canvas-item{position:absolute;transform-origin:center center;cursor:default;
   border:1.5px solid transparent;}
+body.exporting-canvas .canvas-item{border:none!important;outline:none!important;}
+body.exporting-canvas .canvas-item img{border-radius:0!important;}
+body.exporting-canvas .frame-label{display:none!important;}
 .canvas-item.image-item{overflow:hidden;}
+.canvas-item.image-item.mask-editing{overflow:visible;box-shadow:0 0 0 1.5px var(--accent2),0 0 0 9999px rgba(0,0,0,.18);}
+.canvas-item.image-item.mask-editing::after{content:'Mask edit';position:absolute;left:0;top:-24px;
+  background:var(--accent);color:#fff;font-size:10px;font-weight:700;padding:3px 7px;border-radius:5px;pointer-events:none;}
+.canvas-item.image-item.mask-editing img{opacity:.78;outline:1px dashed rgba(255,255,255,.55);outline-offset:0;}
 .canvas-item img{width:100%;height:100%;object-fit:contain;display:block;
   pointer-events:none;border-radius:2px;}
 .shape-content{width:100%;height:100%;display:block;pointer-events:none;overflow:visible;}
+.canvas-item.boolean-editing{outline:1.5px dashed rgba(139,143,244,.75);outline-offset:4px;}
 .frame-content{position:absolute;inset:0;border:1.5px solid rgba(139,143,244,.85);background:rgba(139,143,244,.06);pointer-events:none;}
 .frame-label{position:absolute;left:0;top:-22px;color:var(--accent2);font-size:12px;font-weight:600;pointer-events:none;white-space:nowrap;}
 .canvas-item.multi-sel{outline:1.5px solid var(--accent2);}
@@ -186,6 +219,9 @@ body{display:flex;flex-direction:column;}
 .align-guide{position:absolute;pointer-events:none;z-index:300;transition:opacity .1s;}
 .align-guide.v{width:1px;top:0;bottom:0;background:rgba(255,80,80,.7);}
 .align-guide.h{height:1px;left:0;right:0;background:rgba(255,80,80,.7);}
+.guide-label{position:absolute;z-index:301;pointer-events:none;background:rgba(18,18,24,.92);
+  border:1px solid rgba(255,255,255,.14);border-radius:5px;padding:2px 5px;color:#f4f4fb;
+  font-size:10px;font-weight:700;font-variant-numeric:tabular-nums;box-shadow:0 8px 18px rgba(0,0,0,.28);}
 .user-guide{position:absolute;z-index:38;background:rgba(139,143,244,.75);pointer-events:auto;}
 .user-guide.v{width:1px;top:0;bottom:0;cursor:ew-resize;}
 .user-guide.h{height:1px;left:0;right:0;cursor:ns-resize;}
@@ -276,6 +312,14 @@ body{display:flex;flex-direction:column;}
 /* LAYERS */
 #layers-list{display:flex;flex-direction:column;gap:4px;max-height:260px;overflow-y:auto;padding-right:2px;transition:max-height .18s;}
 #layers-section.layers-expanded #layers-list{max-height:calc(100vh - 190px);}
+.layer-tools{display:flex;flex-direction:column;gap:6px;margin-bottom:7px;}
+.layer-search{width:100%;height:30px;border-radius:7px;border:1px solid var(--border);
+  background:#17171d;color:var(--text);font-size:12px;padding:0 9px;outline:none;}
+.layer-search:focus{border-color:rgba(139,143,244,.55);}
+.layer-filters{display:flex;gap:4px;overflow-x:auto;padding-bottom:1px;}
+.layer-filter{height:25px;min-width:32px;border-radius:7px;border:1px solid rgba(255,255,255,.08);
+  background:var(--bg3);color:var(--text2);font-size:11px;cursor:pointer;padding:0 8px;}
+.layer-filter.active{background:#242454;border-color:rgba(139,143,244,.35);color:#a9abff;}
 .layer-item{display:flex;align-items:center;gap:9px;padding:6px 8px;
   border-radius:7px;cursor:pointer;border:1px solid transparent;transition:.15s;background:transparent;}
 .layer-item:hover{background:rgba(255,255,255,.035);}
@@ -284,6 +328,11 @@ body{display:flex;flex-direction:column;}
 .layer-item.drag-above::before{content:'';position:absolute;left:7px;right:7px;
   top:-1px;height:2px;background:var(--accent2);border-radius:1px;}
 .layer-item{position:relative;}
+.layer-item.group-row{background:rgba(255,255,255,.025);border-color:rgba(255,255,255,.06);}
+.layer-item.group-row .layer-thumb{background:#222238;color:#a9abff;border-color:rgba(139,143,244,.25);}
+.layer-item.group-child{margin-left:18px;}
+.layer-item.group-child::before{content:'';position:absolute;left:-10px;top:0;bottom:0;width:1px;background:rgba(255,255,255,.08);}
+.layer-caret{width:14px;color:var(--text3);font-size:10px;text-align:center;flex-shrink:0;}
 .layer-thumb{width:30px;height:30px;border-radius:6px;background:#171720;
   border:1px solid var(--border2);flex-shrink:0;overflow:hidden;
   display:flex;align-items:center;justify-content:center;}
@@ -323,6 +372,7 @@ body{display:flex;flex-direction:column;}
   border-radius:7px;color:var(--text2);font-size:12px;cursor:pointer;
   font-family:'Outfit',sans-serif;transition:.15s;}
 .act-btn:hover{background:rgba(255,255,255,.07);color:var(--text);border-color:rgba(255,255,255,.16);}
+.act-btn.active{background:#242454;border-color:rgba(139,143,244,.35);color:#a9abff;}
 .act-btn.danger:hover{background:rgba(224,82,82,.1);border-color:rgba(224,82,82,.3);color:var(--danger);}
 .no-sel{font-size:12px;color:var(--text3);padding:6px 0;text-align:center;}
 .multi-sel-info{font-size:12px;color:var(--accent2);padding:4px 0;font-weight:500;text-align:center;}
@@ -373,6 +423,11 @@ body{display:flex;flex-direction:column;}
 .align-icon.dv::before{left:11px;top:1px;width:2px;height:16px;}
 .align-icon.dv::after{left:8px;top:1px;width:8px;height:4px;box-shadow:0 7px 0 var(--accent2),0 14px 0 var(--accent2);}
 .align-section-title{font-size:10px;color:var(--text3);letter-spacing:.5px;text-transform:uppercase;}
+.quick-op-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:5px;}
+.quick-op-btn{height:34px;border-radius:7px;border:1px solid rgba(255,255,255,.08);background:#17171d;color:var(--text2);
+  cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;}
+.quick-op-btn:hover{border-color:rgba(139,143,244,.45);background:#202034;color:#fff;}
+.quick-op-btn.primary{background:#242454;border-color:rgba(139,143,244,.35);color:#aeb0ff;}
 
 /* BACKGROUND */
 .bg-presets{display:flex;gap:5px;flex-wrap:wrap;}
@@ -538,34 +593,50 @@ body{display:flex;flex-direction:column;}
       <svg viewBox="0 0 24 24"><path d="M9 5a1 1 0 0 1 2 0v4.5a1 1 0 0 1 2 0V10a1 1 0 0 1 2 0v1a1 1 0 0 1 2 0v6a4 4 0 0 1-4 4h-2A5 5 0 0 1 5 16v-5a1 1 0 0 1 2 0V5z"/></svg></button>
     <button class="tool-btn" data-tool="zoom"><span class="tool-tip">Zoom (Z)</span>
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="10.5" cy="10.5" r="6.5"/><line x1="15.5" y1="15.5" x2="21" y2="21"/><line x1="10.5" y1="7.5" x2="10.5" y2="13.5"/><line x1="7.5" y1="10.5" x2="13.5" y2="10.5"/></svg></button>
-    <button class="tool-btn" data-tool="text"><span class="tool-tip">Text (T)</span>
-      <svg viewBox="0 0 24 24"><path d="M4 6h16v2H4V6zm4 4h8v2H8v-2zm2 4h4v2h-4v-2z"/></svg></button>
-    <button class="tool-btn" data-tool="note"><span class="tool-tip">Sticky Note (N)</span>
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 4h14v11l-5 5H5z"/><path d="M14 20v-5h5"/></svg></button>
-    <button class="tool-btn" data-tool="comment"><span class="tool-tip">Comment Pin (C)</span>
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 11.5a8.4 8.4 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7a8.4 8.4 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.4 8.4 0 0 1 3.8-.9h.5A8.5 8.5 0 0 1 21 11z"/></svg></button>
+    <div class="tool-group" data-tool-group="markup">
+      <button class="tool-btn" data-primary-tool="text"><span class="tool-tip">Text tools</span>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 5h14"/><path d="M12 5v14"/><path d="M9 19h6"/></svg></button>
+      <div class="tool-flyout">
+        <button class="tool-btn" data-tool="text"><span class="tool-tip">Text (T)</span>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 5h14"/><path d="M12 5v14"/><path d="M9 19h6"/></svg></button>
+        <button class="tool-btn" data-tool="note"><span class="tool-tip">Sticky Note (N)</span>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 4h14v11l-5 5H5z"/><path d="M14 20v-5h5"/></svg></button>
+        <button class="tool-btn" data-tool="comment"><span class="tool-tip">Comment Pin (C)</span>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 11.5a8.4 8.4 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7a8.4 8.4 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.4 8.4 0 0 1 3.8-.9h.5A8.5 8.5 0 0 1 21 11z"/></svg></button>
+      </div>
+    </div>
     <div class="tool-sep"></div>
     <button class="tool-btn" data-tool="frame"><span class="tool-tip">Frame (F)</span>
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="5" width="16" height="14" rx="1"/><path d="M8 5v14M16 5v14M4 9h16M4 15h16"/></svg></button>
-    <button class="tool-btn" data-tool="rect"><span class="tool-tip">Rectangle (R)</span>
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="5" width="16" height="14" rx="1"/></svg></button>
-    <button class="tool-btn" data-tool="line"><span class="tool-tip">Line (L)</span>
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="4" y1="20" x2="20" y2="4"/></svg></button>
-    <button class="tool-btn" data-tool="arrow"><span class="tool-tip">Arrow (Shift+L)</span>
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="4" y1="20" x2="19" y2="5"/><polyline points="11 5 19 5 19 13"/></svg></button>
-    <button class="tool-btn" data-tool="ellipse"><span class="tool-tip">Ellipse (O)</span>
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="12" rx="8" ry="7"/></svg></button>
-    <button class="tool-btn" data-tool="polygon"><span class="tool-tip">Polygon (P)</span>
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 4 21 20 3 20"/></svg></button>
-    <button class="tool-btn" data-tool="star"><span class="tool-tip">Star (S)</span>
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 3 14.7 8.5 20.8 9.4 16.4 13.7 17.4 19.8 12 16.9 6.6 19.8 7.6 13.7 3.2 9.4 9.3 8.5"/></svg></button>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 9V5h4"/><path d="M15 5h4v4"/><path d="M19 15v4h-4"/><path d="M9 19H5v-4"/><path d="M9 12h6"/></svg></button>
+    <div class="tool-group" data-tool-group="shapes">
+      <button class="tool-btn" data-primary-tool="rect"><span class="tool-tip">Shape tools</span>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="6" width="14" height="12" rx="2"/></svg></button>
+      <div class="tool-flyout">
+        <button class="tool-btn" data-tool="rect"><span class="tool-tip">Rectangle (R)</span>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="6" width="14" height="12" rx="2"/></svg></button>
+        <button class="tool-btn" data-tool="ellipse"><span class="tool-tip">Ellipse (O)</span>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="12" rx="8" ry="7"/></svg></button>
+        <button class="tool-btn" data-tool="polygon"><span class="tool-tip">Polygon (P)</span>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 4 21 20 3 20"/></svg></button>
+        <button class="tool-btn" data-tool="star"><span class="tool-tip">Star (S)</span>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 3 14.7 8.5 20.8 9.4 16.4 13.7 17.4 19.8 12 16.9 6.6 19.8 7.6 13.7 3.2 9.4 9.3 8.5"/></svg></button>
+      </div>
+    </div>
+    <div class="tool-group" data-tool-group="lines">
+      <button class="tool-btn" data-primary-tool="line"><span class="tool-tip">Line tools</span>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="4" y1="20" x2="20" y2="4"/></svg></button>
+      <div class="tool-flyout">
+        <button class="tool-btn" data-tool="line"><span class="tool-tip">Line (L)</span>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="4" y1="20" x2="20" y2="4"/></svg></button>
+        <button class="tool-btn" data-tool="arrow"><span class="tool-tip">Arrow (Shift+L)</span>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="4" y1="20" x2="19" y2="5"/><polyline points="11 5 19 5 19 13"/></svg></button>
+      </div>
+    </div>
     <div class="tool-sep"></div>
     <button class="tool-btn" id="center-btn"><span class="tool-tip">Center View</span>
       <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="2"/></svg></button>
     <button class="tool-btn" id="minimap-btn"><span class="tool-tip">Mini Map (M)</span>
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="5" width="16" height="14" rx="2"/><rect x="7" y="8" width="4" height="3"/><rect x="13" y="13" width="4" height="3"/></svg></button>
-    <button class="tool-btn" id="clear-btn"><span class="tool-tip">Clear Canvas</span>
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg></button>
     <div class="tool-sep"></div>
     <button class="tool-btn" id="delete-btn"><span class="tool-tip">Delete Selected</span>
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/></svg></button>
@@ -632,6 +703,18 @@ body{display:flex;flex-direction:column;}
         <span class="panel-toggle" id="pt-layers">▲</span>
       </div>
       <div class="panel-body" id="pb-layers">
+        <div class="layer-tools">
+          <input class="layer-search" id="layer-search" placeholder="Search layers" autocomplete="off">
+          <div class="layer-filters" id="layer-filters">
+            <button class="layer-filter active" data-layer-filter="all">All</button>
+            <button class="layer-filter" data-layer-filter="image">Images</button>
+            <button class="layer-filter" data-layer-filter="text">Text</button>
+            <button class="layer-filter" data-layer-filter="shape">Shapes</button>
+            <button class="layer-filter" data-layer-filter="frame">Frames</button>
+            <button class="layer-filter" data-layer-filter="hidden">Hidden</button>
+            <button class="layer-filter" data-layer-filter="locked">Locked</button>
+          </div>
+        </div>
         <div id="layers-list"><div class="layer-empty">No layers</div></div>
       </div>
     </div>
@@ -669,6 +752,12 @@ body{display:flex;flex-direction:column;}
           <div class="prop-2col">
             <div class="prop-group"><span class="lbl">W</span><input type="number" id="pw" step="1" min="10"></div>
             <div class="prop-group"><span class="lbl">H</span><input type="number" id="ph_" step="1" min="10"></div>
+          </div>
+          <div class="action-row">
+            <button class="act-btn" id="ratio-btn">Lock ratio</button>
+            <button class="act-btn" id="rot-left-btn">-90</button>
+            <button class="act-btn" id="rot-right-btn">+90</button>
+            <button class="act-btn" id="reset-transform-btn">Reset</button>
           </div>
           <div class="prop-2col">
             <div class="prop-group"><span class="lbl">°</span><input type="number" id="pr" step="1"></div>
@@ -764,12 +853,55 @@ body{display:flex;flex-direction:column;}
               <div class="prop-group"><span class="lbl">Y%</span><input type="number" id="img-pos-y" step="1" min="0" max="100" value="50"></div>
             </div>
             <div class="action-row">
-              <button class="act-btn" id="img-crop-btn">Adjust crop</button>
-              <button class="act-btn" id="img-reset-crop-btn">Reset crop</button>
+              <button class="act-btn" id="img-crop-btn">Edit mask</button>
+              <button class="act-btn" id="img-reset-crop-btn">Reset mask</button>
             </div>
+            <button class="act-btn" id="img-remove-vector-mask" style="display:none;">Remove vector mask</button>
+            <div class="action-row">
+              <button class="act-btn" id="img-fit-btn">Fit</button>
+              <button class="act-btn" id="img-fill-btn">Fill</button>
+              <button class="act-btn" id="img-stretch-btn">Stretch</button>
+            </div>
+            <div class="inspector-group-title">Adjustments</div>
+            <div class="opacity-row">
+              <span style="font-size:11px;color:var(--text2);">Bright</span>
+              <input type="range" class="opacity-slider" id="img-bright" min="0" max="200" value="100">
+              <span class="opacity-val" id="img-bright-val">100%</span>
+            </div>
+            <div class="opacity-row">
+              <span style="font-size:11px;color:var(--text2);">Contrast</span>
+              <input type="range" class="opacity-slider" id="img-contrast" min="0" max="200" value="100">
+              <span class="opacity-val" id="img-contrast-val">100%</span>
+            </div>
+            <div class="opacity-row">
+              <span style="font-size:11px;color:var(--text2);">Saturate</span>
+              <input type="range" class="opacity-slider" id="img-saturate" min="0" max="200" value="100">
+              <span class="opacity-val" id="img-saturate-val">100%</span>
+            </div>
+            <div class="opacity-row">
+              <span style="font-size:11px;color:var(--text2);">Blur</span>
+              <input type="range" class="opacity-slider" id="img-blur" min="0" max="20" value="0">
+              <span class="opacity-val" id="img-blur-val">0px</span>
+            </div>
+            <button class="act-btn" id="img-reset-adjust">Reset adjustments</button>
           </div>
           <div id="shape-props">
             <div class="inspector-group-title">Shape</div>
+            <div id="boolean-op-row" style="display:none;flex-direction:column;gap:5px;">
+              <span class="color-label">Boolean operation</span>
+              <select class="font-select" id="boolean-op">
+                <option value="union">Union</option>
+                <option value="subtract">Subtract</option>
+                <option value="intersect">Intersect</option>
+                <option value="exclude">Exclude</option>
+                <option value="flatten">Flatten</option>
+              </select>
+              <button class="act-btn" id="boolean-edit-btn">Edit parts</button>
+              <div class="action-row">
+                <button class="act-btn" id="boolean-release-btn">Release</button>
+                <button class="act-btn" id="boolean-flatten-btn">Flatten</button>
+              </div>
+            </div>
             <div class="color-row">
               <div class="color-swatch"><input type="color" id="shape-fill" value="#6c71f0"></div>
               <span class="color-label">Fill</span>
@@ -787,6 +919,16 @@ body{display:flex;flex-direction:column;}
         </div>
         <!-- MULTI PROPS -->
         <div id="multi-props" style="display:none;flex-direction:column;gap:6px;">
+          <div id="multi-boolean-tools" style="display:none;flex-direction:column;gap:6px;">
+            <div class="align-section-title">Boolean</div>
+            <div class="quick-op-grid">
+              <button class="quick-op-btn primary" data-bool-op="union" title="Union">&cup;</button>
+              <button class="quick-op-btn" data-bool-op="subtract" title="Subtract">&minus;</button>
+              <button class="quick-op-btn" data-bool-op="intersect" title="Intersect">&cap;</button>
+              <button class="quick-op-btn" data-bool-op="exclude" title="Exclude">&oplus;</button>
+              <button class="quick-op-btn" data-bool-op="flatten" title="Flatten">&#8681;</button>
+            </div>
+          </div>
           <div class="align-section-title">Align</div>
           <div class="align-tools-row" id="align-tools-row"></div>
           <div class="align-section-title" style="margin-top:2px;">Distribute</div>
@@ -798,6 +940,10 @@ body{display:flex;flex-direction:column;}
           <div class="action-row">
             <button class="act-btn" id="group-btn">Group</button>
             <button class="act-btn" id="ungroup-btn">Ungroup</button>
+          </div>
+          <div id="vector-mask-tools" style="display:none;flex-direction:column;gap:6px;">
+            <div class="align-section-title">Mask</div>
+            <button class="act-btn" id="vector-mask-btn">Mask with vector</button>
           </div>
         </div>
       </div>
@@ -872,10 +1018,28 @@ body{display:flex;flex-direction:column;}
   <div class="ctx-item" data-action="send-backward"><span class="ci">↓</span>Send Backward</div>
   <div class="ctx-item" data-action="send-back"><span class="ci">⬇</span>Send to Back</div>
   <div class="ctx-sep"></div>
+  <div class="ctx-item" data-action="rename"><span class="ci">T</span>Rename</div>
+  <div class="ctx-item" data-action="group"><span class="ci">[]</span>Group</div>
+  <div class="ctx-item" data-action="ungroup"><span class="ci">][</span>Ungroup</div>
+  <div class="ctx-sep"></div>
+  <div class="ctx-item" data-action="copy-style"><span class="ci">C</span>Copy Style</div>
+  <div class="ctx-item" data-action="paste-style"><span class="ci">P</span>Paste Style</div>
+  <div class="ctx-sep"></div>
+  <div class="ctx-item" data-action="bool-union"><span class="ci">U</span>Union</div>
+  <div class="ctx-item" data-action="bool-subtract"><span class="ci">S</span>Subtract</div>
+  <div class="ctx-item" data-action="bool-intersect"><span class="ci">I</span>Intersect</div>
+  <div class="ctx-item" data-action="bool-exclude"><span class="ci">E</span>Exclude</div>
+  <div class="ctx-item" data-action="bool-flatten"><span class="ci">F</span>Flatten</div>
+  <div class="ctx-sep"></div>
   <div class="ctx-item" data-action="lock"><span class="ci">🔒</span>Lock / Unlock</div>
   <div class="ctx-item" data-action="duplicate"><span class="ci">⧉</span>Duplicate</div>
   <div class="ctx-sep"></div>
   <div class="ctx-item danger" data-action="delete"><span class="ci">✕</span>Delete</div>
+  <div class="ctx-sep"></div>
+  <div class="ctx-item" data-action="edit-mask"><span class="ci">M</span>Edit Mask</div>
+  <div class="ctx-item" data-action="reset-mask"><span class="ci">R</span>Reset Mask</div>
+  <div class="ctx-item" data-action="fill-mask"><span class="ci">F</span>Fill Frame</div>
+  <div class="ctx-item" data-action="fit-mask"><span class="ci">I</span>Fit Image</div>
 </div>
 
 <!-- URL MODAL -->
@@ -896,6 +1060,13 @@ body{display:flex;flex-direction:column;}
   <div class="modal-box" style="width:300px;">
     <div class="modal-title">Export Canvas</div>
     <div class="modal-row">
+      <span>Area</span>
+      <select class="modal-select" id="export-area">
+        <option value="canvas" selected>Whole canvas</option>
+        <option value="selection">Selection</option>
+      </select>
+    </div>
+    <div class="modal-row">
       <span>Resolution</span>
       <select class="modal-select" id="export-scale">
         <option value="1">1× standard</option>
@@ -908,12 +1079,17 @@ body{display:flex;flex-direction:column;}
       <select class="modal-select" id="export-format">
         <option value="png">PNG</option>
         <option value="jpeg">JPEG</option>
+        <option value="webp">WebP</option>
       </select>
     </div>
-    <label class="prop-check" style="margin-top:8px;">
-      <input type="checkbox" id="export-selected-only">
-      Export selection only
-    </label>
+    <div class="modal-row">
+      <span>Background</span>
+      <select class="modal-select" id="export-bg">
+        <option value="transparent" selected>Transparent background</option>
+        <option value="white">White background</option>
+        <option value="canvas">Canvas background</option>
+      </select>
+    </div>
     <div class="modal-actions">
       <button class="modal-btn" id="export-cancel">Cancel</button>
       <button class="modal-btn accent" id="export-confirm">Download</button>
@@ -996,6 +1172,7 @@ const commandInput = $('command-input');
 const commandList = $('command-list');
 let textEditDirty=false;
 let imageCropDirty=false;
+let imageAdjustDirty=false;
 
 // ── STATE ─────────────────────────────────────────────────────────
 let state = {
@@ -1007,6 +1184,11 @@ let state = {
   tool:'select', interaction:null, spaceHeld:false,
   ctxItemId:null, editingId:null,
   snapEnabled:true,
+  layerQuery:'',
+  layerFilter:'all',
+  styleClipboard:null,
+  collapsedGroups:{},
+  lockAspect:false,
   nextGroupId:1,
   shapeDefaults:{fill:'#6c71f0',stroke:'#8b8ff4',strokeWidth:2},
   minimapEnabled:true,
@@ -1014,6 +1196,8 @@ let state = {
   sharePermission:'view',
   shareName:'',
   cropAdjustId:null,
+  booleanAdjustId:null,
+  booleanPartIndex:null,
 };
 
 function ac(){ return state.canvases.find(c=>c.id===state.activeId); }
@@ -1070,7 +1254,9 @@ function addImageItem(src,x,y,w,h){
     x,y,w,h,rot:0,opacity:100,visible:true,locked:false,
     flipH:false,flipV:false,z:maxZ()+1,
     fit:'contain',imgX:50,imgY:50,imgScale:100,
+    imgBright:100,imgContrast:100,imgSaturate:100,imgBlur:0,
     blendMode:'normal',shadow:false,shadowBlur:18,shadowY:10,shadowColor:'rgba(0,0,0,.35)',radius:2});
+  assignInitialFrame(ac().items[ac().items.length-1]);
   state.selectedIds=[id];
   renderItems(); renderLayers();
   updateSelectionOverlay(); updateMultiSelBox();
@@ -1088,6 +1274,7 @@ function addTextItem(x,y,w=220,h=70){
     x,y,w:Math.max(40,w),h:Math.max(28,h),rot:0,opacity:100,
     visible:true,locked:false,flipH:false,flipV:false,z:maxZ()+1,
     blendMode:'normal',shadow:false,shadowBlur:18,shadowY:10,shadowColor:'rgba(0,0,0,.35)',radius:0});
+  assignInitialFrame(ac().items[ac().items.length-1]);
   state.selectedIds=[id];
   renderItems(); renderLayers();
   updateSelectionOverlay(); updateMultiSelBox();
@@ -1109,6 +1296,7 @@ function addNoteItem(x,y,w=220,h=160){
     x,y,w:Math.max(120,w),h:Math.max(90,h),rot:0,opacity:100,
     visible:true,locked:false,flipH:false,flipV:false,z:maxZ()+1,
     blendMode:'normal',shadow:true,shadowBlur:24,shadowY:10,shadowColor:'rgba(0,0,0,.28)',radius:6});
+  assignInitialFrame(ac().items[ac().items.length-1]);
   state.selectedIds=[id];
   renderItems(); renderLayers();
   updateSelectionOverlay(); updateMultiSelBox();
@@ -1136,8 +1324,245 @@ function addCommentItem(x,y,text){
 
 const SHAPE_LABELS={rect:'Rectangle',line:'Line',arrow:'Arrow',ellipse:'Ellipse',polygon:'Polygon',star:'Star'};
 const SHAPE_TOOLS=new Set(Object.keys(SHAPE_LABELS));
+let paperScope=null;
+function getPaperScope(){
+  if(!window.paper) return null;
+  if(!paperScope){
+    paperScope=new window.paper.PaperScope();
+    paperScope.setup(document.createElement('canvas'));
+  }
+  paperScope.project.clear();
+  return paperScope;
+}
 function isShapeTool(tool){
   return SHAPE_TOOLS.has(tool);
+}
+function booleanSelection(op){
+  const selected=selAll();
+  if(selected.length===1&&selected[0].type==='shape'&&selected[0].shape==='boolean'){
+    if(op==='flatten') flattenBooleanShape(selected[0],true);
+    else updateBooleanOperation(selected[0],op,true);
+    return;
+  }
+  addBooleanShape(op,selected);
+}
+function booleanSelectionReady(){
+  const selected=selAll();
+  return (selected.length===1&&selected[0].type==='shape'&&selected[0].shape==='boolean')||
+    selected.filter(i=>i.type==='shape'&&!['line','arrow','boolean','booleanFlat'].includes(i.shape)).length>1;
+}
+function updateBooleanOperation(item,op,withHistory=false){
+  if(!item||item.type!=='shape'||item.shape!=='boolean'||item.locked||!canEditAll()) return;
+  if(op==='flatten'){flattenBooleanShape(item,withHistory);return;}
+  if(withHistory) pushHistory();
+  item.booleanOp=op;
+  item.name=`${op[0].toUpperCase()+op.slice(1)} ${item.id}`;
+  normalizeBooleanBounds(item);
+  const el=canvasWorld.querySelector(`[data-id="${item.id}"]`);
+  if(el) applyItemStyle(el,item);
+  updateSelectionOverlay(); renderLayers(); updateProps(); scheduleSave(); scheduleThumb();
+}
+function ensureBooleanChildren(item){
+  if(!item||item.shape!=='boolean') return [];
+  item.booleanShapes=(item.booleanShapes||[]).map((s,idx)=>({
+    childId:s.childId||`${item.id}-${idx+1}`,
+    name:s.name||`${SHAPE_LABELS[s.shape]||'Shape'} ${idx+1}`,
+    z:s.z??idx,
+    rot:s.rot||0,
+    flipH:!!s.flipH,
+    flipV:!!s.flipV,
+    ...s
+  }));
+  item.booleanShapes.sort((a,b)=>(b.z??0)-(a.z??0));
+  return item.booleanShapes;
+}
+function pointInBooleanShape(s,px,py){
+  const x=s.x,y=s.y,w=s.w,h=s.h;
+  if(px<x||px>x+w||py<y||py>y+h) return false;
+  if(s.shape==='ellipse'){
+    const cx=x+w/2,cy=y+h/2,rx=Math.max(1,w/2),ry=Math.max(1,h/2);
+    return ((px-cx)/rx)**2+((py-cy)/ry)**2<=1;
+  }
+  if(s.shape==='polygon') return pointInPoly(px,py,[[x+w/2,y],[x+w,y+h],[x,y+h]]);
+  if(s.shape==='star'){
+    const pts=[[.5,0],[.61,.36],[.95,.36],[.67,.56],[.78,.9],[.5,.7],[.22,.9],[.33,.56],[.05,.36],[.39,.36]]
+      .map(p=>[x+p[0]*w,y+p[1]*h]);
+    return pointInPoly(px,py,pts);
+  }
+  return true;
+}
+function pointInPoly(px,py,pts){
+  let inside=false;
+  for(let i=0,j=pts.length-1;i<pts.length;j=i++){
+    const xi=pts[i][0],yi=pts[i][1],xj=pts[j][0],yj=pts[j][1];
+    const hit=((yi>py)!==(yj>py))&&(px<(xj-xi)*(py-yi)/(yj-yi||1e-9)+xi);
+    if(hit) inside=!inside;
+  }
+  return inside;
+}
+function paperPathForShape(scope,s){
+  const x=s.x,y=s.y,w=Math.max(1,s.w),h=Math.max(1,s.h);
+  let path;
+  if(s.shape==='ellipse') path=new scope.Path.Ellipse(new scope.Rectangle(x,y,w,h));
+  else if(s.shape==='polygon') path=new scope.Path({segments:[[x+w/2,y],[x+w,y+h],[x,y+h]],closed:true});
+  if(s.shape==='star'){
+    const pts=[[.5,0],[.61,.36],[.95,.36],[.67,.56],[.78,.9],[.5,.7],[.22,.9],[.33,.56],[.05,.36],[.39,.36]]
+      .map(p=>[x+p[0]*w,y+p[1]*h]);
+    path=new scope.Path({segments:pts,closed:true});
+  }
+  if(!path){
+    const r=Math.max(0,Math.min(s.radius||0,w/2,h/2));
+    path=new scope.Path.Rectangle(new scope.Rectangle(x,y,w,h),new scope.Size(r,r));
+  }
+  const center=new scope.Point(x+w/2,y+h/2);
+  if(s.flipH||s.flipV) path.scale(s.flipH?-1:1,s.flipV?-1:1,center);
+  if(s.rot) path.rotate(s.rot,center);
+  return path;
+}
+function paperBooleanResult(shapes,op){
+  const scope=getPaperScope();
+  if(!scope||!shapes.length) return null;
+  try{
+    const ordered=[...shapes].sort((a,b)=>(a.z??0)-(b.z??0));
+    const paths=ordered.map(s=>paperPathForShape(scope,s));
+    let result=paths[0];
+    if(op==='subtract') paths.slice(1).forEach(p=>{result=result.subtract(p);});
+    else if(op==='intersect') paths.slice(1).forEach(p=>{result=result.intersect(p);});
+    else if(op==='exclude') paths.slice(1).forEach(p=>{result=result.exclude(p);});
+    else paths.slice(1).forEach(p=>{result=result.unite(p);});
+    if(!result||result.isEmpty?.()) return null;
+    result.reduce?.();
+    const b=result.bounds;
+    if(!b||b.width<=0||b.height<=0) return null;
+    const normalized=result.clone();
+    normalized.translate(new scope.Point(-b.x,-b.y));
+    normalized.scale(100/b.width,100/b.height,new scope.Point(0,0));
+    return {bounds:{x:b.x,y:b.y,w:b.width,h:b.height},path:normalized.pathData};
+  }catch(err){
+    console.warn('Boolean engine fallback',err);
+    return null;
+  }
+}
+function booleanHit(shapes,op,x,y){
+  const hits=shapes.map(s=>pointInBooleanShape(s,x,y));
+  if(op==='subtract') return !!hits[0]&&!hits.slice(1).some(Boolean);
+  if(op==='intersect') return hits.every(Boolean);
+  if(op==='exclude') return hits.filter(Boolean).length%2===1;
+  return hits.some(Boolean);
+}
+function booleanResultBounds(shapes,op){
+  if(!shapes.length) return null;
+  const minX=Math.min(...shapes.map(s=>s.x)),minY=Math.min(...shapes.map(s=>s.y));
+  const maxX=Math.max(...shapes.map(s=>s.x+s.w)),maxY=Math.max(...shapes.map(s=>s.y+s.h));
+  const w=Math.max(1,maxX-minX),h=Math.max(1,maxY-minY);
+  const steps=90;
+  let bx=Infinity,by=Infinity,br=-Infinity,bb=-Infinity;
+  for(let iy=0;iy<=steps;iy++){
+    const y=minY+h*iy/steps;
+    for(let ix=0;ix<=steps;ix++){
+      const x=minX+w*ix/steps;
+      if(booleanHit(shapes,op,x,y)){
+        bx=Math.min(bx,x); by=Math.min(by,y); br=Math.max(br,x); bb=Math.max(bb,y);
+      }
+    }
+  }
+  if(Number.isFinite(bx)&&br>bx&&bb>by) return {x:bx,y:by,w:br-bx,h:bb-by};
+  return {x:minX,y:minY,w,h};
+}
+function normalizeBooleanBounds(item){
+  if(!item||item.shape!=='boolean') return;
+  const children=ensureBooleanChildren(item);
+  if(!children.length) return;
+  const abs=children.map(s=>({...s,
+    x:item.x+s.x/100*item.w,y:item.y+s.y/100*item.h,
+    w:s.w/100*item.w,h:s.h/100*item.h
+  }));
+  const result=paperBooleanResult(abs,item.booleanOp||'union');
+  const bounds=result?.bounds||booleanResultBounds(abs,item.booleanOp||'union');
+  if(!bounds) return;
+  const nx=bounds.x,ny=bounds.y,nw=Math.max(1,bounds.w),nh=Math.max(1,bounds.h);
+  item.x=nx; item.y=ny; item.w=nw; item.h=nh;
+  item.resultPath=result?.path||'';
+  item.booleanShapes=abs.map(s=>({
+    ...s,
+    x:(s.x-nx)/nw*100,y:(s.y-ny)/nh*100,
+    w:s.w/nw*100,h:s.h/nh*100
+  }));
+}
+function clearBooleanAdjustMode(){
+  const id=state.booleanAdjustId;
+  if(id!==null){
+    state.booleanAdjustId=null;
+    state.booleanPartIndex=null;
+    const item=getItem(id),el=canvasWorld.querySelector(`[data-id="${id}"]`);
+    if(item&&el) applyItemStyle(el,item);
+  }
+}
+function pickBooleanPart(item,clientX,clientY){
+  if(!item||item.shape!=='boolean'||!item.booleanShapes?.length) return -1;
+  const p=screenToWorld(clientX,clientY);
+  const lx=(p.x-item.x)/Math.max(1,item.w)*100;
+  const ly=(p.y-item.y)/Math.max(1,item.h)*100;
+  let best=-1,bestScore=Infinity;
+  item.booleanShapes.forEach((s,idx)=>{
+    const inside=lx>=s.x&&lx<=s.x+s.w&&ly>=s.y&&ly<=s.y+s.h;
+    const cx=s.x+s.w/2,cy=s.y+s.h/2;
+    const score=(inside?0:100000)+Math.hypot(lx-cx,ly-cy);
+    if(score<bestScore){bestScore=score;best=idx;}
+  });
+  return best;
+}
+function beginBooleanPartAdjust(item,clientX,clientY,withHistory=true,keepMode=false){
+  if(!item||item.type!=='shape'||item.shape!=='boolean'||item.locked||!canEditAll()) return false;
+  ensureBooleanChildren(item);
+  const idx=state.booleanAdjustId===item.id&&state.booleanPartIndex!==null
+    ? state.booleanPartIndex
+    : pickBooleanPart(item,clientX,clientY);
+  if(idx<0) return false;
+  if(withHistory) pushHistory();
+  state.booleanAdjustId=item.id;
+  state.booleanPartIndex=idx;
+  interaction={type:'booleanpart',itemId:item.id,partIndex:idx,startMX:clientX,startMY:clientY,
+    startItem:{x:item.x,y:item.y,w:item.w,h:item.h},
+    startShapes:item.booleanShapes.map(s=>({...s})),moved:false,keepMode};
+  const el=canvasWorld.querySelector(`[data-id="${item.id}"]`);
+  if(el) applyItemStyle(el,item);
+  updateProps(); showToast('Drag boolean part to adjust');
+  return true;
+}
+function releaseBooleanShape(item){
+  if(!item||item.type!=='shape'||item.shape!=='boolean'||!canEditAll()) return;
+  pushHistory();
+  ensureBooleanChildren(item);
+  const children=item.booleanShapes.map(s=>{
+    const id=++state.nextId;
+    return {id,type:'shape',shape:s.shape,name:s.name||`${SHAPE_LABELS[s.shape]||'Shape'} ${id}`,
+      x:item.x+s.x/100*item.w,y:item.y+s.y/100*item.h,w:s.w/100*item.w,h:s.h/100*item.h,
+      rot:s.rot||0,opacity:item.opacity??100,visible:item.visible!==false,locked:false,flipH:!!s.flipH,flipV:!!s.flipV,
+      z:maxZ()+1+(s.z||0),blendMode:item.blendMode||'normal',shadow:false,shadowBlur:18,shadowY:10,
+      shadowColor:'rgba(0,0,0,.35)',radius:s.radius||0,fill:item.fill,stroke:item.stroke,strokeWidth:item.strokeWidth};
+  });
+  ac().items=ac().items.filter(i=>i.id!==item.id).concat(children);
+  state.selectedIds=children.map(i=>i.id);
+  clearBooleanAdjustMode();
+  renderItems(); renderLayers(); updateSelectionOverlay(); updateMultiSelBox(); updateProps(); scheduleSave(); scheduleThumb();
+  showToast('Boolean released');
+}
+function flattenBooleanShape(item,withHistory=false){
+  if(!item||item.type!=='shape'||item.shape!=='boolean'||!canEditAll()) return;
+  if(withHistory) pushHistory();
+  normalizeBooleanBounds(item);
+  item.shape='booleanFlat';
+  item.name=`Flattened ${item.id}`;
+  item.flattenedPaths=[item.resultPath||paperBooleanResult(item.booleanShapes||[],item.booleanOp||'union')?.path||''];
+  delete item.booleanShapes;
+  delete item.booleanOp;
+  delete item.resultPath;
+  clearBooleanAdjustMode();
+  const el=canvasWorld.querySelector(`[data-id="${item.id}"]`);
+  if(el) applyItemStyle(el,item);
+  renderLayers(); updateProps(); scheduleSave(); scheduleThumb();
+  showToast('Flattened');
 }
 function addShapeItem(shape,x,y,w=160,h=110,flipH=false,flipV=false){
   if(!canEditAll()) return;
@@ -1151,10 +1576,46 @@ function addShapeItem(shape,x,y,w=160,h=110,flipH=false,flipV=false){
     blendMode:'normal',shadow:false,shadowBlur:18,shadowY:10,shadowColor:'rgba(0,0,0,.35)',radius:3,
     fill:isLine?'transparent':defaults.fill,
     stroke:defaults.stroke,strokeWidth:isLine?Math.max(3,defaults.strokeWidth):defaults.strokeWidth});
+  assignInitialFrame(ac().items[ac().items.length-1]);
   state.selectedIds=[id];
   renderItems(); renderLayers();
   updateSelectionOverlay(); updateMultiSelBox();
   updateProps(); updateCanvasHint(); scheduleThumb();
+}
+function addBooleanShape(op,sourceItems){
+  if(!canEditAll()) return;
+  const items=sourceItems.filter(i=>i.type==='shape'&&!['line','arrow','boolean','booleanFlat'].includes(i.shape));
+  if(items.length<2){showToast('Select 2+ filled shapes');return;}
+  pushHistory();
+  const minX=Math.min(...items.map(i=>i.x)),minY=Math.min(...items.map(i=>i.y));
+  const maxX=Math.max(...items.map(i=>i.x+i.w)),maxY=Math.max(...items.map(i=>i.y+i.h));
+  const bw=Math.max(1,maxX-minX),bh=Math.max(1,maxY-minY);
+  const id=++state.nextId;
+  const base=[...items].sort((a,b)=>a.z-b.z)[0];
+  const boolShapes=items.map(i=>({
+    childId:`${id}-${i.id}`,name:i.name||`${SHAPE_LABELS[i.shape]||'Shape'} ${i.id}`,z:i.z,
+    shape:i.shape,x:(i.x-minX)/bw*100,y:(i.y-minY)/bh*100,
+    w:i.w/bw*100,h:i.h/bh*100,radius:i.radius||0,rot:i.rot||0,flipH:!!i.flipH,flipV:!!i.flipV
+  }));
+  ac().items=ac().items.filter(i=>!items.some(s=>s.id===i.id));
+  const isFlatten=op==='flatten';
+  const boolItem={id,type:'shape',shape:'boolean',booleanOp:isFlatten?'union':op,
+    booleanShapes:boolShapes,
+    name:`${op[0].toUpperCase()+op.slice(1)} ${id}`,
+    x:minX,y:minY,w:bw,h:bh,rot:0,opacity:100,visible:true,locked:false,
+    flipH:false,flipV:false,z:maxZ()+1,blendMode:'normal',shadow:false,shadowBlur:18,shadowY:10,
+    shadowColor:'rgba(0,0,0,.35)',radius:0,fill:base.fill||'#6c71f0',stroke:base.stroke||'#8b8ff4',strokeWidth:base.strokeWidth??2};
+  normalizeBooleanBounds(boolItem);
+  if(isFlatten){
+    boolItem.shape='booleanFlat';
+    boolItem.flattenedPaths=[boolItem.resultPath||boolShapes.map(boolShapePath).join(' ')];
+    delete boolItem.booleanShapes;
+    delete boolItem.booleanOp;
+    delete boolItem.resultPath;
+  }
+  ac().items.push(boolItem);
+  state.selectedIds=[id];
+  renderItems(); renderLayers(); updateSelectionOverlay(); updateMultiSelBox(); updateProps(); scheduleSave(); scheduleThumb();
 }
 
 function addFrameItem(x,y,w=360,h=240){
@@ -1178,6 +1639,7 @@ function deleteItems(ids){
   if(!ids.length) return;
   pushHistory();
   ids.forEach(id=>{ ac().items=ac().items.filter(i=>i.id!==id); });
+  if(ids.includes(state.booleanAdjustId)) clearBooleanAdjustMode();
   state.selectedIds=state.selectedIds.filter(id=>!ids.includes(id));
   renderItems(); renderLayers();
   updateSelectionOverlay(); updateMultiSelBox();
@@ -1195,6 +1657,10 @@ function duplicateItems(ids){
     const nid=++state.nextId;
     const copy={...src,id:nid,x:src.x+20,y:src.y+20,
       z:maxZ()+1,name:src.name+' copy'};
+    if(src.booleanShapes) copy.booleanShapes=src.booleanShapes.map(s=>({...s,childId:`${nid}-${s.childId||s.name||Math.random()}`}));
+    if(src.flattenedPaths) copy.flattenedPaths=[...src.flattenedPaths];
+    if(src.resultPath) copy.resultPath=src.resultPath;
+    if(src.vectorMask) copy.vectorMask={...src.vectorMask};
     if(src.groupId){
       groupMap[src.groupId]=groupMap[src.groupId]||state.nextGroupId++;
       copy.groupId=groupMap[src.groupId];
@@ -1219,6 +1685,11 @@ function groupSelection(){
 }
 
 function ungroupSelection(){
+  const bool=selFirst();
+  if(bool?.type==='shape'&&bool.shape==='boolean'){
+    releaseBooleanShape(bool);
+    return;
+  }
   const groups=new Set(selAll().map(i=>i.groupId).filter(Boolean));
   if(!groups.size){showToast('No group selected');return;}
   pushHistory();
@@ -1228,6 +1699,28 @@ function ungroupSelection(){
 }
 
 // ── TEXT EDITING ──────────────────────────────────────────────────
+function vectorMaskSelectionReady(){
+  const items=selAll();
+  const images=items.filter(i=>i.type==='image'&&!i.locked);
+  const masks=items.filter(i=>i.type==='shape'&&!i.locked&&['rect','ellipse','polygon','star'].includes(i.shape));
+  return images.length===1&&masks.length===1;
+}
+function maskSelectionWithVector(){
+  if(!vectorMaskSelectionReady()){showToast('Select 1 image and 1 vector shape');return;}
+  pushHistory();
+  const items=selAll();
+  const image=items.find(i=>i.type==='image');
+  const mask=items.find(i=>i.type==='shape'&&['rect','ellipse','polygon','star'].includes(i.shape));
+  image.vectorMask={shape:mask.shape,radius:mask.radius||0};
+  image.x=mask.x; image.y=mask.y; image.w=mask.w; image.h=mask.h;
+  image.rot=mask.rot||0; image.flipH=!!mask.flipH; image.flipV=!!mask.flipV;
+  image.fit='cover'; image.imgScale=Math.max(120,image.imgScale||100);
+  ac().items=ac().items.filter(i=>i.id!==mask.id);
+  state.selectedIds=[image.id];
+  renderItems(); renderLayers(); updateSelectionOverlay(); updateMultiSelBox(); updateProps(); scheduleSave(); scheduleThumb();
+  showToast('Vector mask applied');
+}
+
 function startTextEdit(id,el){
   const item=getItem(id); if(!item||item.locked) return;
   const tc=el.querySelector('.text-content'); if(!tc) return;
@@ -1461,6 +1954,8 @@ function applyItemStyle(el,item){
   el.style.boxShadow=item.shadow?`0 ${item.shadowY||10}px ${item.shadowBlur||18}px ${item.shadowColor||'rgba(0,0,0,.35)'}`:'none';
   el.classList.toggle('locked-item',!!item.locked);
   el.classList.toggle('image-item',item.type==='image');
+  el.classList.toggle('mask-editing',item.type==='image'&&state.cropAdjustId===item.id);
+  el.classList.toggle('boolean-editing',item.type==='shape'&&item.shape==='boolean'&&state.booleanAdjustId===item.id);
   el.classList.toggle('multi-sel',state.selectedIds.length>1&&state.selectedIds.includes(item.id));
   el.classList.toggle('comment-open',state.selectedIds.includes(item.id)&&item.type==='comment');
   if(item.type==='text'||item.type==='note'){
@@ -1482,7 +1977,7 @@ function applyItemStyle(el,item){
     tc.style.lineHeight=item.lineHeight||1.4;
     tc.style.padding='8px';
   }
-}
+  }
   if(item.type==='shape'){
     const sc=el.querySelector('.shape-content');
     if(sc) sc.innerHTML=shapeMarkup(item);
@@ -1508,7 +2003,9 @@ function applyItemStyle(el,item){
       img.style.objectPosition=`${posX}% ${posY}%`;
       img.style.transform=fit==='fill'?'none':`scale(${scale})`;
       img.style.transformOrigin=`${posX}% ${posY}%`;
+      img.style.filter=`brightness(${item.imgBright??100}%) contrast(${item.imgContrast??100}%) saturate(${item.imgSaturate??100}%) blur(${item.imgBlur??0}px)`;
     }
+    applyImageVectorMask(el,item);
   }
   if(item.type==='comment'){
     const pin=el.querySelector('.comment-pin span'),pop=el.querySelector('.comment-pop');
@@ -1523,7 +2020,7 @@ function applyFrameClipping(){
     const el=canvasWorld.querySelector(`[data-id="${item.id}"]`);
     if(!el||item.type==='frame'){if(el) el.style.clipPath='';return;}
     const frame=frames.find(f=>item.frameId===f.id);
-    if(!frame){el.style.clipPath='';return;}
+    if(!frame){if(item.type==='image') applyImageVectorMask(el,item); else el.style.clipPath='';return;}
     const top=Math.max(0,frame.y-item.y);
     const left=Math.max(0,frame.x-item.x);
     const right=Math.max(0,item.x+item.w-(frame.x+frame.w));
@@ -1552,15 +2049,72 @@ function assignFrameMembership(ids){
   applyFrameClipping();
 }
 
+function vectorMaskCss(mask){
+  if(!mask) return '';
+  if(mask.shape==='ellipse') return 'ellipse(50% 50% at 50% 50%)';
+  if(mask.shape==='polygon') return 'polygon(50% 0%, 100% 100%, 0% 100%)';
+  if(mask.shape==='star'){
+    return 'polygon(50% 0%, 61% 36%, 95% 36%, 67% 56%, 78% 90%, 50% 70%, 22% 90%, 33% 56%, 5% 36%, 39% 36%)';
+  }
+  const r=Math.max(0,Math.min(50,mask.radius||0));
+  return `inset(0 round ${r}%)`;
+}
+function applyImageVectorMask(el,item){
+  const mask=vectorMaskCss(item.vectorMask);
+  el.style.clipPath=mask||'';
+  el.classList.toggle('vector-masked',!!mask);
+}
+function assignInitialFrame(item){
+  if(!item||item.type==='frame') return;
+  const frame=containingFrame(item);
+  if(frame) item.frameId=frame.id;
+}
+
 function shadowColorHex(item){
   return colorToHex(item.shadowColor||'rgba(0,0,0,.35)','#000000');
 }
 
+function boolShapePath(s){
+  const x=s.x,y=s.y,w=s.w,h=s.h;
+  if(s.shape==='ellipse'){
+    const cx=x+w/2,cy=y+h/2,rx=w/2,ry=h/2;
+    return `M ${cx-rx} ${cy} A ${rx} ${ry} 0 1 0 ${cx+rx} ${cy} A ${rx} ${ry} 0 1 0 ${cx-rx} ${cy} Z`;
+  }
+  if(s.shape==='polygon') return `M ${x+w/2} ${y} L ${x+w} ${y+h} L ${x} ${y+h} Z`;
+  if(s.shape==='star'){
+    const pts=[[.5,0],[.61,.36],[.95,.36],[.67,.56],[.78,.9],[.5,.7],[.22,.9],[.33,.56],[.05,.36],[.39,.36]];
+    return pts.map((p,i)=>`${i?'L':'M'} ${x+p[0]*w} ${y+p[1]*h}`).join(' ')+' Z';
+  }
+  const r=Math.min((s.radius||0),w/2,h/2);
+  if(r>0) return `M ${x+r} ${y} H ${x+w-r} Q ${x+w} ${y} ${x+w} ${y+r} V ${y+h-r} Q ${x+w} ${y+h} ${x+w-r} ${y+h} H ${x+r} Q ${x} ${y+h} ${x} ${y+h-r} V ${y+r} Q ${x} ${y} ${x+r} ${y} Z`;
+  return `M ${x} ${y} H ${x+w} V ${y+h} H ${x} Z`;
+}
+function booleanShapeMarkup(item,common){
+  if(item.shape==='booleanFlat'){
+    const paths=item.flattenedPaths||[];
+    return `<svg class="shape-content" viewBox="0 0 100 100" preserveAspectRatio="none">${paths.map(d=>`<path d="${d}" ${common} fill-rule="evenodd"/>`).join('')}</svg>`;
+  }
+  ensureBooleanChildren(item);
+  if(!item.resultPath) normalizeBooleanBounds(item);
+  if(item.resultPath){
+    return `<svg class="shape-content" viewBox="0 0 100 100" preserveAspectRatio="none"><path d="${item.resultPath}" ${common} fill-rule="evenodd"/></svg>`;
+  }
+  const paths=(item.booleanShapes||[]).map(boolShapePath);
+  const id=`bool-${item.id}`;
+  if((item.booleanOp==='subtract'||item.booleanOp==='exclude')&&paths.length){
+    return `<svg class="shape-content" viewBox="0 0 100 100" preserveAspectRatio="none"><path d="${paths.join(' ')}" ${common} fill-rule="evenodd"/></svg>`;
+  }
+  if(item.booleanOp==='intersect'&&paths.length>1){
+    return `<svg class="shape-content" viewBox="0 0 100 100" preserveAspectRatio="none"><defs><clipPath id="${id}"><path d="${paths.slice(1).join(' ')}"/></clipPath></defs><path d="${paths[0]}" ${common} clip-path="url(#${id})"/></svg>`;
+  }
+  return `<svg class="shape-content" viewBox="0 0 100 100" preserveAspectRatio="none">${paths.map(d=>`<path d="${d}" ${common}/>`).join('')}</svg>`;
+}
 function shapeMarkup(item){
   const stroke=item.stroke||'#8b8ff4';
   const fill=item.fill||'transparent';
   const sw=item.strokeWidth||2;
   const common=`fill="${fill}" stroke="${stroke}" stroke-width="${sw}" vector-effect="non-scaling-stroke"`;
+  if(item.shape==='boolean'||item.shape==='booleanFlat') return booleanShapeMarkup(item,common);
   if(item.shape==='line'){
     return `<svg class="shape-content" viewBox="0 0 100 100" preserveAspectRatio="none"><line x1="4" y1="96" x2="96" y2="4" ${common} stroke-linecap="round"/></svg>`;
   }
@@ -1729,6 +2283,15 @@ function showGuide(type,pos){
   canvasArea.appendChild(g);
   guideEls.push(g);
 }
+function showGuideLabel(text,x,y){
+  const label=document.createElement('div');
+  label.className='guide-label';
+  label.textContent=text;
+  label.style.left=x+'px';
+  label.style.top=y+'px';
+  canvasArea.appendChild(label);
+  guideEls.push(label);
+}
 
 function canvasGuides(){
   const c=ac();
@@ -1828,9 +2391,15 @@ function snapItem(item, othersArr){
       if(d<bestY){bestY=d;dy=b-a;}
     });
   });
-  if(bestX<=SNAP_DIST) showGuide('v',item.x+dx+item.w/2);
+  if(bestX<=SNAP_DIST){
+    showGuide('v',item.x+dx+item.w/2);
+    showGuideLabel(`${Math.round(Math.abs(dx))} px`,(item.x+dx+item.w/2)*state.zoom+state.pan.x+8,(item.y+item.h/2)*state.zoom+state.pan.y-11);
+  }
   else dx=0;
-  if(bestY<=SNAP_DIST) showGuide('h',item.y+dy+item.h/2);
+  if(bestY<=SNAP_DIST){
+    showGuide('h',item.y+dy+item.h/2);
+    showGuideLabel(`${Math.round(Math.abs(dy))} px`,(item.x+item.w/2)*state.zoom+state.pan.x+8,(item.y+dy+item.h/2)*state.zoom+state.pan.y+8);
+  }
   else dy=0;
   return {dx,dy};
 }
@@ -2045,11 +2614,24 @@ function updateProps(){
   $('props-content').style.display=count===1?'flex':'none';
   $('multi-props').style.display=count>1?'flex':'none';
   if(showDefaults) updateShapeDefaultsUI();
-  if(count>1) $('multi-sel-msg').textContent=`${count} items selected`;
+  if(count>1){
+    $('multi-sel-msg').textContent=`${count} items selected`;
+    $('vector-mask-tools').style.display=vectorMaskSelectionReady()?'flex':'none';
+    $('multi-boolean-tools').style.display=selAll().filter(i=>i.type==='shape'&&!['line','arrow','boolean','booleanFlat'].includes(i.shape)).length>1?'flex':'none';
+  }
   if(!item) return;
-  $('px').value=Math.round(item.x); $('py').value=Math.round(item.y);
-  $('pw').value=Math.round(item.w); $('ph_').value=Math.round(item.h);
+  const boolPart=item.shape==='boolean'&&state.booleanAdjustId===item.id&&state.booleanPartIndex!==null
+    ? ensureBooleanChildren(item)[state.booleanPartIndex]
+    : null;
+  if(boolPart){
+    $('px').value=Math.round(item.x+boolPart.x/100*item.w); $('py').value=Math.round(item.y+boolPart.y/100*item.h);
+    $('pw').value=Math.round(boolPart.w/100*item.w); $('ph_').value=Math.round(boolPart.h/100*item.h);
+  }else{
+    $('px').value=Math.round(item.x); $('py').value=Math.round(item.y);
+    $('pw').value=Math.round(item.w); $('ph_').value=Math.round(item.h);
+  }
   $('pr').value=Math.round(item.rot); $('pz').value=item.z;
+  $('ratio-btn').classList.toggle('active',!!state.lockAspect);
   $('popacity').value=item.opacity; $('opacity-val').textContent=item.opacity+'%';
   $('lock-btn').textContent=item.locked?'🔒':'🔓';
   $('blend-mode').value=item.blendMode||'normal';
@@ -2061,7 +2643,8 @@ function updateProps(){
   const isText=item.type==='text'||item.type==='note';
   const isShape=item.type==='shape'||item.type==='frame';
   const isImage=item.type==='image';
-  $('effect-props').style.display=item.type==='comment'?'none':'flex';
+  const isBoolean=item.type==='shape'&&(item.shape==='boolean'||item.shape==='booleanFlat');
+  $('effect-props').style.display=(item.type==='comment'||isBoolean||boolPart)?'none':'flex';
   $('text-props').style.display=isText?'flex':'none';
   $('shape-props').style.display=isShape?'flex':'none';
   $('image-props').style.display=isImage?'flex':'none';
@@ -2079,6 +2662,12 @@ function updateProps(){
     setColorControl('shape-fill',item.fill,'#6c71f0');
     setColorControl('shape-stroke',item.stroke,'#8b8ff4');
     $('shape-stroke-width').value=item.strokeWidth??2;
+    $('boolean-op-row').style.display=item.shape==='boolean'&&!boolPart?'flex':'none';
+    if(item.shape==='boolean'){
+      $('boolean-op').value=item.booleanOp||'union';
+      $('boolean-edit-btn').classList.toggle('active',state.booleanAdjustId===item.id);
+      $('boolean-edit-btn').textContent=state.booleanAdjustId===item.id?'Done editing parts':'Edit parts';
+    }
     $('frame-clip-row').style.display=item.type==='frame'?'flex':'none';
     $('frame-clip').checked=!!item.clipContent;
   }
@@ -2088,6 +2677,19 @@ function updateProps(){
     $('img-scale-val').textContent=(item.imgScale||100)+'%';
     $('img-pos-x').value=Math.round(item.imgX??50);
     $('img-pos-y').value=Math.round(item.imgY??50);
+    $('img-bright').value=item.imgBright??100;
+    $('img-bright-val').textContent=(item.imgBright??100)+'%';
+    $('img-contrast').value=item.imgContrast??100;
+    $('img-contrast-val').textContent=(item.imgContrast??100)+'%';
+    $('img-saturate').value=item.imgSaturate??100;
+    $('img-saturate-val').textContent=(item.imgSaturate??100)+'%';
+    $('img-blur').value=item.imgBlur??0;
+    $('img-blur-val').textContent=(item.imgBlur??0)+'px';
+    $('img-crop-btn').classList.toggle('active',state.cropAdjustId===item.id);
+    $('img-remove-vector-mask').style.display=item.vectorMask?'block':'none';
+    $('img-fit-btn').classList.toggle('active',(item.fit||'contain')==='contain');
+    $('img-fill-btn').classList.toggle('active',(item.fit||'contain')==='cover');
+    $('img-stretch-btn').classList.toggle('active',(item.fit||'contain')==='fill');
   }
 }
 
@@ -2117,7 +2719,25 @@ function updateShapeDefaultsUI(){
 function bindPropNum(id,key){
   $(id).addEventListener('change',e=>{
     const item=selFirst(); if(!item||item.locked) return;
-    pushHistory(); item[key]=parseFloat(e.target.value)||0;
+    pushHistory();
+    const next=parseFloat(e.target.value)||0;
+    if(item.shape==='boolean'&&state.booleanAdjustId===item.id&&state.booleanPartIndex!==null&&['x','y','w','h'].includes(key)){
+      const part=ensureBooleanChildren(item)[state.booleanPartIndex]; if(!part) return;
+      if(key==='x') part.x=(next-item.x)/Math.max(1,item.w)*100;
+      if(key==='y') part.y=(next-item.y)/Math.max(1,item.h)*100;
+      if(key==='w') part.w=Math.max(1,next)/Math.max(1,item.w)*100;
+      if(key==='h') part.h=Math.max(1,next)/Math.max(1,item.h)*100;
+      normalizeBooleanBounds(item);
+      const el=canvasWorld.querySelector(`[data-id="${item.id}"]`);
+      if(el) applyItemStyle(el,item);
+      updateSelectionOverlay(); updateMultiSelBox(); updateProps(); renderLayers(); scheduleSave(); scheduleThumb();
+      return;
+    }
+    if(state.lockAspect&&(key==='w'||key==='h')&&item.w>0&&item.h>0){
+      const ratio=item.w/item.h;
+      if(key==='w'){item.w=Math.max(10,next); item.h=Math.max(10,item.w/ratio);}
+      else {item.h=Math.max(10,next); item.w=Math.max(10,item.h*ratio);}
+    }else item[key]=next;
     const el=canvasWorld.querySelector(`[data-id="${item.id}"]`);
     if(el) applyItemStyle(el,item);
     applyFrameClipping();
@@ -2127,6 +2747,22 @@ function bindPropNum(id,key){
 bindPropNum('px','x'); bindPropNum('py','y');
 bindPropNum('pw','w'); bindPropNum('ph_','h');
 bindPropNum('pr','rot'); bindPropNum('pz','z');
+$('ratio-btn').addEventListener('click',()=>{
+  state.lockAspect=!state.lockAspect;
+  updateProps();
+});
+function updateTransformQuick(fn){
+  const item=selFirst(); if(!item||item.locked) return;
+  pushHistory(); fn(item);
+  const el=canvasWorld.querySelector(`[data-id="${item.id}"]`);
+  if(el) applyItemStyle(el,item);
+  applyFrameClipping(); updateSelectionOverlay(); updateMultiSelBox(); updateProps(); scheduleSave(); scheduleThumb();
+}
+$('rot-left-btn').addEventListener('click',()=>updateTransformQuick(item=>{item.rot=(item.rot||0)-90;}));
+$('rot-right-btn').addEventListener('click',()=>updateTransformQuick(item=>{item.rot=(item.rot||0)+90;}));
+$('reset-transform-btn').addEventListener('click',()=>updateTransformQuick(item=>{
+  item.rot=0; item.flipH=false; item.flipV=false;
+}));
 
 $('popacity').addEventListener('input',e=>{
   const item=selFirst(); if(!item) return;
@@ -2175,6 +2811,10 @@ $('m-dup-btn').addEventListener('click',()=>{ if(state.selectedIds.length) dupli
 $('m-del-btn').addEventListener('click',()=>{ if(state.selectedIds.length) deleteItems([...state.selectedIds]); });
 $('group-btn').addEventListener('click',groupSelection);
 $('ungroup-btn').addEventListener('click',ungroupSelection);
+$('vector-mask-btn').addEventListener('click',maskSelectionWithVector);
+document.querySelectorAll('[data-bool-op]').forEach(btn=>{
+  btn.addEventListener('click',()=>booleanSelection(btn.dataset.boolOp));
+});
 
 function updateImageCropProp(key,value,withHistory=false){
   const item=selFirst(); if(!item||item.type!=='image'||item.locked) return;
@@ -2187,21 +2827,39 @@ function updateImageCropProp(key,value,withHistory=false){
   if(el) applyItemStyle(el,item);
   updateProps(); scheduleSave(); scheduleThumb();
 }
-function beginImageCropAdjust(item,clientX,clientY){
+function clearCropAdjustMode(){
+  const id=state.cropAdjustId;
+  if(id!==null){
+    state.cropAdjustId=null;
+    const item=getItem(id), el=canvasWorld.querySelector(`[data-id="${id}"]`);
+    if(item&&el) applyItemStyle(el,item);
+  }
+}
+function beginImageCropAdjust(item,clientX,clientY,withHistory=true,keepMaskMode=false){
   if(!item||item.type!=='image'||item.locked||!canEditAll()) return false;
   if((item.fit||'contain')!=='cover'){
-    pushHistory();
+    if(withHistory) pushHistory();
     item.fit='cover';
     item.imgScale=Math.max(120,item.imgScale||100);
   }else{
-    pushHistory();
+    if(withHistory) pushHistory();
   }
   interaction={type:'imagecrop',itemId:item.id,startMX:clientX,startMY:clientY,
-    startX:item.imgX??50,startY:item.imgY??50,moved:false};
+    startX:item.imgX??50,startY:item.imgY??50,moved:false,keepMaskMode};
   const el=canvasWorld.querySelector(`[data-id="${item.id}"]`);
   if(el) applyItemStyle(el,item);
   updateProps(); showToast('Drag image to adjust crop');
   return true;
+}
+function setImageFitMode(item,fit){
+  if(!item||item.type!=='image'||item.locked) return;
+  pushHistory();
+  item.fit=fit;
+  if(fit==='contain'||fit==='fill'){item.imgX=50; item.imgY=50; item.imgScale=100;}
+  if(fit==='cover') item.imgScale=Math.max(120,item.imgScale||100);
+  const el=canvasWorld.querySelector(`[data-id="${item.id}"]`);
+  if(el) applyItemStyle(el,item);
+  updateProps(); scheduleSave(); scheduleThumb();
 }
 $('img-fit').addEventListener('change',e=>updateImageCropProp('fit',e.target.value,true));
 $('img-scale').addEventListener('input',e=>{
@@ -2215,14 +2873,58 @@ $('img-scale').addEventListener('change',e=>{
 });
 $('img-pos-x').addEventListener('change',e=>updateImageCropProp('imgX',parseFloat(e.target.value),true));
 $('img-pos-y').addEventListener('change',e=>updateImageCropProp('imgY',parseFloat(e.target.value),true));
-$('img-crop-btn').addEventListener('click',()=>{
-  const item=selFirst(); if(!item||item.type!=='image'||item.locked) return;
+$('img-fit-btn').addEventListener('click',()=>setImageFitMode(selFirst(),'contain'));
+$('img-fill-btn').addEventListener('click',()=>setImageFitMode(selFirst(),'cover'));
+$('img-stretch-btn').addEventListener('click',()=>setImageFitMode(selFirst(),'fill'));
+$('img-remove-vector-mask').addEventListener('click',()=>{
+  const item=selFirst(); if(!item||item.type!=='image'||!item.vectorMask||item.locked) return;
   pushHistory();
-  item.fit='cover'; item.imgScale=Math.max(120,item.imgScale||100);
-  state.cropAdjustId=item.id;
+  delete item.vectorMask;
   const el=canvasWorld.querySelector(`[data-id="${item.id}"]`);
   if(el) applyItemStyle(el,item);
-  updateProps(); scheduleSave(); scheduleThumb(); showToast('Drag image to adjust crop');
+  updateProps(); scheduleSave(); scheduleThumb();
+  showToast('Vector mask removed');
+});
+function updateImageAdjustment(key,value,withHistory=false){
+  const item=selFirst(); if(!item||item.type!=='image'||item.locked) return;
+  if(withHistory) pushHistory();
+  item[key]=key==='imgBlur'?clamp(value,0,20):clamp(value,0,200);
+  const el=canvasWorld.querySelector(`[data-id="${item.id}"]`);
+  if(el) applyItemStyle(el,item);
+  updateProps(); scheduleSave(); scheduleThumb();
+}
+[
+  ['img-bright','imgBright','%'],
+  ['img-contrast','imgContrast','%'],
+  ['img-saturate','imgSaturate','%'],
+  ['img-blur','imgBlur','px']
+].forEach(([id,key,unit])=>{
+  $(id).addEventListener('input',e=>{
+    if(!imageAdjustDirty){pushHistory();imageAdjustDirty=true;}
+    const val=parseInt(e.target.value,10);
+    $(`${id}-val`).textContent=val+unit;
+    updateImageAdjustment(key,val,false);
+  });
+  $(id).addEventListener('change',e=>{
+    updateImageAdjustment(key,parseInt(e.target.value,10),false);
+    imageAdjustDirty=false;
+  });
+});
+$('img-reset-adjust').addEventListener('click',()=>{
+  const item=selFirst(); if(!item||item.type!=='image'||item.locked) return;
+  pushHistory();
+  item.imgBright=100; item.imgContrast=100; item.imgSaturate=100; item.imgBlur=0;
+  const el=canvasWorld.querySelector(`[data-id="${item.id}"]`);
+  if(el) applyItemStyle(el,item);
+  updateProps(); scheduleSave(); scheduleThumb();
+});
+$('img-crop-btn').addEventListener('click',()=>{
+  const item=selFirst(); if(!item||item.type!=='image'||item.locked) return;
+  if(state.cropAdjustId===item.id){clearCropAdjustMode(); updateProps(); return;}
+  state.cropAdjustId=item.id;
+  beginImageCropAdjust(item,0,0,true);
+  interaction=null;
+  updateProps(); scheduleSave(); scheduleThumb();
 });
 $('img-reset-crop-btn').addEventListener('click',()=>{
   const item=selFirst(); if(!item||item.type!=='image'||item.locked) return;
@@ -2298,11 +3000,24 @@ $('shape-stroke-width').addEventListener('change',e=>
   updateShapeProp('strokeWidth',Math.max(0,parseFloat(e.target.value)||0),true)
 );
 $('shape-fill-clear').addEventListener('click',()=>updateShapeProp('fill','transparent',true));
+$('boolean-op').addEventListener('change',e=>updateBooleanOperation(selFirst(),e.target.value,true));
+$('boolean-edit-btn').addEventListener('click',()=>{
+  const item=selFirst(); if(!item||item.type!=='shape'||item.shape!=='boolean'||item.locked) return;
+  if(state.booleanAdjustId===item.id) clearBooleanAdjustMode();
+  else {
+    clearCropAdjustMode();
+    state.booleanAdjustId=item.id;
+    const el=canvasWorld.querySelector(`[data-id="${item.id}"]`);
+    if(el) applyItemStyle(el,item);
+  }
+  updateProps();
+});
+$('boolean-release-btn').addEventListener('click',()=>releaseBooleanShape(selFirst()));
+$('boolean-flatten-btn').addEventListener('click',()=>flattenBooleanShape(selFirst(),true));
 $('frame-clip').addEventListener('change',e=>{
   const item=selFirst(); if(!item||item.type!=='frame'||item.locked) return;
   pushHistory();
   item.clipContent=e.target.checked;
-  if(item.clipContent) frameChildIds(item).forEach(id=>{const child=getItem(id); if(child) child.frameId=item.id;});
   applyFrameClipping(); updateProps(); scheduleSave(); scheduleThumb();
 });
 
@@ -2318,7 +3033,17 @@ $('default-shape-stroke-width').addEventListener('change',e=>
 );
 $('default-shape-fill-clear').addEventListener('click',()=>updateDefaultShapeProp('fill','transparent'));
 
-let layerDrag={id:null,startY:0};
+let layerDrag={ids:null,startY:0};
+$('layer-search').addEventListener('input',e=>{
+  state.layerQuery=e.target.value;
+  renderLayers();
+});
+document.querySelectorAll('.layer-filter').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    state.layerFilter=btn.dataset.layerFilter;
+    renderLayers();
+  });
+});
 
 function layerThumb(item){
   if(item.type==='text') return 'T';
@@ -2326,6 +3051,8 @@ function layerThumb(item){
   if(item.type==='comment') return item.number||'C';
   if(item.type==='frame') return 'F';
   if(item.type==='shape'){
+    if(item.shape==='boolean') return 'B';
+    if(item.shape==='booleanFlat') return 'F';
     const icons={rect:'▭',line:'╱',arrow:'↗',ellipse:'○',polygon:'△',star:'☆'};
     return icons[item.shape]||'□';
   }
@@ -2334,11 +3061,27 @@ function layerThumb(item){
 
 function renderLayers(){
   const list=$('layers-list');
-  const items=[...ac().items].sort((a,b)=>b.z-a.z);
-  $('info-items').textContent=items.length;
-  if(!items.length){list.innerHTML='<div class="layer-empty">No layers</div>';return;}
+  const allItems=[...ac().items].sort((a,b)=>b.z-a.z);
+  const q=(state.layerQuery||'').trim().toLowerCase();
+  const filter=state.layerFilter||'all';
+  const matchesFilter=item=>{
+    if(filter==='all') return true;
+    if(filter==='hidden') return item.visible===false;
+    if(filter==='locked') return !!item.locked;
+    if(filter==='text') return item.type==='text'||item.type==='note';
+    if(filter==='shape') return item.type==='shape';
+    return item.type===filter;
+  };
+  const items=allItems.filter(item=>
+    matchesFilter(item)&&(!q||`${item.name||''} ${item.type||''} ${item.shape||''}`.toLowerCase().includes(q))
+  );
+  $('info-items').textContent=allItems.length;
+  $('layer-search').value=state.layerQuery||'';
+  document.querySelectorAll('.layer-filter').forEach(btn=>btn.classList.toggle('active',btn.dataset.layerFilter===filter));
+  if(!allItems.length){list.innerHTML='<div class="layer-empty">No layers</div>';return;}
+  if(!items.length){list.innerHTML='<div class="layer-empty">No matching layers</div>';return;}
 
-  list.innerHTML=items.map(item=>`
+  const itemRow=item=>`
     <div class="layer-item${state.selectedIds.includes(item.id)?' selected':''}"
          data-id="${item.id}" draggable="true">
       <div class="layer-drag-handle" title="Drag to reorder">⠿</div>
@@ -2351,12 +3094,98 @@ function renderLayers(){
         <div class="layer-icon${item.visible?'':' off'}" data-vis="${item.id}">◉</div>
       </div>
     </div>
-  `).join('');
+  `;
+  const booleanChildRow=(parent,part,idx)=>`
+    <div class="layer-item group-child boolean-child${state.booleanAdjustId===parent.id&&state.booleanPartIndex===idx?' selected':''}"
+         data-bool-parent="${parent.id}" data-bool-part="${idx}" draggable="true">
+      <div class="layer-drag-handle" title="Drag to reorder">â ¿</div>
+      <div class="layer-thumb shape-thumb">${layerThumb({type:'shape',shape:part.shape})}</div>
+      <div class="layer-name-el">${part.name||`${SHAPE_LABELS[part.shape]||'Shape'} ${idx+1}`}</div>
+      <div class="layer-actions"><span class="layer-icon">${idx+1}</span></div>
+    </div>
+  `;
+  const renderedGroups=new Set(), rows=[];
+  items.forEach(item=>{
+    if(item.type==='shape'&&item.shape==='boolean'){
+      const children=ensureBooleanChildren(item);
+      const key=`bool-${item.id}`;
+      const collapsed=!!state.collapsedGroups[key];
+      rows.push(`
+        <div class="layer-item group-row${state.selectedIds.includes(item.id)?' selected':''}" data-bool="${item.id}" draggable="true">
+          <div class="layer-caret">${collapsed?'+':'-'}</div>
+          <div class="layer-thumb shape-thumb">B</div>
+          <div class="layer-name-el" data-name="${item.id}" contenteditable="false">${item.name}</div>
+          <div class="layer-actions"><span class="layer-icon">${children.length}</span></div>
+        </div>
+      `);
+      if(!collapsed) children.forEach((child,idx)=>rows.push(booleanChildRow(item,child,idx)));
+      return;
+    }
+    if(item.groupId){
+      const gid=item.groupId;
+      if(renderedGroups.has(gid)) return;
+      renderedGroups.add(gid);
+      const members=items.filter(i=>i.groupId===gid);
+      const collapsed=!!state.collapsedGroups[gid];
+      const selected=members.length&&members.every(i=>state.selectedIds.includes(i.id));
+      rows.push(`
+        <div class="layer-item group-row${selected?' selected':''}" data-group="${gid}" draggable="true">
+          <div class="layer-caret">${collapsed?'+':'-'}</div>
+          <div class="layer-thumb text-thumb">[]</div>
+          <div class="layer-name-el">Group ${gid}</div>
+          <div class="layer-actions"><span class="layer-icon">${members.length}</span></div>
+        </div>
+      `);
+      if(!collapsed) members.forEach(member=>rows.push(itemRow(member).replace('layer-item','layer-item group-child')));
+    }else rows.push(itemRow(item));
+  });
+  list.innerHTML=rows.join('');
 
   // Click to select
   list.querySelectorAll('.layer-item').forEach(el=>{
     el.addEventListener('click',e=>{
       if(e.target.closest('.layer-actions')||e.target.closest('[data-name]')) return;
+      if(el.dataset.bool){
+        const id=parseInt(el.dataset.bool,10);
+        if(e.target.closest('.layer-caret')){
+          const key=`bool-${id}`;
+          state.collapsedGroups[key]=!state.collapsedGroups[key];
+          renderLayers();
+          return;
+        }
+        state.selectedIds=[id];
+        clearBooleanAdjustMode();
+        renderItemsHighlight(); updateSelectionOverlay();
+        updateMultiSelBox(); updateProps(); renderLayers();
+        return;
+      }
+      if(el.dataset.boolParent){
+        const id=parseInt(el.dataset.boolParent,10),idx=parseInt(el.dataset.boolPart,10);
+        state.selectedIds=[id];
+        state.booleanAdjustId=id;
+        state.booleanPartIndex=idx;
+        const item=getItem(id),node=canvasWorld.querySelector(`[data-id="${id}"]`);
+        if(item&&node) applyItemStyle(node,item);
+        renderItemsHighlight(); updateSelectionOverlay();
+        updateMultiSelBox(); updateProps(); renderLayers();
+        return;
+      }
+      if(el.dataset.group){
+        const gid=parseInt(el.dataset.group,10);
+        if(e.target.closest('.layer-caret')){
+          state.collapsedGroups[gid]=!state.collapsedGroups[gid];
+          renderLayers();
+          return;
+        }
+        const members=items.filter(i=>i.groupId===gid).map(i=>i.id);
+        if(e.shiftKey){
+          if(members.every(i=>state.selectedIds.includes(i))) state.selectedIds=state.selectedIds.filter(i=>!members.includes(i));
+          else state.selectedIds=[...new Set([...state.selectedIds,...members])];
+        }else state.selectedIds=members;
+        renderItemsHighlight(); updateSelectionOverlay();
+        updateMultiSelBox(); updateProps(); renderLayers();
+        return;
+      }
       const id=parseInt(el.dataset.id);
       const item=getItem(id), idsToSelect=selectionIdsForItem(item);
       if(e.shiftKey){
@@ -2369,7 +3198,14 @@ function renderLayers(){
 
     // Drag to reorder
     el.addEventListener('dragstart',e=>{
-      layerDrag.id=parseInt(el.dataset.id);
+      if(el.dataset.boolParent){
+        layerDrag={boolParent:parseInt(el.dataset.boolParent,10),partIndex:parseInt(el.dataset.boolPart,10)};
+        el.style.opacity='.5';
+        return;
+      }
+      const ids=layerUnitIds(el);
+      if(!ids.length){e.preventDefault();return;}
+      layerDrag.ids=ids;
       el.style.opacity='.5';
     });
     el.addEventListener('dragend',()=>{ el.style.opacity=''; clearLayerDragOver(); });
@@ -2380,16 +3216,13 @@ function renderLayers(){
     });
     el.addEventListener('drop',e=>{
       e.preventDefault();
-      const targetId=parseInt(el.dataset.id);
-      if(layerDrag.id&&layerDrag.id!==targetId){
-        pushHistory();
-        const dragItem=getItem(layerDrag.id);
-        const targetItem=getItem(targetId);
-        if(dragItem&&targetItem){
-          const tmp=dragItem.z; dragItem.z=targetItem.z; targetItem.z=tmp;
-        }
-        renderItems(); renderLayers();
+      if(layerDrag.boolParent&&el.dataset.boolParent&&parseInt(el.dataset.boolParent,10)===layerDrag.boolParent){
+        moveBooleanPart(layerDrag.boolParent,layerDrag.partIndex,parseInt(el.dataset.boolPart,10));
+        clearLayerDragOver();
+        return;
       }
+      const targetIds=layerUnitIds(el);
+      if(layerDrag.ids?.length&&targetIds.length) moveLayerUnit(layerDrag.ids,targetIds);
       clearLayerDragOver();
     });
   });
@@ -2449,7 +3282,46 @@ function renderLayers(){
 
 function clearLayerDragOver(){
   document.querySelectorAll('.layer-item.drag-over').forEach(el=>el.classList.remove('drag-over'));
-  layerDrag.id=null;
+  layerDrag={ids:null,startY:0};
+}
+function layerUnitIds(el){
+  if(el.dataset.bool) return [parseInt(el.dataset.bool,10)];
+  if(el.dataset.group){
+    const gid=parseInt(el.dataset.group,10);
+    return ac().items.filter(i=>i.groupId===gid).sort((a,b)=>b.z-a.z).map(i=>i.id);
+  }
+  return el.dataset.id?[parseInt(el.dataset.id,10)]:[];
+}
+function moveLayerUnit(dragIds,targetIds){
+  const dragSet=new Set(dragIds), targetSet=new Set(targetIds);
+  if([...dragSet].some(id=>targetSet.has(id))) return;
+  const ordered=[...ac().items].sort((a,b)=>b.z-a.z);
+  const dragged=ordered.filter(i=>dragSet.has(i.id));
+  if(!dragged.length) return;
+  const remaining=ordered.filter(i=>!dragSet.has(i.id));
+  const targetIndex=remaining.findIndex(i=>targetSet.has(i.id));
+  if(targetIndex<0) return;
+  pushHistory();
+  const next=[...remaining.slice(0,targetIndex),...dragged,...remaining.slice(targetIndex)];
+  const zValues=ordered.map(i=>i.z).sort((a,b)=>b-a);
+  next.forEach((item,idx)=>{item.z=zValues[idx];});
+  renderItems(); renderLayers(); scheduleSave(); scheduleThumb();
+}
+function moveBooleanPart(parentId,fromIdx,toIdx){
+  const item=getItem(parentId);
+  if(!item||item.shape!=='boolean'||fromIdx===toIdx) return;
+  pushHistory();
+  const parts=ensureBooleanChildren(item);
+  const [moved]=parts.splice(fromIdx,1);
+  parts.splice(toIdx,0,moved);
+  parts.forEach((part,idx)=>part.z=parts.length-idx);
+  item.booleanShapes=parts;
+  normalizeBooleanBounds(item);
+  state.booleanAdjustId=parentId;
+  state.booleanPartIndex=toIdx;
+  const el=canvasWorld.querySelector(`[data-id="${parentId}"]`);
+  if(el) applyItemStyle(el,item);
+  renderLayers(); updateProps(); scheduleSave(); scheduleThumb();
 }
 
 // ── BACKGROUND ────────────────────────────────────────────────────
@@ -2574,7 +3446,16 @@ function renderTabs(){
 $('add-canvas-btn').addEventListener('click',()=>addCanvas());
 
 // ── IMAGE LOADING ─────────────────────────────────────────────────
-function loadImage(src,px,py){
+function imageMimeFromSource(src,mime=''){
+  if(mime) return mime;
+  const dataMatch=String(src).match(/^data:(image\/[^;,]+)/i);
+  if(dataMatch) return dataMatch[1].toLowerCase();
+  const clean=String(src).split('?')[0].split('#')[0].toLowerCase();
+  if(/\.(png|webp|gif|svg)$/.test(clean)) return 'image/png';
+  if(/\.(jpe?g)$/.test(clean)) return 'image/jpeg';
+  return 'image/png';
+}
+function loadImage(src,px,py,mime=''){
   const img=new Image();
   img.crossOrigin='anonymous';
   img.onload=async()=>{
@@ -2587,15 +3468,19 @@ function loadImage(src,px,py){
     c.width=w;c.height=h;
     c.getContext('2d').drawImage(img,0,0,w,h);
 
-    // upload to Supabase Storage
-    const blob=await new Promise(r=>c.toBlob(r,'image/jpeg',0.75));
-    const filename=`${Date.now()}-${Math.random().toString(36).slice(2)}.jpg`;
+    // Preserve alpha for transparent formats. JPEG flattens transparent pixels.
+    const sourceMime=imageMimeFromSource(src,mime);
+    const preserveAlpha=sourceMime!=='image/jpeg'&&sourceMime!=='image/jpg';
+    const outputMime=preserveAlpha?'image/png':'image/jpeg';
+    const ext=preserveAlpha?'png':'jpg';
+    const blob=await new Promise(r=>c.toBlob(r,outputMime,preserveAlpha?undefined:0.75));
+    const filename=`${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
     const uploadRes=await fetch(`${SUPABASE_URL}/storage/v1/object/canvas-images/${filename}`,{
       method:'POST',
       headers:{
         'apikey':SUPABASE_KEY,
         'Authorization':`Bearer ${SUPABASE_KEY}`,
-        'Content-Type':'image/jpeg',
+        'Content-Type':outputMime,
       },
       body:blob
     });
@@ -2621,7 +3506,7 @@ function loadImage(src,px,py){
 function loadFiles(files,px,py){
   [...files].filter(f=>f.type.startsWith('image/')).forEach(f=>{
     const reader=new FileReader();
-    reader.onload=e=>loadImage(e.target.result,px,py);
+    reader.onload=e=>loadImage(e.target.result,px,py,f.type);
     reader.readAsDataURL(f);
   });
 }
@@ -2642,7 +3527,7 @@ document.addEventListener('paste',e=>{
   [...e.clipboardData.items].filter(i=>i.type.startsWith('image/')).forEach(i=>{
     const blob=i.getAsFile();
     const reader=new FileReader();
-    reader.onload=ev=>loadImage(ev.target.result);
+    reader.onload=ev=>loadImage(ev.target.result,undefined,undefined,blob?.type||'');
     reader.readAsDataURL(blob);
   });
 });
@@ -2723,22 +3608,30 @@ function onItemMousedown(e){
   updateProps(); renderLayers();
   const item=clicked;
   if(item&&item.type==='image'&&state.tool==='select'&&(e.altKey||state.cropAdjustId===item.id)){
-    beginImageCropAdjust(item,e.clientX,e.clientY);
+    beginImageCropAdjust(item,e.clientX,e.clientY,true,state.cropAdjustId===item.id&&!e.altKey);
     scheduleSave(); scheduleThumb();
     return;
   }
+  if(item&&item.type==='shape'&&item.shape==='boolean'&&state.tool==='select'&&(e.altKey||state.booleanAdjustId===item.id)){
+    beginBooleanPartAdjust(item,e.clientX,e.clientY,true,state.booleanAdjustId===item.id&&!e.altKey);
+    scheduleSave(); scheduleThumb();
+    return;
+  }
+  if(!e.altKey) clearCropAdjustMode();
+  if(!e.altKey) clearBooleanAdjustMode();
   if(item&&!item.locked){
     const allSel=selAll().filter(i=>!i.locked);
     const moveItems=item.type==='frame'
       ? [...new Set([...allSel.map(i=>i.id),...frameChildIds(item)])].map(id=>getItem(id)).filter(i=>i&&!i.locked)
       : allSel;
     interaction={type:'move',startMX:e.clientX,startMY:e.clientY,
+      primaryId:item.id,primaryType:item.type,
       items:moveItems.map(i=>({id:i.id,sx:i.x,sy:i.y})),moved:false};
   }
 }
 function frameChildIds(frame){
   if(!frame||frame.type!=='frame') return [];
-  return ac().items.filter(i=>i.frameId===frame.id||(!i.frameId&&isFrameChild(frame,i))).map(i=>i.id);
+  return ac().items.filter(i=>i.frameId===frame.id).map(i=>i.id);
 }
 function onItemDblclick(e){
   if(state.editingId) return;
@@ -2747,12 +3640,16 @@ function onItemDblclick(e){
   const item=getItem(id);
   if(item&&(item.type==='text'||item.type==='note')) startTextEdit(id,e.currentTarget);
   if(item&&item.type==='image'&&canEditAll()&&!item.locked){
-    pushHistory();
-    item.fit='cover'; item.imgScale=Math.max(120,item.imgScale||100);
     state.cropAdjustId=item.id;
-    applyItemStyle(e.currentTarget,item);
-    updateProps(); scheduleSave(); scheduleThumb();
-    showToast('Drag image to adjust crop');
+    beginImageCropAdjust(item,e.clientX,e.clientY,true);
+    interaction=null;
+    scheduleSave(); scheduleThumb();
+  }
+  if(item&&item.type==='shape'&&item.shape==='boolean'&&canEditAll()&&!item.locked){
+    state.booleanAdjustId=item.id;
+    beginBooleanPartAdjust(item,e.clientX,e.clientY,true);
+    interaction=null;
+    scheduleSave(); scheduleThumb();
   }
   if(item&&item.type==='comment'&&canComment()){
     editActiveComment();
@@ -2831,9 +3728,12 @@ canvasArea.addEventListener('mousedown',e=>{
         return;
       }
       const wp=screenToWorld(e.clientX,e.clientY);
-      addCommentItem(wp.x,wp.y); return;
+      addCommentItem(wp.x,wp.y);
+      returnToSelectTool();
+      return;
     }
     if(state.tool==='select'&&!e.target.closest('.canvas-item')&&!e.target.closest('#selection-overlay')){
+      clearCropAdjustMode();
       state.selectedIds=[];
       renderItemsHighlight(); updateSelectionOverlay(); updateMultiSelBox();
       updateProps(); renderLayers();
@@ -2966,10 +3866,28 @@ document.addEventListener('mousemove',e=>{
   }
   if(interaction.type==='imagecrop'){
     const item=getItem(interaction.itemId); if(!item) return;
-    const dx=(e.clientX-interaction.startMX)/Math.max(1,item.w);
-    const dy=(e.clientY-interaction.startMY)/Math.max(1,item.h);
+    const dx=(e.clientX-interaction.startMX)/(Math.max(1,item.w)*state.zoom);
+    const dy=(e.clientY-interaction.startMY)/(Math.max(1,item.h)*state.zoom);
     item.imgX=clamp(interaction.startX-dx*100,0,100);
     item.imgY=clamp(interaction.startY-dy*100,0,100);
+    interaction.moved=true;
+    const el=canvasWorld.querySelector(`[data-id="${item.id}"]`);
+    if(el) applyItemStyle(el,item);
+    updateProps(); return;
+  }
+  if(interaction.type==='booleanpart'){
+    const item=getItem(interaction.itemId); if(!item||!item.booleanShapes?.[interaction.partIndex]) return;
+    const startItem=interaction.startItem;
+    const dx=(e.clientX-interaction.startMX)/state.zoom;
+    const dy=(e.clientY-interaction.startMY)/state.zoom;
+    const start=interaction.startShapes[interaction.partIndex];
+    item.x=startItem.x; item.y=startItem.y; item.w=startItem.w; item.h=startItem.h;
+    item.booleanShapes=interaction.startShapes.map(s=>({...s}));
+    item.booleanShapes[interaction.partIndex]={...start,
+      x:(startItem.x+start.x/100*startItem.w+dx-startItem.x)/startItem.w*100,
+      y:(startItem.y+start.y/100*startItem.h+dy-startItem.y)/startItem.h*100
+    };
+    normalizeBooleanBounds(item);
     interaction.moved=true;
     const el=canvasWorld.querySelector(`[data-id="${item.id}"]`);
     if(el) applyItemStyle(el,item);
@@ -3048,6 +3966,7 @@ document.addEventListener('mouseup',e=>{
     }else{
       addFrameItem(start.x-180,start.y-120);
     }
+    returnToSelectTool();
   }
   if(interaction&&interaction.type==='textcreate'){
     rubberBand.style.display='none';
@@ -3060,6 +3979,7 @@ document.addEventListener('mouseup',e=>{
     }else{
       addTextItem(start.x-110,start.y-35);
     }
+    returnToSelectTool();
   }
   if(interaction&&interaction.type==='notecreate'){
     rubberBand.style.display='none';
@@ -3072,6 +3992,7 @@ document.addEventListener('mouseup',e=>{
     }else{
       addNoteItem(start.x-110,start.y-80);
     }
+    returnToSelectTool();
   }
   if(interaction&&interaction.type==='shapecreate'){
     rubberBand.style.display='none';
@@ -3087,11 +4008,19 @@ document.addEventListener('mouseup',e=>{
       const [w,h]=defaults[interaction.shape]||defaults.rect;
       addShapeItem(interaction.shape,start.x-w/2,start.y-h/2,w,h);
     }
+    returnToSelectTool();
   }
   if(interaction&&(interaction.type==='resize'||interaction.type==='rotate')) scheduleThumb();
-  if(interaction&&interaction.type==='imagecrop'&&interaction.moved){scheduleSave();scheduleThumb();}
+  if(interaction&&interaction.type==='imagecrop'){
+    if(!interaction.keepMaskMode) clearCropAdjustMode();
+    if(interaction.moved){scheduleSave();scheduleThumb();}
+  }
+  if(interaction&&interaction.type==='booleanpart'){
+    if(!interaction.keepMode) clearBooleanAdjustMode();
+    if(interaction.moved){scheduleSave();scheduleThumb();}
+  }
   if(interaction&&interaction.type==='move'&&interaction.moved){
-    assignFrameMembership(interaction.items.map(i=>i.id));
+    if(interaction.primaryType!=='frame') assignFrameMembership(interaction.items.map(i=>i.id));
     scheduleSave(); scheduleThumb();
   }
   interaction=null;
@@ -3141,6 +4070,18 @@ document.addEventListener('keydown',e=>{
       const el=canvasWorld.querySelector(`[data-id="${item.id}"]`);
       if(el) applyItemStyle(el,item);
       updateSelectionOverlay();updateProps();renderLayers();}}
+  if(e.altKey&&e.shiftKey&&e.code==='KeyU'){e.preventDefault();booleanSelection('union');}
+  if(e.altKey&&e.shiftKey&&e.code==='KeyS'){e.preventDefault();booleanSelection('subtract');}
+  if(e.altKey&&e.shiftKey&&e.code==='KeyI'){e.preventDefault();booleanSelection('intersect');}
+  if(e.altKey&&e.shiftKey&&e.code==='KeyE'){e.preventDefault();booleanSelection('exclude');}
+  if(e.altKey&&e.shiftKey&&e.code==='KeyF'){e.preventDefault();booleanSelection('flatten');}
+  if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.code)&&state.selectedIds.length){
+    e.preventDefault();
+    const step=e.shiftKey?10:1;
+    const dx=e.code==='ArrowLeft'?-step:e.code==='ArrowRight'?step:0;
+    const dy=e.code==='ArrowUp'?-step:e.code==='ArrowDown'?step:0;
+    nudgeSelection(dx,dy);
+  }
   if(e.code==='Delete'||e.code==='Backspace'){if(state.selectedIds.length) deleteItems([...state.selectedIds]);}
   if(e.code==='Escape'){
     flushActiveCommentEditor();
@@ -3204,6 +4145,14 @@ const COMMANDS=[
   {name:'Ungroup selection',group:'Selection',key:'Ctrl Shift G',run:ungroupSelection,enabled:()=>selAll().some(i=>i.groupId)},
   {name:'Duplicate selection',group:'Selection',key:'Ctrl D',run:()=>duplicateItems([...state.selectedIds]),enabled:()=>state.selectedIds.length>0},
   {name:'Delete selection',group:'Selection',key:'Del',run:()=>deleteItems([...state.selectedIds]),enabled:()=>state.selectedIds.length>0},
+  {name:'Copy style',group:'Selection',run:()=>copyItemStyle(state.selectedIds[0]),enabled:()=>state.selectedIds.length===1},
+  {name:'Paste style',group:'Selection',run:()=>pasteItemStyle([...state.selectedIds]),enabled:()=>state.selectedIds.length>0&&!!state.styleClipboard},
+  {name:'Mask with vector',group:'Mask',run:maskSelectionWithVector,enabled:vectorMaskSelectionReady},
+  {name:'Union shapes',group:'Shapes',key:'Alt Shift U',run:()=>booleanSelection('union'),enabled:booleanSelectionReady},
+  {name:'Subtract shapes',group:'Shapes',key:'Alt Shift S',run:()=>booleanSelection('subtract'),enabled:booleanSelectionReady},
+  {name:'Intersect shapes',group:'Shapes',key:'Alt Shift I',run:()=>booleanSelection('intersect'),enabled:booleanSelectionReady},
+  {name:'Exclude shapes',group:'Shapes',key:'Alt Shift E',run:()=>booleanSelection('exclude'),enabled:booleanSelectionReady},
+  {name:'Flatten shapes',group:'Shapes',key:'Alt Shift F',run:()=>booleanSelection('flatten'),enabled:booleanSelectionReady},
   {name:'Crop selected image',group:'Image',run:()=>$('img-crop-btn').click(),enabled:()=>selFirst()?.type==='image'},
   {name:'Reset image crop',group:'Image',run:()=>$('img-reset-crop-btn').click(),enabled:()=>selFirst()?.type==='image'},
   {name:'Bring forward',group:'Arrange',key:']',run:()=>bringForward(state.selectedIds[0]),enabled:()=>state.selectedIds.length===1},
@@ -3256,8 +4205,17 @@ function setTool(tool){
   flushActiveCommentEditor();
   state.tool=tool;
   document.querySelectorAll('.tool-btn[data-tool]').forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll('.tool-group').forEach(g=>g.classList.remove('active','open'));
   const btn=document.querySelector(`[data-tool="${tool}"]`);
-  if(btn) btn.classList.add('active');
+  if(btn){
+    btn.classList.add('active');
+    const group=btn.closest('.tool-group');
+    if(group){
+      group.classList.add('active');
+      group.dataset.currentTool=tool;
+      updateToolGroupPrimary(group,btn);
+    }
+  }
   canvasArea.classList.toggle('hand-tool',tool==='hand');
   canvasArea.classList.toggle('zoom-tool',tool==='zoom');
   canvasArea.classList.toggle('zoom-out',tool==='zoom'&&window.event?.altKey);
@@ -3265,8 +4223,37 @@ function setTool(tool){
   canvasArea.classList.toggle('text-tool',tool==='text'||tool==='note'||tool==='comment'||tool==='frame'||isShapeTool(tool));
   updateProps();
 }
+function returnToSelectTool(){
+  if(state.tool!=='select') setTool('select');
+}
+function updateToolGroupPrimary(group,toolBtn){
+  const primary=group?.querySelector('.tool-btn[data-primary-tool]');
+  const icon=toolBtn?.querySelector('svg');
+  const label=toolBtn?.querySelector('.tool-tip')?.textContent||'Tools';
+  if(!primary||!icon) return;
+  primary.dataset.primaryTool=toolBtn.dataset.tool;
+  primary.innerHTML=`<span class="tool-tip">${label}</span>${icon.outerHTML}`;
+}
 document.querySelectorAll('.tool-btn[data-tool]').forEach(b=>{
-  b.addEventListener('click',()=>setTool(b.dataset.tool));
+  b.addEventListener('click',e=>{
+    setTool(b.dataset.tool);
+    b.closest('.tool-group')?.classList.remove('open');
+    e.stopPropagation();
+  });
+});
+document.querySelectorAll('.tool-btn[data-primary-tool]').forEach(b=>{
+  b.addEventListener('click',e=>{
+    const group=b.closest('.tool-group');
+    document.querySelectorAll('.tool-group.open').forEach(g=>{if(g!==group) g.classList.remove('open');});
+    if(group){
+      group.classList.toggle('open');
+      group.dataset.currentTool=group.dataset.currentTool||b.dataset.primaryTool;
+    }
+    e.stopPropagation();
+  });
+});
+document.addEventListener('click',e=>{
+  if(!e.target.closest('.tool-group')) document.querySelectorAll('.tool-group.open').forEach(g=>g.classList.remove('open'));
 });
 $('comment-close-btn').addEventListener('click',()=>commentPanel.classList.remove('show'));
 $('comment-edit-btn').addEventListener('click',editActiveComment);
@@ -3285,7 +4272,6 @@ $('center-btn').addEventListener('click',centerView);
 $('minimap-btn').addEventListener('click',toggleMiniMap);
 $('undo-btn').addEventListener('click',undo);
 $('redo-btn').addEventListener('click',redo);
-$('clear-btn').addEventListener('click',clearCanvas);
 $('delete-btn').addEventListener('click',()=>{if(state.selectedIds.length) deleteItems([...state.selectedIds]);});
 
 // ── LAYER ORDER ───────────────────────────────────────────────────
@@ -3314,10 +4300,65 @@ function clearCanvas(){
   pushHistory(); ac().items=[]; state.selectedIds=[];
   renderAll();
 }
+function renameItem(id){
+  const item=getItem(id); if(!item||!canEditAll()) return;
+  const next=prompt('Rename layer',item.name||'');
+  if(next===null) return;
+  const name=next.trim();
+  if(!name||name===item.name) return;
+  pushHistory(); item.name=name;
+  renderLayers(); updateProps(); scheduleSave();
+}
+function copyItemStyle(id){
+  const item=getItem(id); if(!item) return;
+  const keys=['opacity','blendMode','shadow','shadowBlur','shadowY','shadowColor','radius',
+    'fill','stroke','strokeWidth','color','bgColor','fontSize','lineHeight','fontFamily','fontWeight','textAlign',
+    'fit','imgX','imgY','imgScale','imgBright','imgContrast','imgSaturate','imgBlur'];
+  state.styleClipboard={style:{}};
+  keys.forEach(key=>{if(item[key]!==undefined) state.styleClipboard.style[key]=item[key];});
+  showToast('Style copied');
+}
+function pasteItemStyle(ids){
+  if(!state.styleClipboard||!ids.length||!canEditAll()) return;
+  const targets=ids.map(id=>getItem(id)).filter(i=>i&&!i.locked);
+  if(!targets.length) return;
+  pushHistory();
+  targets.forEach(item=>{
+    Object.entries(state.styleClipboard.style).forEach(([key,value])=>{
+      const textOnly=['color','bgColor','fontSize','lineHeight','fontFamily','fontWeight','textAlign'];
+      const imageOnly=['fit','imgX','imgY','imgScale','imgBright','imgContrast','imgSaturate','imgBlur'];
+      const shapeOnly=['fill','stroke','strokeWidth'];
+      if(textOnly.includes(key)&&!(item.type==='text'||item.type==='note')) return;
+      if(imageOnly.includes(key)&&item.type!=='image') return;
+      if(shapeOnly.includes(key)&&!(item.type==='shape'||item.type==='frame')) return;
+      item[key]=value;
+    });
+    const el=canvasWorld.querySelector(`[data-id="${item.id}"]`);
+    if(el) applyItemStyle(el,item);
+  });
+  updateSelectionOverlay(); updateProps(); renderLayers(); scheduleSave(); scheduleThumb();
+  showToast('Style pasted');
+}
+function nudgeSelection(dx,dy){
+  if(!state.selectedIds.length||!canEditAll()) return;
+  const ids=[...new Set(state.selectedIds.flatMap(id=>{
+    const item=getItem(id);
+    return item?.type==='frame'?[id,...frameChildIds(item)]:[id];
+  }))];
+  const items=ids.map(id=>getItem(id)).filter(i=>i&&!i.locked);
+  if(!items.length) return;
+  pushHistory();
+  items.forEach(item=>{
+    item.x+=dx; item.y+=dy;
+    const el=canvasWorld.querySelector(`[data-id="${item.id}"]`);
+    if(el) applyItemStyle(el,item);
+  });
+  applyFrameClipping(); updateSelectionOverlay(); updateMultiSelBox(); updateProps(); scheduleSave(); scheduleThumb();
+}
 
 // ── CONTEXT MENU ──────────────────────────────────────────────────
 function showCtxMenu(x,y){
-  ctxMenu.style.cssText=`display:block;left:${Math.min(x,window.innerWidth-180)}px;top:${Math.min(y,window.innerHeight-260)}px;`;
+  ctxMenu.style.cssText=`display:block;left:${Math.min(x,window.innerWidth-220)}px;top:${Math.min(y,window.innerHeight-360)}px;`;
 }
 function hideCtxMenu(){ctxMenu.style.display='none';}
 document.addEventListener('click',hideCtxMenu);
@@ -3329,6 +4370,28 @@ ctxMenu.querySelectorAll('.ctx-item').forEach(item=>{
     else if(action==='bring-forward') bringForward(id);
     else if(action==='send-backward') sendBackward(id);
     else if(action==='send-back') sendToBack(id);
+    else if(action==='rename') renameItem(id);
+    else if(action==='group') groupSelection();
+    else if(action==='ungroup') ungroupSelection();
+    else if(action==='copy-style') copyItemStyle(id);
+    else if(action==='paste-style') pasteItemStyle(state.selectedIds.length?state.selectedIds:[id]);
+    else if(action==='bool-union') booleanSelection('union');
+    else if(action==='bool-subtract') booleanSelection('subtract');
+    else if(action==='bool-intersect') booleanSelection('intersect');
+    else if(action==='bool-exclude') booleanSelection('exclude');
+    else if(action==='bool-flatten') booleanSelection('flatten');
+    else if(action==='edit-mask'){
+      const i=getItem(id); if(i?.type==='image') {state.selectedIds=[id]; state.cropAdjustId=id; beginImageCropAdjust(i,0,0,true); interaction=null;}
+    }
+    else if(action==='reset-mask'){
+      const i=getItem(id); if(i?.type==='image') {state.selectedIds=[id]; $('img-reset-crop-btn').click();}
+    }
+    else if(action==='fill-mask'){
+      const i=getItem(id); if(i?.type==='image') {state.selectedIds=[id]; setImageFitMode(i,'cover');}
+    }
+    else if(action==='fit-mask'){
+      const i=getItem(id); if(i?.type==='image') {state.selectedIds=[id]; setImageFitMode(i,'contain');}
+    }
     else if(action==='duplicate') duplicateItems([id]);
     else if(action==='delete') deleteItems([id]);
     else if(action==='lock'){
@@ -3344,20 +4407,47 @@ ctxMenu.querySelectorAll('.ctx-item').forEach(item=>{
 // ── EXPORT ────────────────────────────────────────────────────────
 $('export-btn').addEventListener('click',()=>{
   if(!ac().items.length){showToast('Nothing to export');return;}
-  $('export-selected-only').checked=state.selectedIds.length>0;
-  $('export-selected-only').disabled=state.selectedIds.length===0;
+  $('export-area').value=state.selectedIds.length>0?'selection':'canvas';
+  $('export-area').querySelector('option[value="selection"]').disabled=state.selectedIds.length===0;
+  $('export-bg').value=state.selectedIds.length>0?'transparent':'canvas';
+  $('export-bg').disabled=false;
   $('export-modal').classList.add('show');
 });
+$('export-area').addEventListener('change',e=>{
+  $('export-bg').value=e.target.value==='canvas'?'canvas':'transparent';
+});
+$('export-format').addEventListener('change',e=>{
+  if(e.target.value==='jpeg'&&$('export-bg').value==='transparent') $('export-bg').value='white';
+});
 $('export-cancel').addEventListener('click',()=>$('export-modal').classList.remove('show'));
+function exportSelectionIds(ids){
+  const expanded=new Set();
+  ids.forEach(id=>{
+    expanded.add(id);
+    const item=getItem(id);
+    if(item?.type==='frame') frameChildIds(item).forEach(childId=>expanded.add(childId));
+  });
+  return expanded;
+}
 $('export-confirm').addEventListener('click',async()=>{
   $('export-modal').classList.remove('show');
-  const selectedOnly=$('export-selected-only').checked&&state.selectedIds.length>0;
-  const exportIds=new Set(selectedOnly?state.selectedIds:ac().items.map(i=>i.id));
+  const selectedOnly=$('export-area').value==='selection'&&state.selectedIds.length>0;
+  const exportIds=selectedOnly?exportSelectionIds(state.selectedIds):new Set(ac().items.map(i=>i.id));
   const items=ac().items.filter(i=>i.visible&&exportIds.has(i.id));
   if(!items.length){showToast('No visible items');return;}
-  const pad=40,scale=parseInt($('export-scale').value)||2,fmt=$('export-format').value||'png';
-  const minX=Math.min(...items.map(i=>i.x))-pad,minY=Math.min(...items.map(i=>i.y))-pad;
-  const maxX=Math.max(...items.map(i=>i.x+i.w))+pad,maxY=Math.max(...items.map(i=>i.y+i.h))+pad;
+  const scale=parseInt($('export-scale').value)||2,fmt=$('export-format').value||'png';
+  const bgMode=$('export-bg').value;
+  const captureBg=bgMode==='canvas'?(ac().bgType==='gradient'?null:ac().bg):bgMode==='white'?'#ffffff':null;
+  const pad=selectedOnly?0:40;
+  const selectedFrame=selectedOnly&&state.selectedIds.length===1?getItem(state.selectedIds[0]):null;
+  const exportFrame=selectedFrame?.type==='frame'?selectedFrame:null;
+  const boundsItems=selectedOnly
+    ? ac().items.filter(i=>i.visible&&state.selectedIds.includes(i.id))
+    : items;
+  const minX=exportFrame?exportFrame.x:Math.min(...boundsItems.map(i=>i.x))-pad;
+  const minY=exportFrame?exportFrame.y:Math.min(...boundsItems.map(i=>i.y))-pad;
+  const maxX=exportFrame?exportFrame.x+exportFrame.w:Math.max(...boundsItems.map(i=>i.x+i.w))+pad;
+  const maxY=exportFrame?exportFrame.y+exportFrame.h:Math.max(...boundsItems.map(i=>i.y+i.h))+pad;
   const hidden=[];
   const saved={pan:{...state.pan},zoom:state.zoom,sel:[...state.selectedIds]};
   if(selectedOnly){
@@ -3369,18 +4459,21 @@ $('export-confirm').addEventListener('click',async()=>{
   state.selectedIds=[]; state.pan={x:0,y:0}; state.zoom=1;
   applyTransform(); selOverlay.style.display='none'; multiSelBox.style.display='none';
   renderItemsHighlight(); showToast('Exporting…');
+  document.body.classList.add('exporting-canvas');
   await new Promise(r=>setTimeout(r,80));
   try{
     const c=await html2canvas(canvasWorld,{
-      backgroundColor:ac().bgType==='gradient'?null:ac().bg,
+      backgroundColor:captureBg,
       scale,x:minX,y:minY,width:Math.max(1,maxX-minX),height:Math.max(1,maxY-minY),
       logging:false,useCORS:true,allowTaint:true,
     });
     const link=document.createElement('a');
     link.download=`${ac().name||'canvas'}.${fmt}`;
-    link.href=c.toDataURL(fmt==='jpeg'?'image/jpeg':'image/png',0.95);
+    const mime=fmt==='jpeg'?'image/jpeg':fmt==='webp'?'image/webp':'image/png';
+    link.href=c.toDataURL(mime,0.95);
     link.click(); showToast('Exported!');
   }catch(err){showToast('Export failed');}
+  document.body.classList.remove('exporting-canvas');
   hidden.forEach(i=>i.visible=true);
   state.selectedIds=saved.sel; state.pan=saved.pan; state.zoom=saved.zoom;
   if(hidden.length) renderItems();
@@ -3419,6 +4512,8 @@ const SHORTCUTS=[
   {action:'Deselect',keys:['Esc']},
   {section:'Items'},
   {action:'Duplicate',keys:['Ctrl','D']},
+  {action:'Nudge 1px',keys:['Arrow']},
+  {action:'Nudge 10px',keys:['Shift','Arrow']},
   {action:'Group',keys:['Ctrl','G']},
   {action:'Ungroup',keys:['Ctrl','Shift','G']},
   {action:'Delete',keys:['Del']},
@@ -3428,6 +4523,12 @@ const SHORTCUTS=[
   {action:'Constrain resize',keys:['Shift','drag corner']},
   {action:'Constrain shape while drawing',keys:['Shift','drag']},
   {action:'Snap rotation 15°',keys:['Shift','rotate']},
+  {section:'Shapes'},
+  {action:'Union shapes',keys:['Alt','Shift','U']},
+  {action:'Subtract shapes',keys:['Alt','Shift','S']},
+  {action:'Intersect shapes',keys:['Alt','Shift','I']},
+  {action:'Exclude shapes',keys:['Alt','Shift','E']},
+  {action:'Flatten shapes',keys:['Alt','Shift','F']},
   {section:'Text'},
   {action:'Create text block',keys:['T','or dbl-click']},
   {action:'Create sticky note',keys:['N','drag']},
@@ -3646,6 +4747,8 @@ async function loadCanvas(){
     state.nextGroupId=saved.nextGroupId||Math.max(1,...state.canvases.flatMap(c=>(c.items||[]).map(i=>i.groupId||0)))+1
     state.shapeDefaults={fill:'#6c71f0',stroke:'#8b8ff4',strokeWidth:2,...(saved.shapeDefaults||{})}
     state.minimapEnabled=saved.minimapEnabled!==false
+    state.collapsedGroups=saved.collapsedGroups||{}
+    state.lockAspect=!!saved.lockAspect
     state.activeId=state.canvases[0]?.id||1
     state.canvases.forEach(c=>{
       if(!c.history) c.history=[]
@@ -3723,6 +4826,11 @@ async function init(){
     $('add-canvas-btn').style.display='none'
     document.querySelectorAll('.tool-btn[data-tool]').forEach(btn=>{
       if(!['select','hand','zoom','comment'].includes(btn.dataset.tool)) btn.style.display='none'
+    })
+    document.querySelectorAll('.tool-group').forEach(group=>{
+      const visibleTools=[...group.querySelectorAll('.tool-btn[data-tool]')].filter(btn=>btn.style.display!=='none')
+      if(!visibleTools.length) group.style.display='none'
+      else group.querySelector('.tool-btn[data-primary-tool]').dataset.primaryTool=visibleTools[0].dataset.tool
     })
     setTool('comment')
     showToast('Comment mode — click to add pins')
