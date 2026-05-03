@@ -1,6 +1,5 @@
--- Vision Canvas safety policies for real-user testing.
--- Run this in the Supabase SQL Editor after checking that the column names match your table.
--- The frontend can improve UX, but these policies are the real security boundary.
+-- Vision Canvas safety policies and shared-link approval flow.
+-- Run this in the Supabase SQL Editor.
 
 alter table public.canvases enable row level security;
 
@@ -32,9 +31,60 @@ on public.canvases
 for delete
 using (auth.uid() = user_id);
 
--- Shared links should go through token-scoped RPC functions.
--- Do not add a broad policy like "share_token is not null" for SELECT, because
--- anonymous users could enumerate every shared row.
+create table if not exists public.canvas_access_requests (
+  id uuid primary key default gen_random_uuid(),
+  canvas_id uuid not null references public.canvases(id) on delete cascade,
+  share_token text not null,
+  guest_key text not null,
+  guest_name text not null,
+  requested_permission text not null check (requested_permission in ('comment','edit')),
+  status text not null default 'pending' check (status in ('pending','approved','rejected')),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (canvas_id, guest_key)
+);
+
+alter table public.canvas_access_requests enable row level security;
+
+drop policy if exists "Owners can read access requests" on public.canvas_access_requests;
+drop policy if exists "Owners can update access requests" on public.canvas_access_requests;
+
+create policy "Owners can read access requests"
+on public.canvas_access_requests
+for select
+using (
+  exists (
+    select 1 from public.canvases c
+    where c.id = canvas_id
+      and c.user_id = auth.uid()
+  )
+);
+
+create policy "Owners can update access requests"
+on public.canvas_access_requests
+for update
+using (
+  exists (
+    select 1 from public.canvases c
+    where c.id = canvas_id
+      and c.user_id = auth.uid()
+  )
+)
+with check (
+  exists (
+    select 1 from public.canvases c
+    where c.id = canvas_id
+      and c.user_id = auth.uid()
+  )
+);
+
+drop function if exists public.get_shared_canvas(text);
+drop function if exists public.update_shared_canvas(text, jsonb);
+drop function if exists public.update_shared_canvas(text, text, jsonb);
+drop function if exists public.request_canvas_access(text, text, text, text);
+drop function if exists public.get_canvas_access_status(text, text);
+drop function if exists public.list_canvas_access_requests(uuid);
+drop function if exists public.set_canvas_access_request(uuid, text);
 
 create or replace function public.get_shared_canvas(p_token text)
 returns table (
@@ -55,7 +105,88 @@ as $$
   limit 1;
 $$;
 
-create or replace function public.update_shared_canvas(p_token text, p_state jsonb)
+create or replace function public.request_canvas_access(
+  p_token text,
+  p_guest_key text,
+  p_guest_name text,
+  p_permission text
+)
+returns table(status text)
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  target_canvas_id uuid;
+begin
+  select c.id into target_canvas_id
+  from public.canvases c
+  where c.share_token = p_token
+    and c.share_permission in ('comment','edit')
+    and p_permission in ('comment','edit')
+    and coalesce(c.is_deleted, false) = false
+  limit 1;
+
+  if target_canvas_id is null then
+    return query select 'rejected'::text;
+    return;
+  end if;
+
+  insert into public.canvas_access_requests (
+    canvas_id, share_token, guest_key, guest_name, requested_permission, status
+  )
+  values (
+    target_canvas_id, p_token, p_guest_key, coalesce(nullif(trim(p_guest_name),''),'Guest'), p_permission, 'pending'
+  )
+  on conflict (canvas_id, guest_key)
+  do update set
+    guest_name = excluded.guest_name,
+    requested_permission = excluded.requested_permission,
+    updated_at = now();
+
+  return query
+    select r.status
+    from public.canvas_access_requests r
+    where r.canvas_id = target_canvas_id
+      and r.guest_key = p_guest_key
+    limit 1;
+end;
+$$;
+
+create or replace function public.get_canvas_access_status(p_token text, p_guest_key text)
+returns table(status text)
+language sql
+security definer
+set search_path = public
+as $$
+  select r.status
+  from public.canvas_access_requests r
+  where r.share_token = p_token
+    and r.guest_key = p_guest_key
+  limit 1;
+$$;
+
+create or replace function public.list_canvas_access_requests(p_canvas_id uuid)
+returns table (
+  id uuid,
+  guest_name text,
+  requested_permission text,
+  status text,
+  created_at timestamptz
+)
+language sql
+security definer
+set search_path = public
+as $$
+  select r.id, r.guest_name, r.requested_permission, r.status, r.created_at
+  from public.canvas_access_requests r
+  join public.canvases c on c.id = r.canvas_id
+  where r.canvas_id = p_canvas_id
+    and c.user_id = auth.uid()
+  order by r.created_at desc;
+$$;
+
+create or replace function public.set_canvas_access_request(p_request_id uuid, p_status text)
 returns boolean
 language plpgsql
 security definer
@@ -64,19 +195,58 @@ as $$
 declare
   updated_count integer;
 begin
-  update public.canvases
+  if p_status not in ('approved','rejected') then
+    return false;
+  end if;
+
+  update public.canvas_access_requests r
+  set status = p_status,
+      updated_at = now()
+  from public.canvases c
+  where r.id = p_request_id
+    and c.id = r.canvas_id
+    and c.user_id = auth.uid();
+
+  get diagnostics updated_count = row_count;
+  return updated_count > 0;
+end;
+$$;
+
+create or replace function public.update_shared_canvas(p_token text, p_guest_key text, p_state jsonb)
+returns boolean
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  updated_count integer;
+begin
+  update public.canvases c
   set state = p_state::text,
       updated_at = now()
-  where share_token = p_token
-    and share_permission = 'edit'
-    and coalesce(is_deleted, false) = false;
+  where c.share_token = p_token
+    and c.share_permission in ('comment','edit')
+    and coalesce(c.is_deleted, false) = false
+    and exists (
+      select 1
+      from public.canvas_access_requests r
+      where r.canvas_id = c.id
+        and r.guest_key = p_guest_key
+        and r.status = 'approved'
+        and (
+          c.share_permission = 'edit'
+          or (c.share_permission = 'comment' and r.requested_permission = 'comment')
+        )
+    );
+
   get diagnostics updated_count = row_count;
   return updated_count > 0;
 end;
 $$;
 
 grant execute on function public.get_shared_canvas(text) to anon, authenticated;
-grant execute on function public.update_shared_canvas(text, jsonb) to anon, authenticated;
-
--- Comment-only links should eventually write to a separate comments table/RPC.
--- Until that table exists, treat "Can comment" as controlled-test only.
+grant execute on function public.update_shared_canvas(text, text, jsonb) to anon, authenticated;
+grant execute on function public.request_canvas_access(text, text, text, text) to anon, authenticated;
+grant execute on function public.get_canvas_access_status(text, text) to anon, authenticated;
+grant execute on function public.list_canvas_access_requests(uuid) to anon, authenticated;
+grant execute on function public.set_canvas_access_request(uuid, text) to anon, authenticated;
