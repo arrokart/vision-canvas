@@ -1311,9 +1311,10 @@ function updateBooleanOperation(item,op,withHistory=false){
   if(withHistory) pushHistory();
   item.booleanOp=op;
   item.name=`${op[0].toUpperCase()+op.slice(1)} ${item.id}`;
+  normalizeBooleanBounds(item);
   const el=canvasWorld.querySelector(`[data-id="${item.id}"]`);
   if(el) applyItemStyle(el,item);
-  renderLayers(); updateProps(); scheduleSave(); scheduleThumb();
+  updateSelectionOverlay(); renderLayers(); updateProps(); scheduleSave(); scheduleThumb();
 }
 function ensureBooleanChildren(item){
   if(!item||item.shape!=='boolean') return [];
@@ -1325,6 +1326,38 @@ function ensureBooleanChildren(item){
   }));
   item.booleanShapes.sort((a,b)=>(b.z??0)-(a.z??0));
   return item.booleanShapes;
+}
+function booleanResultBounds(shapes,op){
+  if(!shapes.length) return null;
+  if(op==='subtract') return {...shapes[0]};
+  if(op==='intersect'){
+    const b=shapes.reduce((acc,s)=>({
+      x:Math.max(acc.x,s.x),y:Math.max(acc.y,s.y),
+      r:Math.min(acc.r,s.x+s.w),b:Math.min(acc.b,s.y+s.h)
+    }),{x:shapes[0].x,y:shapes[0].y,r:shapes[0].x+shapes[0].w,b:shapes[0].y+shapes[0].h});
+    if(b.r>b.x&&b.b>b.y) return {x:b.x,y:b.y,w:b.r-b.x,h:b.b-b.y};
+  }
+  const minX=Math.min(...shapes.map(s=>s.x)),minY=Math.min(...shapes.map(s=>s.y));
+  const maxX=Math.max(...shapes.map(s=>s.x+s.w)),maxY=Math.max(...shapes.map(s=>s.y+s.h));
+  return {x:minX,y:minY,w:maxX-minX,h:maxY-minY};
+}
+function normalizeBooleanBounds(item){
+  if(!item||item.shape!=='boolean') return;
+  const children=ensureBooleanChildren(item);
+  if(!children.length) return;
+  const abs=children.map(s=>({...s,
+    x:item.x+s.x/100*item.w,y:item.y+s.y/100*item.h,
+    w:s.w/100*item.w,h:s.h/100*item.h
+  }));
+  const bounds=booleanResultBounds(abs,item.booleanOp||'union');
+  if(!bounds) return;
+  const nx=bounds.x,ny=bounds.y,nw=Math.max(1,bounds.w),nh=Math.max(1,bounds.h);
+  item.x=nx; item.y=ny; item.w=nw; item.h=nh;
+  item.booleanShapes=abs.map(s=>({
+    ...s,
+    x:(s.x-nx)/nw*100,y:(s.y-ny)/nh*100,
+    w:s.w/nw*100,h:s.h/nh*100
+  }));
 }
 function clearBooleanAdjustMode(){
   const id=state.booleanAdjustId;
@@ -1360,6 +1393,7 @@ function beginBooleanPartAdjust(item,clientX,clientY,withHistory=true,keepMode=f
   state.booleanAdjustId=item.id;
   state.booleanPartIndex=idx;
   interaction={type:'booleanpart',itemId:item.id,partIndex:idx,startMX:clientX,startMY:clientY,
+    startItem:{x:item.x,y:item.y,w:item.w,h:item.h},
     startShapes:item.booleanShapes.map(s=>({...s})),moved:false,keepMode};
   const el=canvasWorld.querySelector(`[data-id="${item.id}"]`);
   if(el) applyItemStyle(el,item);
@@ -1387,6 +1421,7 @@ function releaseBooleanShape(item){
 function flattenBooleanShape(item,withHistory=false){
   if(!item||item.type!=='shape'||item.shape!=='boolean'||!canEditAll()) return;
   if(withHistory) pushHistory();
+  normalizeBooleanBounds(item);
   item.shape='booleanFlat';
   item.name=`Flattened ${item.id}`;
   item.flattenedPaths=(item.booleanShapes||[]).map(boolShapePath);
@@ -1433,12 +1468,14 @@ function addBooleanShape(op,sourceItems){
   }));
   ac().items=ac().items.filter(i=>!items.some(s=>s.id===i.id));
   const isFlatten=op==='flatten';
-  ac().items.push({id,type:'shape',shape:isFlatten?'booleanFlat':'boolean',booleanOp:isFlatten?undefined:op,
+  const boolItem={id,type:'shape',shape:isFlatten?'booleanFlat':'boolean',booleanOp:isFlatten?undefined:op,
     booleanShapes:isFlatten?undefined:boolShapes,flattenedPaths:isFlatten?boolShapes.map(boolShapePath):undefined,
     name:`${op[0].toUpperCase()+op.slice(1)} ${id}`,
     x:minX,y:minY,w:bw,h:bh,rot:0,opacity:100,visible:true,locked:false,
     flipH:false,flipV:false,z:maxZ()+1,blendMode:'normal',shadow:false,shadowBlur:18,shadowY:10,
-    shadowColor:'rgba(0,0,0,.35)',radius:0,fill:base.fill||'#6c71f0',stroke:base.stroke||'#8b8ff4',strokeWidth:base.strokeWidth??2});
+    shadowColor:'rgba(0,0,0,.35)',radius:0,fill:base.fill||'#6c71f0',stroke:base.stroke||'#8b8ff4',strokeWidth:base.strokeWidth??2};
+  if(!isFlatten) normalizeBooleanBounds(boolItem);
+  ac().items.push(boolItem);
   state.selectedIds=[id];
   renderItems(); renderLayers(); updateSelectionOverlay(); updateMultiSelBox(); updateProps(); scheduleSave(); scheduleThumb();
 }
@@ -2501,6 +2538,7 @@ function bindPropNum(id,key){
       if(key==='y') part.y=(next-item.y)/Math.max(1,item.h)*100;
       if(key==='w') part.w=Math.max(1,next)/Math.max(1,item.w)*100;
       if(key==='h') part.h=Math.max(1,next)/Math.max(1,item.h)*100;
+      normalizeBooleanBounds(item);
       const el=canvasWorld.querySelector(`[data-id="${item.id}"]`);
       if(el) applyItemStyle(el,item);
       updateSelectionOverlay(); updateMultiSelBox(); updateProps(); renderLayers(); scheduleSave(); scheduleThumb();
@@ -3074,6 +3112,7 @@ function moveBooleanPart(parentId,fromIdx,toIdx){
   parts.splice(toIdx,0,moved);
   parts.forEach((part,idx)=>part.z=parts.length-idx);
   item.booleanShapes=parts;
+  normalizeBooleanBounds(item);
   state.booleanAdjustId=parentId;
   state.booleanPartIndex=toIdx;
   const el=canvasWorld.querySelector(`[data-id="${parentId}"]`);
@@ -3634,10 +3673,17 @@ document.addEventListener('mousemove',e=>{
   }
   if(interaction.type==='booleanpart'){
     const item=getItem(interaction.itemId); if(!item||!item.booleanShapes?.[interaction.partIndex]) return;
-    const dx=(e.clientX-interaction.startMX)/(Math.max(1,item.w)*state.zoom)*100;
-    const dy=(e.clientY-interaction.startMY)/(Math.max(1,item.h)*state.zoom)*100;
+    const startItem=interaction.startItem;
+    const dx=(e.clientX-interaction.startMX)/state.zoom;
+    const dy=(e.clientY-interaction.startMY)/state.zoom;
     const start=interaction.startShapes[interaction.partIndex];
-    item.booleanShapes[interaction.partIndex]={...start,x:start.x+dx,y:start.y+dy};
+    item.x=startItem.x; item.y=startItem.y; item.w=startItem.w; item.h=startItem.h;
+    item.booleanShapes=interaction.startShapes.map(s=>({...s}));
+    item.booleanShapes[interaction.partIndex]={...start,
+      x:(startItem.x+start.x/100*startItem.w+dx-startItem.x)/startItem.w*100,
+      y:(startItem.y+start.y/100*startItem.h+dy-startItem.y)/startItem.h*100
+    };
+    normalizeBooleanBounds(item);
     interaction.moved=true;
     const el=canvasWorld.querySelector(`[data-id="${item.id}"]`);
     if(el) applyItemStyle(el,item);
