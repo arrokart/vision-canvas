@@ -111,13 +111,13 @@ body{display:flex;flex-direction:column;}
   border-left:4px solid transparent;border-top:4px solid currentColor;opacity:.72;}
 .tool-group.active>.tool-btn{background:#eee7ff;box-shadow:0 8px 18px rgba(75,54,130,.12),inset 0 0 0 1px rgba(112,83,190,.08);}
 .tool-flyout{position:absolute;left:calc(100% + 9px);top:0;display:none;gap:5px;padding:6px;
-  background:rgba(16,16,22,.98);border:1px solid rgba(255,255,255,.11);border-radius:10px;
-  box-shadow:0 18px 44px rgba(0,0,0,.42);backdrop-filter:blur(18px);z-index:1001;}
+  background:#fbfbff;border:1px solid rgba(20,20,32,.1);border-radius:12px;
+  box-shadow:0 18px 36px rgba(20,20,35,.18);backdrop-filter:blur(18px);z-index:1001;}
 .tool-group.open .tool-flyout{display:flex;}
 .tool-group.open>.tool-btn{background:#f0f0f8;color:#202033;}
-.tool-flyout .tool-btn{background:rgba(255,255,255,.035);}
-.tool-flyout .tool-btn:hover{background:rgba(255,255,255,.09);}
-.tool-flyout .tool-btn.active{background:#242454;color:#8f91ff;}
+.tool-flyout .tool-btn{background:#f7f7fc;}
+.tool-flyout .tool-btn:hover{background:#efeff8;}
+.tool-flyout .tool-btn.active{background:#eee7ff;color:#5b2bbd;}
 .tool-sep{width:31px;height:1px;background:rgba(20,20,32,.1);margin:7px 0;}
 .tool-tip{position:absolute;left:calc(100% + 10px);background:#202027;
   border:1px solid rgba(255,255,255,.11);color:#f4f4fb;font-size:11px;padding:5px 8px;
@@ -922,11 +922,11 @@ body.exporting-canvas .frame-label{display:none!important;}
           <div id="multi-boolean-tools" style="display:none;flex-direction:column;gap:6px;">
             <div class="align-section-title">Boolean</div>
             <div class="quick-op-grid">
-              <button class="quick-op-btn primary" data-bool-op="union" title="Union">âˆª</button>
-              <button class="quick-op-btn" data-bool-op="subtract" title="Subtract">âˆ’</button>
-              <button class="quick-op-btn" data-bool-op="intersect" title="Intersect">âˆ©</button>
-              <button class="quick-op-btn" data-bool-op="exclude" title="Exclude">âŠ•</button>
-              <button class="quick-op-btn" data-bool-op="flatten" title="Flatten">â‡£</button>
+              <button class="quick-op-btn primary" data-bool-op="union" title="Union">&cup;</button>
+              <button class="quick-op-btn" data-bool-op="subtract" title="Subtract">&minus;</button>
+              <button class="quick-op-btn" data-bool-op="intersect" title="Intersect">&cap;</button>
+              <button class="quick-op-btn" data-bool-op="exclude" title="Exclude">&oplus;</button>
+              <button class="quick-op-btn" data-bool-op="flatten" title="Flatten">&#8681;</button>
             </div>
           </div>
           <div class="align-section-title">Align</div>
