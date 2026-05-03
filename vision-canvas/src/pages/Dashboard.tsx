@@ -187,6 +187,7 @@ type ViewFilter = 'all' | 'starred' | 'recent'
 
 export default function Dashboard({ user }: { user: any }) {
   const navigate = useNavigate()
+  const starredStorageKey = `vision-starred-canvases-${user.id}`
   const [canvases, setCanvases] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [hoveredId, setHoveredId] = useState<string | null>(null)
@@ -197,13 +198,13 @@ export default function Dashboard({ user }: { user: any }) {
   useEffect(() => { fetchCanvases() }, [])
 
   useEffect(() => {
-    const saved = localStorage.getItem(`vision-starred-canvases-${user.id}`)
+    const saved = localStorage.getItem(starredStorageKey)
     try {
       setStarredIds(saved ? JSON.parse(saved) : [])
     } catch {
       setStarredIds([])
     }
-  }, [user.id])
+  }, [starredStorageKey])
 
   const fetchCanvases = async () => {
     const { data } = await supabase
@@ -212,7 +213,18 @@ export default function Dashboard({ user }: { user: any }) {
       .eq('user_id', user.id)
       .eq('is_deleted', false)
       .order('created_at', { ascending: false })
-    setCanvases(data || [])
+    const rows = data || []
+    setCanvases(rows)
+    try {
+      const saved = localStorage.getItem(starredStorageKey)
+      const savedIds = saved ? JSON.parse(saved) : []
+      const dbIds = rows.filter(c => c.is_starred).map(c => c.id)
+      const mergedIds = [...new Set([...savedIds, ...dbIds])]
+      setStarredIds(mergedIds)
+      localStorage.setItem(starredStorageKey, JSON.stringify(mergedIds))
+    } catch {
+      setStarredIds(rows.filter(c => c.is_starred).map(c => c.id))
+    }
     setLoading(false)
   }
 
@@ -232,21 +244,30 @@ export default function Dashboard({ user }: { user: any }) {
     setCanvases(prev => prev.filter(c => c.id !== id))
     setStarredIds(prev => {
       const next = prev.filter(starredId => starredId !== id)
-      localStorage.setItem(`vision-starred-canvases-${user.id}`, JSON.stringify(next))
+      localStorage.setItem(starredStorageKey, JSON.stringify(next))
       return next
     })
   }
 
   const logout = async () => { await supabase.auth.signOut() }
 
-  const toggleStar = (id: string) => {
-    setStarredIds(prev => {
-      const next = prev.includes(id)
-        ? prev.filter(starredId => starredId !== id)
-        : [...prev, id]
-      localStorage.setItem(`vision-starred-canvases-${user.id}`, JSON.stringify(next))
-      return next
-    })
+  const toggleStar = async (id: string) => {
+    const nextIsStarred = !starredIds.includes(id)
+    const nextIds = nextIsStarred
+      ? [...new Set([...starredIds, id])]
+      : starredIds.filter(starredId => starredId !== id)
+
+    setStarredIds(nextIds)
+    setCanvases(prev => prev.map(c => c.id === id ? { ...c, is_starred: nextIsStarred } : c))
+    localStorage.setItem(starredStorageKey, JSON.stringify(nextIds))
+
+    const { error } = await supabase
+      .from('canvases')
+      .update({ is_starred: nextIsStarred })
+      .eq('id', id)
+      .eq('user_id', user.id)
+
+    if (error) console.warn('Starred fallback used because Supabase did not save is_starred:', error.message)
   }
 
   const viewTitles: Record<ViewFilter, string> = {
