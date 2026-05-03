@@ -868,6 +868,16 @@ body.exporting-canvas .frame-label{display:none!important;}
           </div>
           <div id="shape-props">
             <div class="inspector-group-title">Shape</div>
+            <div id="boolean-op-row" style="display:none;flex-direction:column;gap:5px;">
+              <span class="color-label">Boolean operation</span>
+              <select class="font-select" id="boolean-op">
+                <option value="union">Union</option>
+                <option value="subtract">Subtract</option>
+                <option value="intersect">Intersect</option>
+                <option value="exclude">Exclude</option>
+                <option value="flatten">Flatten</option>
+              </select>
+            </div>
             <div class="color-row">
               <div class="color-swatch"><input type="color" id="shape-fill" value="#6c71f0"></div>
               <span class="color-label">Fill</span>
@@ -1278,10 +1288,26 @@ function isShapeTool(tool){
   return SHAPE_TOOLS.has(tool);
 }
 function booleanSelection(op){
-  addBooleanShape(op,selAll());
+  const selected=selAll();
+  if(selected.length===1&&selected[0].type==='shape'&&selected[0].shape==='boolean'){
+    updateBooleanOperation(selected[0],op,true);
+    return;
+  }
+  addBooleanShape(op,selected);
 }
 function booleanSelectionReady(){
-  return selAll().filter(i=>i.type==='shape'&&!['line','arrow','boolean'].includes(i.shape)).length>1;
+  const selected=selAll();
+  return (selected.length===1&&selected[0].type==='shape'&&selected[0].shape==='boolean')||
+    selected.filter(i=>i.type==='shape'&&!['line','arrow','boolean'].includes(i.shape)).length>1;
+}
+function updateBooleanOperation(item,op,withHistory=false){
+  if(!item||item.type!=='shape'||item.shape!=='boolean'||item.locked||!canEditAll()) return;
+  if(withHistory) pushHistory();
+  item.booleanOp=op;
+  item.name=`${op[0].toUpperCase()+op.slice(1)} ${item.id}`;
+  const el=canvasWorld.querySelector(`[data-id="${item.id}"]`);
+  if(el) applyItemStyle(el,item);
+  renderLayers(); updateProps(); scheduleSave(); scheduleThumb();
 }
 function addShapeItem(shape,x,y,w=160,h=110,flipH=false,flipV=false){
   if(!canEditAll()) return;
@@ -2297,6 +2323,8 @@ function updateProps(){
     setColorControl('shape-fill',item.fill,'#6c71f0');
     setColorControl('shape-stroke',item.stroke,'#8b8ff4');
     $('shape-stroke-width').value=item.strokeWidth??2;
+    $('boolean-op-row').style.display=item.shape==='boolean'?'flex':'none';
+    if(item.shape==='boolean') $('boolean-op').value=item.booleanOp||'union';
     $('frame-clip-row').style.display=item.type==='frame'?'flex':'none';
     $('frame-clip').checked=!!item.clipContent;
   }
@@ -2603,6 +2631,7 @@ $('shape-stroke-width').addEventListener('change',e=>
   updateShapeProp('strokeWidth',Math.max(0,parseFloat(e.target.value)||0),true)
 );
 $('shape-fill-clear').addEventListener('click',()=>updateShapeProp('fill','transparent',true));
+$('boolean-op').addEventListener('change',e=>updateBooleanOperation(selFirst(),e.target.value,true));
 $('frame-clip').addEventListener('change',e=>{
   const item=selFirst(); if(!item||item.type!=='frame'||item.locked) return;
   pushHistory();
