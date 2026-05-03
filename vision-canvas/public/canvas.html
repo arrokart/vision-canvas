@@ -879,6 +879,10 @@ body.exporting-canvas .frame-label{display:none!important;}
                 <option value="flatten">Flatten</option>
               </select>
               <button class="act-btn" id="boolean-edit-btn">Edit parts</button>
+              <div class="action-row">
+                <button class="act-btn" id="boolean-release-btn">Release</button>
+                <button class="act-btn" id="boolean-flatten-btn">Flatten</button>
+              </div>
             </div>
             <div class="color-row">
               <div class="color-swatch"><input type="color" id="shape-fill" value="#6c71f0"></div>
@@ -1327,19 +1331,55 @@ function ensureBooleanChildren(item){
   item.booleanShapes.sort((a,b)=>(b.z??0)-(a.z??0));
   return item.booleanShapes;
 }
+function pointInBooleanShape(s,px,py){
+  const x=s.x,y=s.y,w=s.w,h=s.h;
+  if(px<x||px>x+w||py<y||py>y+h) return false;
+  if(s.shape==='ellipse'){
+    const cx=x+w/2,cy=y+h/2,rx=Math.max(1,w/2),ry=Math.max(1,h/2);
+    return ((px-cx)/rx)**2+((py-cy)/ry)**2<=1;
+  }
+  if(s.shape==='polygon') return pointInPoly(px,py,[[x+w/2,y],[x+w,y+h],[x,y+h]]);
+  if(s.shape==='star'){
+    const pts=[[.5,0],[.61,.36],[.95,.36],[.67,.56],[.78,.9],[.5,.7],[.22,.9],[.33,.56],[.05,.36],[.39,.36]]
+      .map(p=>[x+p[0]*w,y+p[1]*h]);
+    return pointInPoly(px,py,pts);
+  }
+  return true;
+}
+function pointInPoly(px,py,pts){
+  let inside=false;
+  for(let i=0,j=pts.length-1;i<pts.length;j=i++){
+    const xi=pts[i][0],yi=pts[i][1],xj=pts[j][0],yj=pts[j][1];
+    const hit=((yi>py)!==(yj>py))&&(px<(xj-xi)*(py-yi)/(yj-yi||1e-9)+xi);
+    if(hit) inside=!inside;
+  }
+  return inside;
+}
+function booleanHit(shapes,op,x,y){
+  const hits=shapes.map(s=>pointInBooleanShape(s,x,y));
+  if(op==='subtract') return !!hits[0]&&!hits.slice(1).some(Boolean);
+  if(op==='intersect') return hits.every(Boolean);
+  if(op==='exclude') return hits.filter(Boolean).length%2===1;
+  return hits.some(Boolean);
+}
 function booleanResultBounds(shapes,op){
   if(!shapes.length) return null;
-  if(op==='subtract') return {...shapes[0]};
-  if(op==='intersect'){
-    const b=shapes.reduce((acc,s)=>({
-      x:Math.max(acc.x,s.x),y:Math.max(acc.y,s.y),
-      r:Math.min(acc.r,s.x+s.w),b:Math.min(acc.b,s.y+s.h)
-    }),{x:shapes[0].x,y:shapes[0].y,r:shapes[0].x+shapes[0].w,b:shapes[0].y+shapes[0].h});
-    if(b.r>b.x&&b.b>b.y) return {x:b.x,y:b.y,w:b.r-b.x,h:b.b-b.y};
-  }
   const minX=Math.min(...shapes.map(s=>s.x)),minY=Math.min(...shapes.map(s=>s.y));
   const maxX=Math.max(...shapes.map(s=>s.x+s.w)),maxY=Math.max(...shapes.map(s=>s.y+s.h));
-  return {x:minX,y:minY,w:maxX-minX,h:maxY-minY};
+  const w=Math.max(1,maxX-minX),h=Math.max(1,maxY-minY);
+  const steps=90;
+  let bx=Infinity,by=Infinity,br=-Infinity,bb=-Infinity;
+  for(let iy=0;iy<=steps;iy++){
+    const y=minY+h*iy/steps;
+    for(let ix=0;ix<=steps;ix++){
+      const x=minX+w*ix/steps;
+      if(booleanHit(shapes,op,x,y)){
+        bx=Math.min(bx,x); by=Math.min(by,y); br=Math.max(br,x); bb=Math.max(bb,y);
+      }
+    }
+  }
+  if(Number.isFinite(bx)&&br>bx&&bb>by) return {x:bx,y:by,w:br-bx,h:bb-by};
+  return {x:minX,y:minY,w,h};
 }
 function normalizeBooleanBounds(item){
   if(!item||item.shape!=='boolean') return;
@@ -2456,7 +2496,8 @@ function updateProps(){
   const isText=item.type==='text'||item.type==='note';
   const isShape=item.type==='shape'||item.type==='frame';
   const isImage=item.type==='image';
-  $('effect-props').style.display=item.type==='comment'?'none':'flex';
+  const isBoolean=item.type==='shape'&&(item.shape==='boolean'||item.shape==='booleanFlat');
+  $('effect-props').style.display=(item.type==='comment'||isBoolean||boolPart)?'none':'flex';
   $('text-props').style.display=isText?'flex':'none';
   $('shape-props').style.display=isShape?'flex':'none';
   $('image-props').style.display=isImage?'flex':'none';
@@ -2474,7 +2515,7 @@ function updateProps(){
     setColorControl('shape-fill',item.fill,'#6c71f0');
     setColorControl('shape-stroke',item.stroke,'#8b8ff4');
     $('shape-stroke-width').value=item.strokeWidth??2;
-    $('boolean-op-row').style.display=item.shape==='boolean'?'flex':'none';
+    $('boolean-op-row').style.display=item.shape==='boolean'&&!boolPart?'flex':'none';
     if(item.shape==='boolean'){
       $('boolean-op').value=item.booleanOp||'union';
       $('boolean-edit-btn').classList.toggle('active',state.booleanAdjustId===item.id);
@@ -2810,6 +2851,8 @@ $('boolean-edit-btn').addEventListener('click',()=>{
   }
   updateProps();
 });
+$('boolean-release-btn').addEventListener('click',()=>releaseBooleanShape(selFirst()));
+$('boolean-flatten-btn').addEventListener('click',()=>flattenBooleanShape(selFirst(),true));
 $('frame-clip').addEventListener('change',e=>{
   const item=selFirst(); if(!item||item.type!=='frame'||item.locked) return;
   pushHistory();
