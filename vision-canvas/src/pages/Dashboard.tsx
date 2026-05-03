@@ -183,14 +183,27 @@ const ThumbSVGs = [
 ]
 
 // ── Component ─────────────────────────────────────────────────────────────────
+type ViewFilter = 'all' | 'starred' | 'recent'
+
 export default function Dashboard({ user }: { user: any }) {
   const navigate = useNavigate()
   const [canvases, setCanvases] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [hoveredId, setHoveredId] = useState<string | null>(null)
   const [query, setQuery] = useState('')
+  const [activeView, setActiveView] = useState<ViewFilter>('all')
+  const [starredIds, setStarredIds] = useState<string[]>([])
 
   useEffect(() => { fetchCanvases() }, [])
+
+  useEffect(() => {
+    const saved = localStorage.getItem(`vision-starred-canvases-${user.id}`)
+    try {
+      setStarredIds(saved ? JSON.parse(saved) : [])
+    } catch {
+      setStarredIds([])
+    }
+  }, [user.id])
 
   const fetchCanvases = async () => {
     const { data } = await supabase
@@ -208,19 +221,47 @@ export default function Dashboard({ user }: { user: any }) {
       .from('canvases')
       .insert({ user_id: user.id, name: 'Untitled Canvas' })
       .select().single()
-    if (data) setCanvases(prev => [data, ...prev])
+    if (data) {
+      setCanvases(prev => [data, ...prev])
+      setActiveView('all')
+    }
   }
 
   const deleteCanvas = async (id: string) => {
     await supabase.from('canvases').update({ is_deleted: true }).eq('id', id)
     setCanvases(prev => prev.filter(c => c.id !== id))
+    setStarredIds(prev => {
+      const next = prev.filter(starredId => starredId !== id)
+      localStorage.setItem(`vision-starred-canvases-${user.id}`, JSON.stringify(next))
+      return next
+    })
   }
 
   const logout = async () => { await supabase.auth.signOut() }
 
-  const visibleCanvases = canvases.filter(c =>
-    (c.name || '').toLowerCase().includes(query.trim().toLowerCase())
-  )
+  const toggleStar = (id: string) => {
+    setStarredIds(prev => {
+      const next = prev.includes(id)
+        ? prev.filter(starredId => starredId !== id)
+        : [...prev, id]
+      localStorage.setItem(`vision-starred-canvases-${user.id}`, JSON.stringify(next))
+      return next
+    })
+  }
+
+  const viewTitles: Record<ViewFilter, string> = {
+    all: 'All Canvases',
+    starred: 'Starred',
+    recent: 'Recent',
+  }
+
+  const visibleCanvases = canvases
+    .filter(c => (c.name || '').toLowerCase().includes(query.trim().toLowerCase()))
+    .filter(c => activeView === 'starred' ? starredIds.includes(c.id) : true)
+    .sort((a, b) => {
+      if (activeView !== 'recent') return 0
+      return new Date(b.updated_at || b.created_at).getTime() - new Date(a.updated_at || a.created_at).getTime()
+    })
 
   if (loading) return (
     <div style={{
@@ -256,9 +297,9 @@ export default function Dashboard({ user }: { user: any }) {
         <div style={s.navSection}>
           <div style={s.navLabel}>Workspace</div>
 
-          <NavItem icon={<IconGrid color={C.purple}/>} iconBg={C.purpleDim} label="All Canvases" active />
-          <NavItem icon={<IconStar color={C.amber}/>}  iconBg={C.amberDim}  label="Starred" disabled />
-          <NavItem icon={<IconClock color={C.cyan}/>}  iconBg={C.cyanDim}   label="Recent" disabled />
+          <NavItem icon={<IconGrid color={C.purple}/>} iconBg={C.purpleDim} label="All Canvases" active={activeView === 'all'} onClick={() => setActiveView('all')} />
+          <NavItem icon={<IconStar color={C.amber}/>}  iconBg={C.amberDim}  label="Starred" active={activeView === 'starred'} onClick={() => setActiveView('starred')} />
+          <NavItem icon={<IconClock color={C.cyan}/>}  iconBg={C.cyanDim}   label="Recent" active={activeView === 'recent'} onClick={() => setActiveView('recent')} />
         </div>
 
         <div style={s.divider}/>
@@ -294,8 +335,8 @@ export default function Dashboard({ user }: { user: any }) {
         {/* Top bar */}
         <div style={s.topbar}>
           <div>
-            <div style={s.pageTitle}>All Canvases</div>
-            <div style={s.pageSub}>{canvases.length} canvas{canvases.length !== 1 ? 'es' : ''}</div>
+            <div style={s.pageTitle}>{viewTitles[activeView]}</div>
+            <div style={s.pageSub}>{visibleCanvases.length} of {canvases.length} canvas{canvases.length !== 1 ? 'es' : ''}</div>
           </div>
           <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
             {/* search pill */}
@@ -328,9 +369,9 @@ export default function Dashboard({ user }: { user: any }) {
                 <rect x="20" y="20" width="12" height="12" rx="3" fill={C.amber} fillOpacity="0.3"/>
               </svg>
             </div>
-            <div style={s.emptyTitle}>{query ? 'No matching canvases' : 'No canvases yet'}</div>
-            <div style={s.emptySub}>{query ? 'Try another search term' : 'Create your first canvas to get started'}</div>
-            {!query && <button style={s.newBtn} onClick={createCanvas}><IconPlus/> New Canvas</button>}
+            <div style={s.emptyTitle}>{query ? 'No matching canvases' : activeView === 'starred' ? 'No starred canvases' : 'No canvases yet'}</div>
+            <div style={s.emptySub}>{query ? 'Try another search term' : activeView === 'starred' ? 'Star a canvas to find it here quickly' : 'Create your first canvas to get started'}</div>
+            {!query && activeView !== 'starred' && <button style={s.newBtn} onClick={createCanvas}><IconPlus/> New Canvas</button>}
           </div>
         ) : (
           <div style={s.grid}>
@@ -338,6 +379,7 @@ export default function Dashboard({ user }: { user: any }) {
               const ac = ACCENTS[i % ACCENTS.length]
               const ThumbSVG = ThumbSVGs[i % ThumbSVGs.length]
               const isHovered = hoveredId === c.id
+              const isStarred = starredIds.includes(c.id)
 
               return (
                 <div
@@ -406,6 +448,16 @@ export default function Dashboard({ user }: { user: any }) {
                       </div>
                     </div>
                     <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+                      <button
+                        style={{ ...s.starBtn, color: isStarred ? C.amber : C.textDim, background: isStarred ? C.amberDim : 'transparent' }}
+                        title={isStarred ? 'Remove from Starred' : 'Add to Starred'}
+                        onClick={e => {
+                          e.stopPropagation()
+                          toggleStar(c.id)
+                        }}
+                      >
+                        <IconStar color="currentColor" />
+                      </button>
                       <span style={{ ...s.tag, color: ac.tagColor, background: ac.dim, border: `1px solid ${ac.color}33` }}>
                         {ac.tag}
                       </span>
@@ -443,15 +495,17 @@ function NavItem({
   label,
   active = false,
   disabled = false,
+  onClick,
 }: {
   icon: React.ReactNode
   iconBg: string
   label: string
   active?: boolean
   disabled?: boolean
+  onClick?: () => void
 }) {
   return (
-    <div style={{
+    <div onClick={disabled ? undefined : onClick} style={{
       display: 'flex', alignItems: 'center', gap: 10,
       padding: '7px 10px', borderRadius: 9, cursor: disabled ? 'default' : 'pointer',
       fontSize: 13.5, marginBottom: 2, transition: 'all 0.15s',
@@ -599,6 +653,18 @@ const s: Record<string, React.CSSProperties> = {
   tag: {
     fontSize: 10, fontWeight: 600, padding: '3px 8px',
     borderRadius: 5, letterSpacing: '0.3px',
+  },
+  starBtn: {
+    width: 28,
+    height: 28,
+    border: 'none',
+    borderRadius: 8,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    cursor: 'pointer',
+    padding: 0,
+    transition: 'all 0.15s',
   },
   delBtn: {
     background: 'none', border: 'none',
