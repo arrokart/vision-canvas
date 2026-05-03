@@ -840,6 +840,7 @@ body.exporting-canvas .frame-label{display:none!important;}
               <button class="act-btn" id="img-crop-btn">Edit mask</button>
               <button class="act-btn" id="img-reset-crop-btn">Reset mask</button>
             </div>
+            <button class="act-btn" id="img-remove-vector-mask" style="display:none;">Remove vector mask</button>
             <div class="action-row">
               <button class="act-btn" id="img-fit-btn">Fit</button>
               <button class="act-btn" id="img-fill-btn">Fill</button>
@@ -913,6 +914,10 @@ body.exporting-canvas .frame-label{display:none!important;}
           <div class="action-row">
             <button class="act-btn" id="group-btn">Group</button>
             <button class="act-btn" id="ungroup-btn">Ungroup</button>
+          </div>
+          <div id="vector-mask-tools" style="display:none;flex-direction:column;gap:6px;">
+            <div class="align-section-title">Mask</div>
+            <button class="act-btn" id="vector-mask-btn">Mask with vector</button>
           </div>
         </div>
       </div>
@@ -1629,6 +1634,7 @@ function duplicateItems(ids){
     if(src.booleanShapes) copy.booleanShapes=src.booleanShapes.map(s=>({...s,childId:`${nid}-${s.childId||s.name||Math.random()}`}));
     if(src.flattenedPaths) copy.flattenedPaths=[...src.flattenedPaths];
     if(src.resultPath) copy.resultPath=src.resultPath;
+    if(src.vectorMask) copy.vectorMask={...src.vectorMask};
     if(src.groupId){
       groupMap[src.groupId]=groupMap[src.groupId]||state.nextGroupId++;
       copy.groupId=groupMap[src.groupId];
@@ -1667,6 +1673,28 @@ function ungroupSelection(){
 }
 
 // ── TEXT EDITING ──────────────────────────────────────────────────
+function vectorMaskSelectionReady(){
+  const items=selAll();
+  const images=items.filter(i=>i.type==='image'&&!i.locked);
+  const masks=items.filter(i=>i.type==='shape'&&!i.locked&&['rect','ellipse','polygon','star'].includes(i.shape));
+  return images.length===1&&masks.length===1;
+}
+function maskSelectionWithVector(){
+  if(!vectorMaskSelectionReady()){showToast('Select 1 image and 1 vector shape');return;}
+  pushHistory();
+  const items=selAll();
+  const image=items.find(i=>i.type==='image');
+  const mask=items.find(i=>i.type==='shape'&&['rect','ellipse','polygon','star'].includes(i.shape));
+  image.vectorMask={shape:mask.shape,radius:mask.radius||0};
+  image.x=mask.x; image.y=mask.y; image.w=mask.w; image.h=mask.h;
+  image.rot=mask.rot||0; image.flipH=!!mask.flipH; image.flipV=!!mask.flipV;
+  image.fit='cover'; image.imgScale=Math.max(120,image.imgScale||100);
+  ac().items=ac().items.filter(i=>i.id!==mask.id);
+  state.selectedIds=[image.id];
+  renderItems(); renderLayers(); updateSelectionOverlay(); updateMultiSelBox(); updateProps(); scheduleSave(); scheduleThumb();
+  showToast('Vector mask applied');
+}
+
 function startTextEdit(id,el){
   const item=getItem(id); if(!item||item.locked) return;
   const tc=el.querySelector('.text-content'); if(!tc) return;
@@ -1951,6 +1979,7 @@ function applyItemStyle(el,item){
       img.style.transformOrigin=`${posX}% ${posY}%`;
       img.style.filter=`brightness(${item.imgBright??100}%) contrast(${item.imgContrast??100}%) saturate(${item.imgSaturate??100}%) blur(${item.imgBlur??0}px)`;
     }
+    applyImageVectorMask(el,item);
   }
   if(item.type==='comment'){
     const pin=el.querySelector('.comment-pin span'),pop=el.querySelector('.comment-pop');
@@ -1965,7 +1994,7 @@ function applyFrameClipping(){
     const el=canvasWorld.querySelector(`[data-id="${item.id}"]`);
     if(!el||item.type==='frame'){if(el) el.style.clipPath='';return;}
     const frame=frames.find(f=>item.frameId===f.id);
-    if(!frame){el.style.clipPath='';return;}
+    if(!frame){if(item.type==='image') applyImageVectorMask(el,item); else el.style.clipPath='';return;}
     const top=Math.max(0,frame.y-item.y);
     const left=Math.max(0,frame.x-item.x);
     const right=Math.max(0,item.x+item.w-(frame.x+frame.w));
@@ -1992,6 +2021,22 @@ function assignFrameMembership(ids){
     else delete item.frameId;
   });
   applyFrameClipping();
+}
+
+function vectorMaskCss(mask){
+  if(!mask) return '';
+  if(mask.shape==='ellipse') return 'ellipse(50% 50% at 50% 50%)';
+  if(mask.shape==='polygon') return 'polygon(50% 0%, 100% 100%, 0% 100%)';
+  if(mask.shape==='star'){
+    return 'polygon(50% 0%, 61% 36%, 95% 36%, 67% 56%, 78% 90%, 50% 70%, 22% 90%, 33% 56%, 5% 36%, 39% 36%)';
+  }
+  const r=Math.max(0,Math.min(50,mask.radius||0));
+  return `inset(0 round ${r}%)`;
+}
+function applyImageVectorMask(el,item){
+  const mask=vectorMaskCss(item.vectorMask);
+  el.style.clipPath=mask||'';
+  el.classList.toggle('vector-masked',!!mask);
 }
 function assignInitialFrame(item){
   if(!item||item.type==='frame') return;
@@ -2543,7 +2588,10 @@ function updateProps(){
   $('props-content').style.display=count===1?'flex':'none';
   $('multi-props').style.display=count>1?'flex':'none';
   if(showDefaults) updateShapeDefaultsUI();
-  if(count>1) $('multi-sel-msg').textContent=`${count} items selected`;
+  if(count>1){
+    $('multi-sel-msg').textContent=`${count} items selected`;
+    $('vector-mask-tools').style.display=vectorMaskSelectionReady()?'flex':'none';
+  }
   if(!item) return;
   const boolPart=item.shape==='boolean'&&state.booleanAdjustId===item.id&&state.booleanPartIndex!==null
     ? ensureBooleanChildren(item)[state.booleanPartIndex]
@@ -2611,6 +2659,7 @@ function updateProps(){
     $('img-blur').value=item.imgBlur??0;
     $('img-blur-val').textContent=(item.imgBlur??0)+'px';
     $('img-crop-btn').classList.toggle('active',state.cropAdjustId===item.id);
+    $('img-remove-vector-mask').style.display=item.vectorMask?'block':'none';
     $('img-fit-btn').classList.toggle('active',(item.fit||'contain')==='contain');
     $('img-fill-btn').classList.toggle('active',(item.fit||'contain')==='cover');
     $('img-stretch-btn').classList.toggle('active',(item.fit||'contain')==='fill');
@@ -2735,6 +2784,7 @@ $('m-dup-btn').addEventListener('click',()=>{ if(state.selectedIds.length) dupli
 $('m-del-btn').addEventListener('click',()=>{ if(state.selectedIds.length) deleteItems([...state.selectedIds]); });
 $('group-btn').addEventListener('click',groupSelection);
 $('ungroup-btn').addEventListener('click',ungroupSelection);
+$('vector-mask-btn').addEventListener('click',maskSelectionWithVector);
 
 function updateImageCropProp(key,value,withHistory=false){
   const item=selFirst(); if(!item||item.type!=='image'||item.locked) return;
@@ -2796,6 +2846,15 @@ $('img-pos-y').addEventListener('change',e=>updateImageCropProp('imgY',parseFloa
 $('img-fit-btn').addEventListener('click',()=>setImageFitMode(selFirst(),'contain'));
 $('img-fill-btn').addEventListener('click',()=>setImageFitMode(selFirst(),'cover'));
 $('img-stretch-btn').addEventListener('click',()=>setImageFitMode(selFirst(),'fill'));
+$('img-remove-vector-mask').addEventListener('click',()=>{
+  const item=selFirst(); if(!item||item.type!=='image'||!item.vectorMask||item.locked) return;
+  pushHistory();
+  delete item.vectorMask;
+  const el=canvasWorld.querySelector(`[data-id="${item.id}"]`);
+  if(el) applyItemStyle(el,item);
+  updateProps(); scheduleSave(); scheduleThumb();
+  showToast('Vector mask removed');
+});
 function updateImageAdjustment(key,value,withHistory=false){
   const item=selFirst(); if(!item||item.type!=='image'||item.locked) return;
   if(withHistory) pushHistory();
@@ -4058,6 +4117,7 @@ const COMMANDS=[
   {name:'Delete selection',group:'Selection',key:'Del',run:()=>deleteItems([...state.selectedIds]),enabled:()=>state.selectedIds.length>0},
   {name:'Copy style',group:'Selection',run:()=>copyItemStyle(state.selectedIds[0]),enabled:()=>state.selectedIds.length===1},
   {name:'Paste style',group:'Selection',run:()=>pasteItemStyle([...state.selectedIds]),enabled:()=>state.selectedIds.length>0&&!!state.styleClipboard},
+  {name:'Mask with vector',group:'Mask',run:maskSelectionWithVector,enabled:vectorMaskSelectionReady},
   {name:'Union shapes',group:'Shapes',key:'Alt Shift U',run:()=>booleanSelection('union'),enabled:booleanSelectionReady},
   {name:'Subtract shapes',group:'Shapes',key:'Alt Shift S',run:()=>booleanSelection('subtract'),enabled:booleanSelectionReady},
   {name:'Intersect shapes',group:'Shapes',key:'Alt Shift I',run:()=>booleanSelection('intersect'),enabled:booleanSelectionReady},
