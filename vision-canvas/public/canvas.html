@@ -3034,6 +3034,7 @@ $('default-shape-stroke-width').addEventListener('change',e=>
 $('default-shape-fill-clear').addEventListener('click',()=>updateDefaultShapeProp('fill','transparent'));
 
 let layerDrag={ids:null,startY:0};
+let lastLayerSelectIds=[];
 $('layer-search').addEventListener('input',e=>{
   state.layerQuery=e.target.value;
   renderLayers();
@@ -3153,7 +3154,7 @@ function renderLayers(){
           renderLayers();
           return;
         }
-        state.selectedIds=[id];
+        applyLayerSelection(el,[id],e);
         clearBooleanAdjustMode();
         renderItemsHighlight(); updateSelectionOverlay();
         updateMultiSelBox(); updateProps(); renderLayers();
@@ -3178,20 +3179,14 @@ function renderLayers(){
           return;
         }
         const members=items.filter(i=>i.groupId===gid).map(i=>i.id);
-        if(e.shiftKey){
-          if(members.every(i=>state.selectedIds.includes(i))) state.selectedIds=state.selectedIds.filter(i=>!members.includes(i));
-          else state.selectedIds=[...new Set([...state.selectedIds,...members])];
-        }else state.selectedIds=members;
+        applyLayerSelection(el,members,e);
         renderItemsHighlight(); updateSelectionOverlay();
         updateMultiSelBox(); updateProps(); renderLayers();
         return;
       }
       const id=parseInt(el.dataset.id);
       const item=getItem(id), idsToSelect=selectionIdsForItem(item);
-      if(e.shiftKey){
-        if(idsToSelect.every(i=>state.selectedIds.includes(i))) state.selectedIds=state.selectedIds.filter(i=>!idsToSelect.includes(i));
-        else state.selectedIds=[...new Set([...state.selectedIds,...idsToSelect])];
-      } else state.selectedIds=idsToSelect;
+      applyLayerSelection(el,idsToSelect,e);
       renderItemsHighlight(); updateSelectionOverlay();
       updateMultiSelBox(); updateProps(); renderLayers();
     });
@@ -3291,6 +3286,37 @@ function layerUnitIds(el){
     return ac().items.filter(i=>i.groupId===gid).sort((a,b)=>b.z-a.z).map(i=>i.id);
   }
   return el.dataset.id?[parseInt(el.dataset.id,10)]:[];
+}
+function visibleLayerRows(){
+  return [...$('layers-list').querySelectorAll('.layer-item')]
+    .filter(el=>!el.dataset.boolParent&&layerUnitIds(el).length);
+}
+function layerRangeIds(targetEl){
+  const rows=visibleLayerRows();
+  const targetIndex=rows.indexOf(targetEl);
+  const anchorIndex=rows.findIndex(row=>{
+    const rowIds=layerUnitIds(row);
+    return rowIds.some(id=>lastLayerSelectIds.includes(id));
+  });
+  if(targetIndex<0||anchorIndex<0) return layerUnitIds(targetEl);
+  const [from,to]=targetIndex<anchorIndex?[targetIndex,anchorIndex]:[anchorIndex,targetIndex];
+  return [...new Set(rows.slice(from,to+1).flatMap(row=>layerUnitIds(row)))];
+}
+function applyLayerSelection(el,ids,e){
+  const cleanIds=[...new Set(ids)].filter(id=>getItem(id));
+  if(!cleanIds.length) return;
+  if(e.shiftKey){
+    state.selectedIds=layerRangeIds(el);
+  }else if(e.ctrlKey||e.metaKey){
+    const selected=new Set(state.selectedIds);
+    const allSelected=cleanIds.every(id=>selected.has(id));
+    cleanIds.forEach(id=>allSelected?selected.delete(id):selected.add(id));
+    state.selectedIds=[...selected];
+    lastLayerSelectIds=cleanIds;
+  }else{
+    state.selectedIds=cleanIds;
+    lastLayerSelectIds=cleanIds;
+  }
 }
 function layerDragIdsForUnit(unitIds){
   const selected=new Set(state.selectedIds);
