@@ -5058,7 +5058,7 @@ const SUPABASE_URL = 'https://tzzbinwvtuvjhynlmjzo.supabase.co'
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR6emJpbnd2dHV2amh5bmxtanpvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzcyMTQwNDgsImV4cCI6MjA5Mjc5MDA0OH0.J5evLhHjvW3hn280SelzkenehL1qj7uHjW8uG-3HvZY'
 function apiBearer(){return CANVAS_ID&&OWNER_AUTH_TOKEN?OWNER_AUTH_TOKEN:SUPABASE_KEY}
 
-let realtimeClient = null, collabChannel = null, collabUser = null, lastCursorSent = 0
+let realtimeClient = null, collabChannel = null, collabUser = null, lastCursorSent = 0, remoteAutoLoadTimer = null
 const remoteCursors = new Map()
 function collabKey(){return CANVAS_ID || (state.shareToken ? `share-${state.shareToken}` : SHARE_TOKEN ? `share-${SHARE_TOKEN}` : null)}
 function hashColor(seed){
@@ -5163,19 +5163,35 @@ function broadcastSaved(){
 }
 function handleRemoteSaved(data){
   if(!data || data.key===getCollabUser().key) return
+  if(canAutoApplyRemoteChange()){
+    clearTimeout(remoteAutoLoadTimer)
+    remoteAutoLoadTimer = setTimeout(()=>loadLatestRemoteChanges({auto:true,name:data.name||'Someone'}), 250)
+    return
+  }
   const box=$('remote-change-toast'), name=$('remote-change-name')
   if(name) name.textContent=data.name||'Someone'
   if(box) box.classList.add('show')
   showToast(`${data.name||'Someone'} saved newer changes`)
 }
-async function loadLatestRemoteChanges(){
+function canAutoApplyRemoteChange(){
+  return !hasUnsavedChanges && !saveInProgress && !interaction && !state.editingId
+}
+async function loadLatestRemoteChanges(opts={}){
   $('remote-change-toast')?.classList.remove('show')
-  if(hasUnsavedChanges && !window.confirm('You have unsaved local changes. Load latest anyway?')) return
+  if(!opts.auto && hasUnsavedChanges && !window.confirm('You have unsaved local changes. Load latest anyway?')) return
+  if(opts.auto && !canAutoApplyRemoteChange()) return
+  const view={activeId:state.activeId,pan:{...state.pan},zoom:state.zoom,selectedIds:[...state.selectedIds],tool:state.tool}
   await loadCanvas()
+  if(state.canvases.some(c=>c.id===view.activeId)) state.activeId=view.activeId
+  state.pan=view.pan
+  state.zoom=view.zoom
+  state.selectedIds=view.selectedIds.filter(id=>getItem(id))
+  state.tool=view.tool
   renderAll()
   updateProps()
   renderLayers()
-  showToast('Latest changes loaded')
+  setTool(view.tool)
+  showToast(opts.auto ? `${opts.name} updated the canvas` : 'Latest changes loaded')
 }
 
 const THUMB_SAVE_INTERVAL = 30000
