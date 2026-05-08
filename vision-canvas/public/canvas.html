@@ -2127,7 +2127,7 @@ function startTextEdit(id,el){
   tc.contentEditable='true';
   tc.spellcheck=true;
   if(isLegacyTextPlaceholder(item)) item.text='';
-  tc.innerText=item.text||'';
+  tc.innerHTML=item.html||escapeHtml(item.text||'').replace(/\n/g,'<br>');
   tc.focus();
   const range=document.createRange();
   range.selectNodeContents(tc);
@@ -2135,8 +2135,11 @@ function startTextEdit(id,el){
   const s=window.getSelection(); s.removeAllRanges(); s.addRange(range);
   const onBlur=()=>{
     const nextText=normalizeTextContent(tc.innerText);
+    const nextHtml=sanitizeTextHtml(tc.innerHTML);
     if(!textEditDirty&&nextText!==item.text) pushHistory();
     item.text=nextText;
+    if(nextHtml&&nextHtml!==escapeHtml(nextText).replace(/\n/g,'<br>')) item.html=nextHtml;
+    else delete item.html;
     fitTextHeight(item,el);
     tc.contentEditable='false'; state.editingId=null; textEditDirty=false;
     el.classList.remove('editing');
@@ -2149,6 +2152,7 @@ function startTextEdit(id,el){
   const onInput=()=>{
     if(!textEditDirty){pushHistory();textEditDirty=true;}
     item.text=normalizeTextContent(tc.innerText);
+    item.html=sanitizeTextHtml(tc.innerHTML);
     fitTextHeight(item,el);
     updateSelectionOverlay(); updateProps(); scheduleSave();
   };
@@ -2163,6 +2167,58 @@ function startTextEdit(id,el){
   fitTextHeight(item,el);
 }
 
+function sanitizeTextHtml(html){
+  const t=document.createElement('template');
+  t.innerHTML=html||'';
+  const allowedStyle=new Set(['color','background-color','font-size','font-family','font-weight','line-height','letter-spacing','text-transform']);
+  function clean(node){
+    if(node.nodeType===Node.TEXT_NODE) return escapeHtml(node.textContent||'');
+    if(node.nodeType!==Node.ELEMENT_NODE) return '';
+    const tag=node.tagName.toLowerCase();
+    if(tag==='br') return '<br>';
+    const body=[...node.childNodes].map(clean).join('');
+    if(tag==='div'||tag==='p') return body+'<br>';
+    if(!['span','b','strong','i','em','u'].includes(tag)) return body;
+    const styles=[];
+    if(node.getAttribute('style')){
+      node.getAttribute('style').split(';').forEach(pair=>{
+        const [rawKey,...rest]=pair.split(':');
+        const key=(rawKey||'').trim().toLowerCase();
+        const value=rest.join(':').trim().replace(/[<>"']/g,'');
+        if(allowedStyle.has(key)&&value) styles.push(`${key}:${value}`);
+      });
+    }
+    return styles.length ? `<span style="${styles.join(';')}">${body}</span>` : body;
+  }
+  return [...t.content.childNodes].map(clean).join('').replace(/(<br>)+$/,'');
+}
+function selectionInsideTextContent(tc){
+  const sel=window.getSelection();
+  if(!sel||sel.rangeCount===0||sel.isCollapsed) return null;
+  const range=sel.getRangeAt(0);
+  if(!tc.contains(range.commonAncestorContainer)) return null;
+  return range;
+}
+function applyInlineTextStyle(prop,value){
+  const item=selFirst(); if(!item||state.editingId!==item.id) return false;
+  const el=canvasWorld.querySelector(`[data-id="${item.id}"]`);
+  const tc=el?.querySelector('.text-content');
+  const range=tc&&selectionInsideTextContent(tc);
+  if(!range) return false;
+  if(!textEditDirty){pushHistory();textEditDirty=true;}
+  const span=document.createElement('span');
+  span.style[prop]=value;
+  span.appendChild(range.extractContents());
+  range.insertNode(span);
+  const nextRange=document.createRange();
+  nextRange.selectNodeContents(span);
+  const sel=window.getSelection(); sel.removeAllRanges(); sel.addRange(nextRange);
+  item.text=normalizeTextContent(tc.innerText);
+  item.html=sanitizeTextHtml(tc.innerHTML);
+  fitTextHeight(item,el);
+  updateSelectionOverlay(); scheduleSave(); scheduleThumb();
+  return true;
+}
 function isLegacyTextPlaceholder(item){
   return (item.type==='text'&&item.text==='Double-click to edit')
     ||(item.type==='note'&&item.text==='Write a note...');
@@ -2358,7 +2414,8 @@ function applyItemStyle(el,item){
   if(item.type==='text'||item.type==='note'){
   const tc=el.querySelector('.text-content');
   if(tc&&tc.contentEditable!=='true'){
-    tc.innerText=isLegacyTextPlaceholder(item)?'':(item.text||'');
+    if(item.html&&!isLegacyTextPlaceholder(item)) tc.innerHTML=sanitizeTextHtml(item.html);
+    else tc.innerText=isLegacyTextPlaceholder(item)?'':(item.text||'');
     tc.dataset.placeholder=item.type==='note'?'Write a note...':'Type text';
     tc.style.fontSize=item.fontSize+'px';
     tc.style.fontFamily=item.fontFamily;
@@ -3342,7 +3399,10 @@ function bindTextProp(id,key,isNum){
   $(id).addEventListener('change',e=>{
     const item=selFirst(); if(!item||(item.type!=='text'&&item.type!=='note')) return;
     const fallback=key==='lineHeight'?1.4:16;
-    pushHistory(); item[key]=isNum?(parseFloat(e.target.value)||fallback):e.target.value;
+    const next=isNum?(parseFloat(e.target.value)||fallback):e.target.value;
+    const inlineMap={fontSize:['fontSize',`${next}px`],lineHeight:['lineHeight',String(next)],letterSpacing:['letterSpacing',`${next}px`],textPadding:null,textTransform:['textTransform',next],fontWeight:['fontWeight',next],fontFamily:['fontFamily',next]};
+    if(inlineMap[key]&&applyInlineTextStyle(inlineMap[key][0],inlineMap[key][1])){ updateProps(); return; }
+    pushHistory(); item[key]=next;
     const el=canvasWorld.querySelector(`[data-id="${item.id}"]`);
     if(el){ applyItemStyle(el,item); fitTextHeight(item,el); }
     updateSelectionOverlay(); updateProps(); scheduleSave(); scheduleThumb();
@@ -3382,6 +3442,7 @@ $('t-fit').addEventListener('click',()=>{
 });
 $('t-color').addEventListener('input',e=>{
   const item=selFirst(); if(!item||(item.type!=='text'&&item.type!=='note')) return;
+  if(applyInlineTextStyle('color',e.target.value)) return;
   item.color=e.target.value;
   const el=canvasWorld.querySelector(`[data-id="${item.id}"]`);
   if(el) applyItemStyle(el,item);
@@ -3389,6 +3450,7 @@ $('t-color').addEventListener('input',e=>{
 });
 $('t-bg').addEventListener('input',e=>{
   const item=selFirst(); if(!item||(item.type!=='text'&&item.type!=='note')) return;
+  if(applyInlineTextStyle('backgroundColor',e.target.value)) return;
   item.bgColor=e.target.value;
   const el=canvasWorld.querySelector(`[data-id="${item.id}"]`);
   if(el) applyItemStyle(el,item);
@@ -4803,10 +4865,11 @@ function pasteItemStyle(ids){
   pushHistory();
   targets.forEach(item=>{
     Object.entries(state.styleClipboard.style).forEach(([key,value])=>{
-      const textOnly=['color','bgColor','fontSize','lineHeight','letterSpacing','textTransform','textPadding','fontFamily','fontWeight','textAlign'];
+    const textOnly=['color','bgColor','fontSize','lineHeight','letterSpacing','textTransform','textPadding','fontFamily','fontWeight','textAlign'];
       const imageOnly=['fit','imgX','imgY','imgScale','imgBright','imgContrast','imgSaturate','imgBlur'];
       const shapeOnly=['fill','stroke','strokeWidth'];
       if(textOnly.includes(key)&&!(item.type==='text'||item.type==='note')) return;
+      if(key==='html') return;
       if(imageOnly.includes(key)&&item.type!=='image') return;
       if(shapeOnly.includes(key)&&!(item.type==='shape'||item.type==='frame')) return;
       item[key]=value;
