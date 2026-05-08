@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <title>Vision Canvas</title>
-<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600&family=Syne:wght@600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700;800&family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&family=Outfit:wght@300;400;500;600;700;800&family=Syne:wght@600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="/paper-full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -409,6 +409,11 @@ body.exporting-canvas .frame-label{display:none!important;}
   border-radius:8px;color:var(--text2);font-size:13px;cursor:pointer;transition:.15s;}
 .align-btn-ui:hover,.align-btn-ui.active{background:rgba(108,113,240,.15);
   border-color:rgba(108,113,240,.3);color:var(--accent2);}
+.text-preset-row{display:grid;grid-template-columns:repeat(3,1fr);gap:5px;}
+.text-preset-btn{height:30px;border-radius:8px;border:1px solid rgba(255,255,255,.09);
+  background:rgba(255,255,255,.035);color:var(--text2);font-family:'Outfit',sans-serif;
+  font-size:11px;font-weight:700;cursor:pointer;transition:.15s;}
+.text-preset-btn:hover{background:rgba(108,113,240,.18);border-color:rgba(139,143,244,.38);color:#d8d6ff;}
 .color-row{display:flex;align-items:center;gap:8px;}
 .color-swatch{width:32px;height:32px;border-radius:8px;border:1px solid var(--border2);
   cursor:pointer;position:relative;flex-shrink:0;}
@@ -934,30 +939,51 @@ body.exporting-canvas .frame-label{display:none!important;}
           </div>
           <div id="text-props">
             <div class="inspector-group-title">Text</div>
+            <div class="text-preset-row">
+              <button class="text-preset-btn" data-text-preset="heading">Heading</button>
+              <button class="text-preset-btn" data-text-preset="subheading">Subhead</button>
+              <button class="text-preset-btn" data-text-preset="body">Body</button>
+            </div>
             <div class="prop-2col">
               <div class="prop-group"><span class="lbl">Sz</span><input type="number" id="t-size" step="1" min="8" max="200" value="24"></div>
               <select class="font-select" id="t-weight">
                 <option value="300">Light</option>
                 <option value="400" selected>Regular</option>
+                <option value="500">Medium</option>
                 <option value="600">SemiBold</option>
                 <option value="700">Bold</option>
+                <option value="800">Extra Bold</option>
               </select>
             </div>
             <div class="prop-2col">
               <div class="prop-group"><span class="lbl">Line</span><input type="number" id="t-line" step="0.05" min="0.8" max="3" value="1.4"></div>
-              <button class="act-btn" id="t-fit" style="height:28px;">Fit height</button>
+              <div class="prop-group"><span class="lbl">Track</span><input type="number" id="t-track" step="0.1" min="-5" max="30" value="0"></div>
             </div>
             <select class="font-select" id="t-font">
+              <option value="'Inter', sans-serif">Inter</option>
               <option value="'Outfit', sans-serif">Outfit</option>
+              <option value="'DM Sans', sans-serif">DM Sans</option>
               <option value="'Syne', sans-serif">Syne</option>
               <option value="Georgia, serif">Georgia</option>
-              <option value="'Courier New', monospace">Monospace</option>
+              <option value="'Times New Roman', serif">Times New Roman</option>
+              <option value="'JetBrains Mono','Courier New', monospace">JetBrains Mono</option>
+              <option value="'Courier New', monospace">Courier New</option>
             </select>
+            <div class="prop-2col">
+              <select class="font-select" id="t-transform">
+                <option value="none">Normal case</option>
+                <option value="uppercase">Uppercase</option>
+                <option value="lowercase">Lowercase</option>
+                <option value="capitalize">Capitalize</option>
+              </select>
+              <div class="prop-group"><span class="lbl">Pad</span><input type="number" id="t-pad" step="1" min="0" max="80" value="8"></div>
+            </div>
             <div class="text-align-row">
               <button class="align-btn-ui" data-align="left">⬅</button>
               <button class="align-btn-ui" data-align="center">↔</button>
               <button class="align-btn-ui" data-align="right">➡</button>
             </div>
+            <button class="act-btn" id="t-fit" style="height:30px;">Fit text box height</button>
             <div class="color-row">
               <div class="color-swatch"><input type="color" id="t-color" value="#eeeef5"></div>
               <span class="color-label">Text</span>
@@ -1639,7 +1665,7 @@ function addTextItem(x,y,w=220,h=70){
   pushHistory();
   const id=++state.nextId;
   ac().items.push({id,type:'text',name:`Text ${id}`,
-    text:'',fontSize:24,lineHeight:1.4,
+    text:'',fontSize:24,lineHeight:1.4,letterSpacing:0,textTransform:'none',textPadding:8,
     fontFamily:"'Outfit', sans-serif",fontWeight:'400',
     color:'#eeeef5',textAlign:'left',bgColor:'',
     x,y,w:Math.max(40,w),h:Math.max(28,h),rot:0,opacity:100,
@@ -1661,7 +1687,7 @@ function addNoteItem(x,y,w=220,h=160){
   pushHistory();
   const id=++state.nextId;
   ac().items.push({id,type:'note',name:`Note ${id}`,
-    text:'',fontSize:18,lineHeight:1.35,
+    text:'',fontSize:18,lineHeight:1.35,letterSpacing:0,textTransform:'none',textPadding:12,
     fontFamily:"'Outfit', sans-serif",fontWeight:'500',
     color:'#171717',textAlign:'left',bgColor:'#ffd966',
     x,y,w:Math.max(120,w),h:Math.max(90,h),rot:0,opacity:100,
@@ -2339,6 +2365,8 @@ function applyItemStyle(el,item){
     tc.style.fontWeight=item.fontWeight;
     tc.style.color=item.color;
     tc.style.textAlign=item.textAlign;
+    tc.style.letterSpacing=(item.letterSpacing||0)+'px';
+    tc.style.textTransform=item.textTransform||'none';
     tc.style.background=item.bgColor||(item.type==='note'?'#ffd966':'transparent');
     tc.style.width='100%';
     tc.style.height='100%';
@@ -2346,7 +2374,7 @@ function applyItemStyle(el,item){
     tc.style.wordBreak='break-word';
     tc.style.whiteSpace='pre-wrap';
     tc.style.lineHeight=item.lineHeight||1.4;
-    tc.style.padding='8px';
+    tc.style.padding=(item.textPadding??(item.type==='note'?12:8))+'px';
   }
   }
   if(item.type==='shape'){
@@ -3024,6 +3052,9 @@ function updateProps(){
   if(isText){
     $('t-size').value=item.fontSize; $('t-weight').value=item.fontWeight;
     $('t-line').value=item.lineHeight||1.4;
+    $('t-track').value=item.letterSpacing||0;
+    $('t-transform').value=item.textTransform||'none';
+    $('t-pad').value=item.textPadding??(item.type==='note'?12:8);
     $('t-font').value=item.fontFamily; $('t-color').value=item.color;
     if(item.bgColor) $('t-bg').value=item.bgColor;
   document.querySelectorAll('.align-btn-ui').forEach(b=>
@@ -3314,13 +3345,34 @@ function bindTextProp(id,key,isNum){
     pushHistory(); item[key]=isNum?(parseFloat(e.target.value)||fallback):e.target.value;
     const el=canvasWorld.querySelector(`[data-id="${item.id}"]`);
     if(el){ applyItemStyle(el,item); fitTextHeight(item,el); }
-    updateSelectionOverlay(); updateProps(); scheduleThumb();
+    updateSelectionOverlay(); updateProps(); scheduleSave(); scheduleThumb();
   });
+}
+function setTextProps(patch,withHistory=true){
+  const item=selFirst(); if(!item||(item.type!=='text'&&item.type!=='note')||item.locked) return;
+  if(withHistory) pushHistory();
+  Object.assign(item,patch);
+  const el=canvasWorld.querySelector(`[data-id="${item.id}"]`);
+  if(el){ applyItemStyle(el,item); fitTextHeight(item,el); }
+  updateSelectionOverlay(); updateProps(); scheduleSave(); scheduleThumb();
 }
 bindTextProp('t-size','fontSize',true);
 bindTextProp('t-line','lineHeight',true);
+bindTextProp('t-track','letterSpacing',true);
+bindTextProp('t-pad','textPadding',true);
+bindTextProp('t-transform','textTransform',false);
 bindTextProp('t-weight','fontWeight',false);
 bindTextProp('t-font','fontFamily',false);
+document.querySelectorAll('[data-text-preset]').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    const presets={
+      heading:{fontSize:48,fontWeight:'800',lineHeight:1.05,letterSpacing:-0.5,fontFamily:"'Syne', sans-serif",textTransform:'none',textPadding:8},
+      subheading:{fontSize:28,fontWeight:'700',lineHeight:1.18,letterSpacing:0,fontFamily:"'Inter', sans-serif",textTransform:'none',textPadding:8},
+      body:{fontSize:18,fontWeight:'400',lineHeight:1.45,letterSpacing:0,fontFamily:"'Inter', sans-serif",textTransform:'none',textPadding:8}
+    };
+    setTextProps(presets[btn.dataset.textPreset]||presets.body,true);
+  });
+});
 $('t-fit').addEventListener('click',()=>{
   const item=selFirst(); if(!item||(item.type!=='text'&&item.type!=='note')||item.locked) return;
   pushHistory();
@@ -3333,19 +3385,27 @@ $('t-color').addEventListener('input',e=>{
   item.color=e.target.value;
   const el=canvasWorld.querySelector(`[data-id="${item.id}"]`);
   if(el) applyItemStyle(el,item);
+  scheduleSave(); scheduleThumb();
 });
 $('t-bg').addEventListener('input',e=>{
   const item=selFirst(); if(!item||(item.type!=='text'&&item.type!=='note')) return;
   item.bgColor=e.target.value;
   const el=canvasWorld.querySelector(`[data-id="${item.id}"]`);
   if(el) applyItemStyle(el,item);
+  scheduleSave(); scheduleThumb();
 });
 $('t-bg-clear').addEventListener('click',()=>{
   const item=selFirst(); if(!item||(item.type!=='text'&&item.type!=='note')) return;
   pushHistory(); item.bgColor='';
   const el=canvasWorld.querySelector(`[data-id="${item.id}"]`);
   if(el) applyItemStyle(el,item);
+  updateProps(); scheduleSave(); scheduleThumb();
 });
+const justifyBtn=document.createElement('button');
+justifyBtn.className='align-btn-ui';
+justifyBtn.dataset.align='justify';
+justifyBtn.textContent='Justify';
+document.querySelector('.text-align-row')?.appendChild(justifyBtn);
 document.querySelectorAll('.align-btn-ui').forEach(btn=>{
   btn.addEventListener('click',()=>{
     const item=selFirst(); if(!item||(item.type!=='text'&&item.type!=='note')) return;
@@ -4730,7 +4790,7 @@ function renameItem(id){
 function copyItemStyle(id){
   const item=getItem(id); if(!item) return;
   const keys=['opacity','blendMode','shadow','shadowBlur','shadowY','shadowColor','radius',
-    'fill','stroke','strokeWidth','color','bgColor','fontSize','lineHeight','fontFamily','fontWeight','textAlign',
+    'fill','stroke','strokeWidth','color','bgColor','fontSize','lineHeight','letterSpacing','textTransform','textPadding','fontFamily','fontWeight','textAlign',
     'fit','imgX','imgY','imgScale','imgBright','imgContrast','imgSaturate','imgBlur'];
   state.styleClipboard={style:{}};
   keys.forEach(key=>{if(item[key]!==undefined) state.styleClipboard.style[key]=item[key];});
@@ -4743,7 +4803,7 @@ function pasteItemStyle(ids){
   pushHistory();
   targets.forEach(item=>{
     Object.entries(state.styleClipboard.style).forEach(([key,value])=>{
-      const textOnly=['color','bgColor','fontSize','lineHeight','fontFamily','fontWeight','textAlign'];
+      const textOnly=['color','bgColor','fontSize','lineHeight','letterSpacing','textTransform','textPadding','fontFamily','fontWeight','textAlign'];
       const imageOnly=['fit','imgX','imgY','imgScale','imgBright','imgContrast','imgSaturate','imgBlur'];
       const shapeOnly=['fill','stroke','strokeWidth'];
       if(textOnly.includes(key)&&!(item.type==='text'||item.type==='note')) return;
