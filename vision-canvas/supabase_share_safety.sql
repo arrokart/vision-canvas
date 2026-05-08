@@ -232,6 +232,7 @@ as $$
   join public.canvases c on c.id = r.canvas_id
   where r.canvas_id = p_canvas_id
     and c.user_id = auth.uid()
+    and r.status in ('pending','approved')
   order by r.created_at desc;
 $$;
 
@@ -243,8 +244,20 @@ set search_path = public
 as $$
 declare
   updated_count integer;
+  previous_status text;
 begin
   if p_status not in ('approved','rejected') then
+    return false;
+  end if;
+
+  select r.status
+  into previous_status
+  from public.canvas_access_requests r
+  join public.canvases c on c.id = r.canvas_id
+  where r.id = p_request_id
+    and c.user_id = auth.uid();
+
+  if previous_status is null then
     return false;
   end if;
 
@@ -260,7 +273,11 @@ begin
   if updated_count > 0 then
     insert into public.canvas_access_activity (canvas_id, guest_key, guest_name, action, detail)
     select r.canvas_id, r.guest_key, r.guest_name,
-      case when p_status = 'approved' then 'approved' else 'revoked' end,
+      case
+        when p_status = 'approved' then 'approved'
+        when previous_status = 'approved' then 'revoked'
+        else 'rejected'
+      end,
       r.requested_permission
     from public.canvas_access_requests r
     where r.id = p_request_id;

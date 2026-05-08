@@ -5399,7 +5399,6 @@ async function renderAccessRequests(){
     const activity=await fetchAccessActivity().catch(()=>[])
     const pending=(rows||[]).filter(r=>r.status==='pending')
     const approved=(rows||[]).filter(r=>r.status==='approved')
-    const rejected=(rows||[]).filter(r=>r.status==='rejected')
     updateShareRequestBadge(pending.length)
     box.innerHTML=`<h4>Pending requests</h4>${
       pending.length ? pending.map(r=>`
@@ -5420,12 +5419,6 @@ async function renderAccessRequests(){
         ${approved.length ? approved.map(r=>accessRowHtml(r,`
           <button class="mini-btn reject" data-access-action="rejected">Revoke</button>
         `,'approved')).join('') : '<div class="access-empty">No approved people yet.</div>'}
-      </div>
-      <div class="access-section">
-        <h4>Rejected</h4>
-        ${rejected.length ? rejected.map(r=>accessRowHtml(r,`
-          <button class="mini-btn approve" data-access-action="approved">Approve</button>
-        `,'rejected')).join('') : '<div class="access-empty">No rejected people.</div>'}
       </div>
       <div class="access-section">
         <h4>History</h4>
