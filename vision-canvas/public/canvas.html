@@ -6,6 +6,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600&family=Syne:wght@600;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="/paper-full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box;}
 :root{
@@ -542,6 +543,26 @@ body.exporting-canvas .frame-label{display:none!important;}
 .activity-badge.comment::before{background:var(--warn);box-shadow:0 0 0 3px rgba(240,168,64,.12);}
 .activity-badge.edit::before{background:var(--success);box-shadow:0 0 0 3px rgba(82,201,122,.12);}
 .activity-badge.owner::before{background:var(--accent2);box-shadow:0 0 0 3px rgba(108,113,240,.16);}
+.collab-status{height:24px;max-width:150px;padding:0 8px;border-radius:999px;border:1px solid rgba(34,211,238,.22);
+  background:rgba(34,211,238,.07);color:#8fdcff;font-size:10.5px;font-weight:600;
+  display:flex;align-items:center;gap:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.collab-status::before{content:'';width:6px;height:6px;border-radius:50%;background:var(--accent3);
+  box-shadow:0 0 0 3px rgba(34,211,238,.12);}
+.collab-status.offline{display:none;}
+.remote-cursor{position:absolute;left:0;top:0;z-index:4200;pointer-events:none;transform:translate(-2px,-2px);
+  transition:transform .08s linear,opacity .18s;filter:drop-shadow(0 8px 14px rgba(0,0,0,.32));}
+.remote-cursor svg{width:18px;height:18px;display:block;}
+.remote-cursor-label{position:absolute;left:14px;top:14px;padding:3px 7px;border-radius:999px;
+  color:#fff;font-size:10.5px;font-weight:700;white-space:nowrap;background:var(--cursor-color,#6c71f0);}
+.remote-cursor.idle{opacity:.45;}
+.remote-change-toast{position:absolute;top:14px;left:50%;transform:translateX(-50%);z-index:4300;
+  display:none;align-items:center;gap:8px;background:rgba(18,18,28,.96);border:1px solid rgba(139,143,244,.32);
+  box-shadow:0 16px 44px rgba(0,0,0,.32);border-radius:999px;padding:7px 8px 7px 12px;color:var(--text2);
+  font-size:12px;}
+.remote-change-toast.show{display:flex;}
+.remote-change-toast strong{color:var(--text);font-weight:700;}
+.remote-change-toast button{height:26px;border:none;border-radius:999px;background:var(--accent);color:#fff;
+  padding:0 10px;font-family:'Outfit',sans-serif;font-size:11px;font-weight:700;cursor:pointer;}
 .share-modal-box{width:420px;max-width:calc(100vw - 28px);}
 .feedback-modal-box{width:420px;max-width:calc(100vw - 28px);}
 .feedback-textarea{width:100%;min-height:112px;resize:vertical;background:var(--bg3);
@@ -677,6 +698,7 @@ body.exporting-canvas .frame-label{display:none!important;}
     <div class="tb-sep"></div>
     <button class="tb-btn" id="url-btn">🔗 URL</button>
     <span id="activity-badge" class="activity-badge owner">Owner</span>
+    <span id="collab-status" class="collab-status offline">Live</span>
     <span id="save-indicator" class="save-indicator">Saved</span>
     <button class="tb-btn" id="feedback-btn">Feedback</button>
     <button class="tb-btn" id="share-btn">🔗 Share<span id="share-pending-badge" class="share-pending-badge">0</span></button>
@@ -774,6 +796,11 @@ body.exporting-canvas .frame-label{display:none!important;}
     <div id="minimap">
       <canvas id="minimap-canvas" width="168" height="112"></canvas>
       <div id="minimap-view"></div>
+    </div>
+    <div id="remote-cursors"></div>
+    <div id="remote-change-toast" class="remote-change-toast">
+      <span><strong id="remote-change-name">Someone</strong> saved newer changes</span>
+      <button id="remote-reload-btn">Load latest</button>
     </div>
     <div id="comment-panel" class="comment-panel">
       <div class="comment-panel-head">
@@ -1347,6 +1374,7 @@ function saveGuestName(name){
   guestName = (name || '').trim().slice(0,32);
   try{ localStorage.setItem(GUEST_STORAGE_KEY, guestName); }catch(e){}
   updateActivityBadge();
+  refreshCollabIdentity();
 }
 function isSmallEditorScreen(){
   return window.innerWidth <= 760 || window.innerHeight <= 520;
@@ -4948,6 +4976,8 @@ $('feedback-cancel')?.addEventListener('click',()=>$('feedback-modal').classList
 $('feedback-copy')?.addEventListener('click',copyFeedbackReport);
 $('mobile-copy-link')?.addEventListener('click',copyCurrentLink);
 $('mobile-continue-view')?.addEventListener('click',dismissMobileViewGuard);
+$('remote-reload-btn')?.addEventListener('click',loadLatestRemoteChanges);
+canvasArea.addEventListener('mousemove',broadcastCursor);
 window.addEventListener('resize',updateMobileGuard);
 
 // Close modals on overlay click
@@ -5028,6 +5058,126 @@ const SUPABASE_URL = 'https://tzzbinwvtuvjhynlmjzo.supabase.co'
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR6emJpbnd2dHV2amh5bmxtanpvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzcyMTQwNDgsImV4cCI6MjA5Mjc5MDA0OH0.J5evLhHjvW3hn280SelzkenehL1qj7uHjW8uG-3HvZY'
 function apiBearer(){return CANVAS_ID&&OWNER_AUTH_TOKEN?OWNER_AUTH_TOKEN:SUPABASE_KEY}
 
+let realtimeClient = null, collabChannel = null, collabUser = null, lastCursorSent = 0
+const remoteCursors = new Map()
+function collabKey(){return CANVAS_ID || (state.shareToken ? `share-${state.shareToken}` : SHARE_TOKEN ? `share-${SHARE_TOKEN}` : null)}
+function hashColor(seed){
+  const colors=['#6c71f0','#22d3ee','#f472b6','#fbbf24','#34d399','#f97316','#a78bfa']
+  let h=0; for(let i=0;i<seed.length;i++) h=(h*31+seed.charCodeAt(i))>>>0
+  return colors[h%colors.length]
+}
+function getCollabUser(){
+  if(collabUser) return collabUser
+  const key = guestKey || OWNER_AUTH_TOKEN?.slice(-12) || Math.random().toString(36).slice(2)
+  const name = guestDisplayName ? guestDisplayName() : 'User'
+  collabUser = {key,name,color:hashColor(key),mode:ACCESS_MODE}
+  return collabUser
+}
+function updateCollabStatus(count=0){
+  const el=$('collab-status')
+  if(!el) return
+  el.classList.toggle('offline', !collabChannel)
+  const others=Math.max(0,count-1)
+  el.textContent=others ? `${others} live` : 'Live'
+  el.title=others ? `${others} other user${others===1?'':'s'} currently here` : 'Realtime ready'
+}
+function refreshCollabIdentity(){
+  collabUser = null
+  if(collabChannel) collabChannel.track({...getCollabUser(),activeAt:Date.now()})
+}
+function initRealtimeCollab(){
+  const key=collabKey()
+  if(!key || !window.supabase?.createClient) return
+  try{
+    realtimeClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
+      realtime:{params:{eventsPerSecond:8}}
+    })
+    collabChannel = realtimeClient.channel(`canvas:${key}`, {
+      config:{presence:{key:getCollabUser().key},broadcast:{self:false}}
+    })
+    collabChannel.on('presence',{event:'sync'},()=>{
+      const stateMap=collabChannel.presenceState()
+      const users=Object.values(stateMap).flat()
+      updateCollabStatus(users.length)
+      cleanupRemoteCursors(new Set(users.map(u=>u.key)))
+    })
+    collabChannel.on('broadcast',{event:'cursor'},payload=>renderRemoteCursor(payload.payload))
+    collabChannel.on('broadcast',{event:'saved'},payload=>handleRemoteSaved(payload.payload))
+    collabChannel.subscribe(status=>{
+      if(status==='SUBSCRIBED'){
+        collabChannel.track({...getCollabUser(),activeAt:Date.now()})
+        updateCollabStatus(1)
+      }
+    })
+  }catch(e){
+    collabChannel=null
+    updateCollabStatus(0)
+  }
+}
+function cleanupRemoteCursors(activeKeys){
+  remoteCursors.forEach((entry,key)=>{
+    if(!activeKeys.has(key)){
+      entry.el.remove()
+      remoteCursors.delete(key)
+    }
+  })
+}
+function broadcastCursor(e){
+  if(!collabChannel || document.body.classList.contains('mobile-guard-active')) return
+  const now=Date.now()
+  if(now-lastCursorSent<90) return
+  const r=canvasArea.getBoundingClientRect()
+  if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom) return
+  lastCursorSent=now
+  const p=screenToWorld(e.clientX,e.clientY)
+  collabChannel.send({type:'broadcast',event:'cursor',payload:{...getCollabUser(),x:p.x,y:p.y,t:now}})
+}
+function renderRemoteCursor(data){
+  if(!data || data.key===getCollabUser().key) return
+  const layer=$('remote-cursors')
+  if(!layer) return
+  let entry=remoteCursors.get(data.key)
+  if(!entry){
+    const el=document.createElement('div')
+    el.className='remote-cursor'
+    el.innerHTML=`<svg viewBox="0 0 24 24"><path d="M4 2l16 10-7 1.5L9 22z" fill="var(--cursor-color)"/></svg><div class="remote-cursor-label"></div>`
+    layer.appendChild(el)
+    entry={el,lastSeen:0}
+    remoteCursors.set(data.key,entry)
+  }
+  const p=worldToScreen(data.x,data.y)
+  const r=canvasArea.getBoundingClientRect()
+  entry.el.style.setProperty('--cursor-color',data.color||'#6c71f0')
+  entry.el.style.transform=`translate(${p.x-r.left}px,${p.y-r.top}px)`
+  entry.el.querySelector('.remote-cursor-label').textContent=data.name||'Guest'
+  entry.el.classList.remove('idle')
+  entry.lastSeen=Date.now()
+}
+setInterval(()=>{
+  const now=Date.now()
+  remoteCursors.forEach(entry=>entry.el.classList.toggle('idle',now-entry.lastSeen>2500))
+},1200)
+function broadcastSaved(){
+  if(!collabChannel) return
+  collabChannel.send({type:'broadcast',event:'saved',payload:{...getCollabUser(),savedAt:Date.now()}})
+}
+function handleRemoteSaved(data){
+  if(!data || data.key===getCollabUser().key) return
+  const box=$('remote-change-toast'), name=$('remote-change-name')
+  if(name) name.textContent=data.name||'Someone'
+  if(box) box.classList.add('show')
+  showToast(`${data.name||'Someone'} saved newer changes`)
+}
+async function loadLatestRemoteChanges(){
+  $('remote-change-toast')?.classList.remove('show')
+  if(hasUnsavedChanges && !window.confirm('You have unsaved local changes. Load latest anyway?')) return
+  await loadCanvas()
+  renderAll()
+  updateProps()
+  renderLayers()
+  showToast('Latest changes loaded')
+}
+
 const THUMB_SAVE_INTERVAL = 30000
 let saveTimer, retrySaveTimer, thumbTimer, thumbInProgress = false, thumbDirty = false, lastThumbSave = 0
 let hasUnsavedChanges = false, saveInProgress = false, lastSaveAttempt = 0, saveFailureCount = 0
@@ -5062,6 +5212,7 @@ async function saveStateOnly(){
       lastPersistedState = buildPersistedState()
       clearSaveRetry()
       showSaveIndicator('saved')
+      broadcastSaved()
     }
     else queueSaveRetry('error')
   }catch(err){
@@ -5363,6 +5514,7 @@ async function init(){
   updateActivityBadge();
   updateMobileGuard();
   renderAll();
+  initRealtimeCollab();
   requestGuestName();
   if(ac().items.length) setTimeout(fitAll, 300);
   
