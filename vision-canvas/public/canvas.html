@@ -5665,7 +5665,6 @@ async function renderAccessRequests(){
   if(!box||!CANVAS_ID) return
   try{
     const rows=await fetchAccessRequests()
-    const activity=await fetchAccessActivity().catch(()=>[])
     const pending=(rows||[]).filter(r=>r.status==='pending')
     const approved=(rows||[]).filter(r=>r.status==='approved')
     updateShareRequestBadge(pending.length)
@@ -5688,10 +5687,6 @@ async function renderAccessRequests(){
         ${approved.length ? approved.map(r=>accessRowHtml(r,`
           <button class="mini-btn reject" data-access-action="rejected">Revoke</button>
         `,'approved')).join('') : '<div class="access-empty">No approved people yet.</div>'}
-      </div>
-      <div class="access-section">
-        <h4>History</h4>
-        ${activity.length ? activity.map(accessActivityHtml).join('') : '<div class="access-empty">No activity yet.</div>'}
       </div>
     `)
     box.querySelectorAll('[data-access-action]').forEach(btn=>{
