@@ -1559,6 +1559,7 @@ const commandModal = $('command-modal');
 const commandInput = $('command-input');
 const commandList = $('command-list');
 let textEditDirty=false;
+let savedTextRange=null, savedTextRangeId=null;
 let imageCropDirty=false;
 let imageAdjustDirty=false;
 
@@ -2141,6 +2142,7 @@ function startTextEdit(id,el){
     if(nextHtml&&nextHtml!==escapeHtml(nextText).replace(/\n/g,'<br>')) item.html=nextHtml;
     else delete item.html;
     fitTextHeight(item,el);
+    savedTextRange=null; savedTextRangeId=null;
     tc.contentEditable='false'; state.editingId=null; textEditDirty=false;
     el.classList.remove('editing');
     tc.removeEventListener('blur',onBlur);
@@ -2199,11 +2201,37 @@ function selectionInsideTextContent(tc){
   if(!tc.contains(range.commonAncestorContainer)) return null;
   return range;
 }
+function rememberTextSelection(){
+  if(!state.editingId) return;
+  const el=canvasWorld.querySelector(`[data-id="${state.editingId}"]`);
+  const tc=el?.querySelector('.text-content');
+  const range=tc&&selectionInsideTextContent(tc);
+  if(range){
+    savedTextRange=range.cloneRange();
+    savedTextRangeId=state.editingId;
+  }
+}
+document.addEventListener('selectionchange',rememberTextSelection);
+function getEditableTextRange(tc,itemId){
+  const live=selectionInsideTextContent(tc);
+  if(live){
+    savedTextRange=live.cloneRange();
+    savedTextRangeId=itemId;
+    return live;
+  }
+  if(savedTextRange&&savedTextRangeId===itemId&&tc.contains(savedTextRange.commonAncestorContainer)){
+    const sel=window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(savedTextRange);
+    return savedTextRange.cloneRange();
+  }
+  return null;
+}
 function applyInlineTextStyle(prop,value){
   const item=selFirst(); if(!item||state.editingId!==item.id) return false;
   const el=canvasWorld.querySelector(`[data-id="${item.id}"]`);
   const tc=el?.querySelector('.text-content');
-  const range=tc&&selectionInsideTextContent(tc);
+  const range=tc&&getEditableTextRange(tc,item.id);
   if(!range) return false;
   if(!textEditDirty){pushHistory();textEditDirty=true;}
   const span=document.createElement('span');
@@ -2213,6 +2241,8 @@ function applyInlineTextStyle(prop,value){
   const nextRange=document.createRange();
   nextRange.selectNodeContents(span);
   const sel=window.getSelection(); sel.removeAllRanges(); sel.addRange(nextRange);
+  savedTextRange=nextRange.cloneRange();
+  savedTextRangeId=item.id;
   item.text=normalizeTextContent(tc.innerText);
   item.html=sanitizeTextHtml(tc.innerHTML);
   fitTextHeight(item,el);
