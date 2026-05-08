@@ -527,7 +527,7 @@ body.exporting-canvas .frame-label{display:none!important;}
 .share-preview strong{font-size:12px;color:var(--text);font-weight:600;}
 .share-preview span{font-size:11px;color:var(--text2);line-height:1.4;}
 .save-indicator{font-size:11px;color:var(--text3);margin-left:8px;display:flex;align-items:center;gap:4px;
-  min-width:76px;font-variant-numeric:tabular-nums;}
+  min-width:126px;font-variant-numeric:tabular-nums;}
 .save-indicator.failed{color:var(--danger);font-weight:600;}
 .save-indicator.offline{color:var(--warn);font-weight:600;}
 .activity-badge{height:24px;padding:0 8px;border-radius:999px;border:1px solid var(--border);
@@ -543,6 +543,29 @@ body.exporting-canvas .frame-label{display:none!important;}
 .activity-badge.edit::before{background:var(--success);box-shadow:0 0 0 3px rgba(82,201,122,.12);}
 .activity-badge.owner::before{background:var(--accent2);box-shadow:0 0 0 3px rgba(108,113,240,.16);}
 .share-modal-box{width:420px;max-width:calc(100vw - 28px);}
+.feedback-modal-box{width:420px;max-width:calc(100vw - 28px);}
+.feedback-textarea{width:100%;min-height:112px;resize:vertical;background:var(--bg3);
+  border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:'Outfit',sans-serif;
+  font-size:13px;line-height:1.45;padding:9px 10px;outline:none;}
+.feedback-textarea:focus{border-color:var(--accent);}
+.mobile-guard{position:fixed;inset:0;z-index:9000;display:none;align-items:center;justify-content:center;
+  padding:22px;background:linear-gradient(180deg,rgba(9,9,15,.98),rgba(12,12,20,.98));}
+.mobile-guard-card{width:min(420px,100%);border:1px solid rgba(139,143,244,.28);
+  background:rgba(18,18,28,.94);box-shadow:0 24px 80px rgba(0,0,0,.48);
+  border-radius:18px;padding:24px;display:flex;flex-direction:column;gap:14px;text-align:left;}
+.mobile-guard-mark{width:42px;height:42px;border-radius:12px;background:rgba(108,113,240,.18);
+  border:1px solid rgba(139,143,244,.34);display:flex;align-items:center;justify-content:center;
+  color:#c9c7ff;font-family:'Syne',sans-serif;font-weight:700;}
+.mobile-guard-card h2{font-family:'Syne',sans-serif;font-size:21px;font-weight:700;color:var(--text);}
+.mobile-guard-card p{font-size:13px;color:var(--text2);line-height:1.6;}
+.mobile-guard-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:4px;}
+.mobile-guard-actions .modal-btn{min-width:130px;flex:1;}
+@media (max-width:760px), (max-height:520px){
+  body.mobile-guard-active .mobile-guard{display:flex;}
+  body.mobile-guard-active #topbar,
+  body.mobile-guard-active #main,
+  body.mobile-guard-active #toast{filter:blur(2px);pointer-events:none;}
+}
 .share-mode-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:12px 0;}
 .share-mode-card{border:1px solid var(--border);background:rgba(255,255,255,.025);color:var(--text2);
   border-radius:10px;padding:10px;cursor:pointer;text-align:left;font-family:'Outfit',sans-serif;
@@ -655,6 +678,7 @@ body.exporting-canvas .frame-label{display:none!important;}
     <button class="tb-btn" id="url-btn">🔗 URL</button>
     <span id="activity-badge" class="activity-badge owner">Owner</span>
     <span id="save-indicator" class="save-indicator">Saved</span>
+    <button class="tb-btn" id="feedback-btn">Feedback</button>
     <button class="tb-btn" id="share-btn">🔗 Share<span id="share-pending-badge" class="share-pending-badge">0</span></button>
     <button class="tb-btn" id="export-btn">⬇ Export</button>
     <button class="tb-btn primary" id="upload-btn">+ Image</button>
@@ -1121,6 +1145,20 @@ body.exporting-canvas .frame-label{display:none!important;}
   <div class="ctx-item" data-action="fit-mask"><span class="ci">I</span>Fit Image</div>
 </div>
 
+<!-- MOBILE GUARD -->
+<div class="mobile-guard" id="mobile-guard">
+  <div class="mobile-guard-card">
+    <div class="mobile-guard-mark">V</div>
+    <h2>Open on desktop or large tablet</h2>
+    <p>Vision Canvas is built for precise canvas work with a keyboard, pointer, and larger screen. Please open this link on a desktop browser or large tablet for editing.</p>
+    <p id="mobile-view-note">View-only shared links can still be inspected with pan and zoom on larger screens.</p>
+    <div class="mobile-guard-actions">
+      <button class="modal-btn accent" id="mobile-copy-link">Copy link</button>
+      <button class="modal-btn" id="mobile-continue-view">Continue view only</button>
+    </div>
+  </div>
+</div>
+
 <!-- URL MODAL -->
 <div class="modal-overlay" id="url-modal">
   <div class="modal-box" style="width:360px;">
@@ -1224,6 +1262,20 @@ body.exporting-canvas .frame-label{display:none!important;}
   </div>
 </div>
 
+<!-- FEEDBACK MODAL -->
+<div class="modal-overlay" id="feedback-modal">
+  <div class="modal-box feedback-modal-box">
+    <div class="modal-title">Send Feedback</div>
+    <div class="guest-summary">Tell us what felt confusing, broken, or missing. The report includes the current page link so it is easier to reproduce.</div>
+    <textarea class="feedback-textarea" id="feedback-text" maxlength="1000" placeholder="What happened?"></textarea>
+    <div class="share-status" id="feedback-status">Feedback is copied locally so you can send it to the owner during testing.</div>
+    <div class="modal-actions">
+      <button class="modal-btn" id="feedback-cancel">Cancel</button>
+      <button class="modal-btn accent" id="feedback-copy">Copy Report</button>
+    </div>
+  </div>
+</div>
+
 <!-- GUEST MODAL -->
 <div class="modal-overlay" id="guest-modal">
   <div class="modal-box" style="width:340px;">
@@ -1268,6 +1320,7 @@ let guestAccessStatus = SHARE_TOKEN_PARAM && ACCESS_MODE!=='view' ? 'checking' :
 function hasSharedAccess(){return !SHARE_TOKEN_PARAM||ACCESS_MODE==='view'||guestAccessStatus==='approved';}
 function canEditAll(){return ACCESS_MODE==='edit'&&hasSharedAccess();}
 function canComment(){return (ACCESS_MODE==='edit'||ACCESS_MODE==='comment')&&hasSharedAccess();}
+const MOBILE_GUARD_KEY = `vision-mobile-guard-${SHARE_TOKEN_PARAM || URL_PARAMS.get('id') || 'local'}`;
 const GUEST_STORAGE_KEY = SHARE_TOKEN_PARAM ? `vision-guest-${SHARE_TOKEN_PARAM}` : 'vision-owner';
 const GUEST_KEY_STORAGE_KEY = SHARE_TOKEN_PARAM ? `vision-guest-key-${SHARE_TOKEN_PARAM}` : 'vision-owner-key';
 let guestName = '';
@@ -1294,6 +1347,35 @@ function saveGuestName(name){
   guestName = (name || '').trim().slice(0,32);
   try{ localStorage.setItem(GUEST_STORAGE_KEY, guestName); }catch(e){}
   updateActivityBadge();
+}
+function isSmallEditorScreen(){
+  return window.innerWidth <= 760 || window.innerHeight <= 520;
+}
+function updateMobileGuard(){
+  const continueBtn = $('mobile-continue-view');
+  const note = $('mobile-view-note');
+  const canContinue = ACCESS_MODE === 'view';
+  if(continueBtn) continueBtn.style.display = canContinue ? '' : 'none';
+  if(note) note.textContent = canContinue
+    ? 'This view-only link can be inspected on a larger tablet, but editing is disabled on phone-sized screens.'
+    : 'For editing, open this canvas on desktop or a large tablet.';
+  let dismissed = false;
+  try{ dismissed = sessionStorage.getItem(MOBILE_GUARD_KEY) === 'dismissed'; }catch(e){}
+  document.body.classList.toggle('mobile-guard-active', isSmallEditorScreen() && !(dismissed && canContinue));
+}
+async function copyCurrentLink(){
+  const link = window.location.href;
+  try{
+    await navigator.clipboard.writeText(link);
+    showToast('Link copied');
+  }catch(e){
+    window.prompt('Copy this link', link);
+  }
+}
+function dismissMobileViewGuard(){
+  if(ACCESS_MODE !== 'view') return;
+  try{ sessionStorage.setItem(MOBILE_GUARD_KEY, 'dismissed'); }catch(e){}
+  document.body.classList.remove('mobile-guard-active');
 }
 function requestGuestName(){
   if(!SHARE_TOKEN_PARAM || ACCESS_MODE==='view' || guestName) return;
@@ -4861,9 +4943,15 @@ function showShortcuts(){
 }
 $('help-btn').addEventListener('click',showShortcuts);
 $('shortcuts-close').addEventListener('click',()=>$('shortcuts-modal').classList.remove('show'));
+$('feedback-btn')?.addEventListener('click',openFeedbackModal);
+$('feedback-cancel')?.addEventListener('click',()=>$('feedback-modal').classList.remove('show'));
+$('feedback-copy')?.addEventListener('click',copyFeedbackReport);
+$('mobile-copy-link')?.addEventListener('click',copyCurrentLink);
+$('mobile-continue-view')?.addEventListener('click',dismissMobileViewGuard);
+window.addEventListener('resize',updateMobileGuard);
 
 // Close modals on overlay click
-['url-modal','export-modal','share-modal','shortcuts-modal'].forEach(id=>{
+['url-modal','export-modal','share-modal','shortcuts-modal','feedback-modal'].forEach(id=>{
   $(id).addEventListener('click',e=>{if(e.target===$(id)) $(id).classList.remove('show');});
 });
 
@@ -4889,6 +4977,34 @@ let toastT;
 function showToast(msg){
   const t=$('toast'); t.textContent=msg; t.classList.add('show');
   clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove('show'),2200);
+}
+function openFeedbackModal(){
+  const modal=$('feedback-modal'), input=$('feedback-text'), status=$('feedback-status');
+  if(!modal||!input) return;
+  input.value='';
+  if(status) status.textContent='Feedback is copied locally so you can send it to the owner during testing.';
+  modal.classList.add('show');
+  setTimeout(()=>input.focus(),80);
+}
+async function copyFeedbackReport(){
+  const input=$('feedback-text'), status=$('feedback-status');
+  const report = [
+    'Vision Canvas feedback',
+    `Page: ${window.location.href}`,
+    `Mode: ${ACCESS_MODE}${SHARE_TOKEN ? ' shared' : ' owner'}`,
+    `Canvas: ${state?.shareName || CANVAS_ID || 'unknown'}`,
+    `Screen: ${window.innerWidth}x${window.innerHeight}`,
+    '',
+    (input?.value || '').trim() || '(No message entered)'
+  ].join('\n');
+  try{
+    await navigator.clipboard.writeText(report);
+    if(status) status.textContent='Copied. Send this report to the project owner.';
+    showToast('Feedback report copied');
+  }catch(e){
+    if(status) status.textContent='Clipboard blocked. Select and copy your message manually.';
+    window.prompt('Copy feedback report', report);
+  }
 }
 
 // ── CANVAS HINT ───────────────────────────────────────────────────
@@ -5170,10 +5286,10 @@ function showSaveIndicator(status){
   const el=document.getElementById('save-indicator')
   if(!el) return
   el.classList.remove('failed','offline')
-  if(status==='saving'){el.textContent='Saving...';el.style.color='#f0a840'}
-  if(status==='saved') {el.textContent='Saved';el.style.color='#52c97a'}
-  if(status==='error') {el.textContent='Save failed';el.style.color='';el.classList.add('failed')}
-  if(status==='offline') {el.textContent='Offline';el.style.color='';el.classList.add('offline')}
+  if(status==='saving'){el.textContent='Saving changes...';el.style.color='#f0a840';el.title='Your latest changes are being saved.'}
+  if(status==='saved') {el.textContent='All changes saved';el.style.color='#52c97a';el.title='Your canvas is saved.'}
+  if(status==='error') {el.textContent='Save failed - retrying';el.style.color='';el.title='The app will keep retrying. Do not close this tab yet.';el.classList.add('failed')}
+  if(status==='offline') {el.textContent='Offline - retrying';el.style.color='';el.title='Reconnect to finish saving these changes.';el.classList.add('offline')}
 }
 function updateActivityBadge(){
   const el=$('activity-badge')
@@ -5245,6 +5361,7 @@ async function init(){
   await loadCanvas();
   await ensureGuestAccess();
   updateActivityBadge();
+  updateMobileGuard();
   renderAll();
   requestGuestName();
   if(ac().items.length) setTimeout(fitAll, 300);
