@@ -174,6 +174,8 @@ body.exporting-canvas .frame-label{display:none!important;}
 .frame-label{position:absolute;left:0;top:-22px;color:var(--accent2);font-size:12px;font-weight:600;pointer-events:none;white-space:nowrap;}
 .canvas-item.multi-sel{outline:1.5px solid var(--accent2);}
 .canvas-item.locked-item{cursor:not-allowed;}
+.canvas-item.is-mask-shape{opacity:0.25;}
+.canvas-item.is-mask-shape:hover,.canvas-item.is-mask-shape.selected{opacity:0.6;}
 
 /* TEXT */
 .text-item{overflow:hidden;}
@@ -882,6 +884,7 @@ body.exporting-canvas .frame-label{display:none!important;}
           <div class="color-row">
             <div class="color-swatch"><input type="color" id="default-shape-stroke" value="#8b8ff4"></div>
             <span class="color-label">Stroke</span>
+            <button class="act-btn" id="default-shape-stroke-clear" style="flex:0;padding:0 5px;height:22px;font-size:10px;margin-right:6px;">Clear</button>
             <div class="prop-group" style="margin-left:auto;width:82px;">
               <span class="lbl">W</span><input type="number" id="default-shape-stroke-width" step="1" min="0" max="40" value="2">
             </div>
@@ -1110,6 +1113,7 @@ body.exporting-canvas .frame-label{display:none!important;}
             <div class="color-row">
               <div class="color-swatch"><input type="color" id="shape-stroke" value="#8b8ff4"></div>
               <span class="color-label">Stroke</span>
+              <button class="act-btn" id="shape-stroke-clear" style="flex:0;padding:0 5px;height:22px;font-size:10px;margin-right:6px;">Clear</button>
               <div class="prop-group" style="margin-left:auto;width:82px;">
                 <span class="lbl">W</span><input type="number" id="shape-stroke-width" step="1" min="0" max="40" value="2">
               </div>
@@ -1640,7 +1644,20 @@ function getItem(id){ return ac().items.find(i=>i.id===id); }
 function selFirst(){ return state.selectedIds.length===1 ? getItem(state.selectedIds[0]) : null; }
 function selAll(){ return state.selectedIds.map(id=>getItem(id)).filter(Boolean); }
 function groupMembers(groupId){ return ac().items.filter(i=>i.groupId===groupId); }
-function selectionIdsForItem(item){ return item&&item.groupId?groupMembers(item.groupId).map(i=>i.id):item?[item.id]:[]; }
+function selectionIdsForItem(item){
+  if(!item) return [];
+  let ids = item.groupId ? groupMembers(item.groupId).map(i=>i.id) : [item.id];
+  const extra = new Set();
+  ids.forEach(id => {
+    const cur = getItem(id);
+    if(cur){
+      if(cur.maskedById) extra.add(cur.maskedById);
+      ac().items.forEach(o => { if(o.maskedById===cur.id) extra.add(o.id); });
+    }
+  });
+  extra.forEach(id => ids.push(id));
+  return [...new Set(ids)];
+}
 function clamp(value,min,max){ return Math.max(min,Math.min(max,Number(value)||0)); }
 function validSharePermission(value){ return ['view','comment','edit'].includes(value) ? value : 'view'; }
 function shareUrlForToken(token){ return token ? `${window.location.origin}/shared/${token}` : ''; }
@@ -2153,11 +2170,9 @@ function maskSelectionWithVector(){
   const items=selAll();
   const image=items.find(i=>i.type==='image');
   const mask=items.find(i=>i.type==='shape'&&['rect','ellipse','polygon','star'].includes(i.shape));
-  image.vectorMask={shape:mask.shape,radius:mask.radius||0};
-  image.x=mask.x; image.y=mask.y; image.w=mask.w; image.h=mask.h;
-  image.rot=mask.rot||0; image.flipH=!!mask.flipH; image.flipV=!!mask.flipV;
-  image.fit='cover'; image.imgScale=Math.max(120,image.imgScale||100);
-  ac().items=ac().items.filter(i=>i.id!==mask.id);
+  image.maskedById=mask.id;
+  mask.z=Math.max(1,image.z-1);
+  delete image.vectorMask;
   state.selectedIds=[image.id];
   renderItems(); renderLayers(); updateSelectionOverlay(); updateMultiSelBox(); updateProps(); scheduleSave(); scheduleThumb();
   showToast('Vector mask applied');
@@ -2539,6 +2554,17 @@ function applyItemStyle(el,item){
   el.classList.toggle('boolean-editing',item.type==='shape'&&item.shape==='boolean'&&state.booleanAdjustId===item.id);
   el.classList.toggle('multi-sel',state.selectedIds.length>1&&state.selectedIds.includes(item.id));
   el.classList.toggle('comment-open',state.selectedIds.includes(item.id)&&item.type==='comment');
+  el.classList.toggle('is-mask-shape', isMask(item));
+
+  // If this item is a mask, update any items that are masked by it to reflect repositioning/resizing
+  ac().items.forEach(other => {
+    if (other.maskedById === item.id) {
+      const otherEl = canvasWorld.querySelector(`[data-id="${other.id}"]`);
+      if (otherEl) {
+        applyImageVectorMask(otherEl, other);
+      }
+    }
+  });
   
   if(item.type==='text'||item.type==='note'){
     if(item.fontFamily) ensureFontLoaded(item.fontFamily);
@@ -2646,6 +2672,10 @@ function assignFrameMembership(ids){
   applyFrameClipping();
 }
 
+function isMask(item){
+  return ac().items.some(other => other.maskedById === item.id);
+}
+
 function vectorMaskCss(mask){
   if(!mask) return '';
   if(mask.shape==='ellipse') return 'ellipse(50% 50% at 50% 50%)';
@@ -2657,9 +2687,58 @@ function vectorMaskCss(mask){
   return `inset(0 round ${r}%)`;
 }
 function applyImageVectorMask(el,item){
-  const mask=vectorMaskCss(item.vectorMask);
-  el.style.clipPath=mask||'';
-  el.classList.toggle('vector-masked',!!mask);
+  let maskCss = '';
+  if (item.maskedById) {
+    const maskItem = getItem(item.maskedById);
+    if (maskItem) {
+      // Ensure SVG defs container exists
+      let svgContainer = document.getElementById('mask-svg-container');
+      if (!svgContainer) {
+        svgContainer = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        svgContainer.id = 'mask-svg-container';
+        svgContainer.style.position = 'absolute';
+        svgContainer.style.width = '0';
+        svgContainer.style.height = '0';
+        svgContainer.style.pointerEvents = 'none';
+        svgContainer.innerHTML = '<defs></defs>';
+        document.body.appendChild(svgContainer);
+      }
+      const defs = svgContainer.querySelector('defs');
+      let clipPath = defs.querySelector(`#mask-clip-path-${item.id}`);
+      if (!clipPath) {
+        clipPath = document.createElementNS('http://www.w3.org/2000/svg', 'clipPath');
+        clipPath.id = `mask-clip-path-${item.id}`;
+        clipPath.setAttribute('clipPathUnits', 'userSpaceOnUse');
+        defs.appendChild(clipPath);
+      }
+
+      // Calculate SVG transformation matrix from mask space to image space
+      const iw = item.w, ih = item.h, ix = item.x, iy = item.y, irot = item.rot || 0;
+      const mw = maskItem.w, mh = maskItem.h, mx = maskItem.x, my = maskItem.y, mrot = maskItem.rot || 0;
+      
+      const transform = `translate(${iw/2},${ih/2}) rotate(${-irot}) translate(${-ix - iw/2},${-iy - ih/2}) translate(${mx + mw/2},${my + mh/2}) rotate(${mrot}) translate(${-mw/2},${-mh/2}) scale(${mw/100},${mh/100})`;
+      
+      let shapeHtml = '';
+      if (maskItem.shape === 'ellipse') {
+        shapeHtml = `<ellipse cx="50" cy="50" rx="50" ry="50" transform="${transform}" />`;
+      } else if (maskItem.shape === 'polygon') {
+        shapeHtml = `<polygon points="50,0 100,100 0,100" transform="${transform}" />`;
+      } else if (maskItem.shape === 'star') {
+        shapeHtml = `<polygon points="50,0 61,36 95,36 67,56 78,90 50,70 22,90 33,56 5,36 39,36" transform="${transform}" />`;
+      } else { // rect or default
+        const r = maskItem.radius || 0;
+        const rx = mw > 0 ? (r / mw) * 100 : 0;
+        const ry = mh > 0 ? (r / mh) * 100 : 0;
+        shapeHtml = `<rect x="0" y="0" width="100" height="100" rx="${rx}" ry="${ry}" transform="${transform}" />`;
+      }
+      clipPath.innerHTML = shapeHtml;
+      maskCss = `url(#mask-clip-path-${item.id})`;
+    }
+  } else if (item.vectorMask) {
+    maskCss = vectorMaskCss(item.vectorMask);
+  }
+  el.style.clipPath=maskCss||'';
+  el.classList.toggle('vector-masked',!!maskCss);
 }
 function assignInitialFrame(item){
   if(!item||item.type==='frame') return;
@@ -2709,7 +2788,7 @@ function booleanShapeMarkup(item,common){
 function shapeMarkup(item){
   const stroke=item.stroke||'#8b8ff4';
   const fill=item.fill||'transparent';
-  const sw=item.strokeWidth||2;
+  const sw=item.strokeWidth??2;
   const common=`fill="${fill}" stroke="${stroke}" stroke-width="${sw}" vector-effect="non-scaling-stroke"`;
   if(item.shape==='boolean'||item.shape==='booleanFlat') return booleanShapeMarkup(item,common);
   if(item.shape==='line'){
@@ -3384,7 +3463,7 @@ function updateProps(){
     $('img-blur').value=item.imgBlur??0;
     $('img-blur-val').textContent=(item.imgBlur??0)+'px';
     $('img-crop-btn').classList.toggle('active',state.cropAdjustId===item.id);
-    $('img-remove-vector-mask').style.display=item.vectorMask?'block':'none';
+    $('img-remove-vector-mask').style.display=(item.vectorMask||item.maskedById)?'block':'none';
     $('img-fit-btn').classList.toggle('active',(item.fit||'contain')==='contain');
     $('img-fill-btn').classList.toggle('active',(item.fit||'contain')==='cover');
     $('img-stretch-btn').classList.toggle('active',(item.fit||'contain')==='fill');
@@ -3576,9 +3655,11 @@ $('img-fit-btn').addEventListener('click',()=>setImageFitMode(selFirst(),'contai
 $('img-fill-btn').addEventListener('click',()=>setImageFitMode(selFirst(),'cover'));
 $('img-stretch-btn').addEventListener('click',()=>setImageFitMode(selFirst(),'fill'));
 $('img-remove-vector-mask').addEventListener('click',()=>{
-  const item=selFirst(); if(!item||item.type!=='image'||!item.vectorMask||item.locked) return;
+  const item=selFirst(); if(!item||item.type!=='image'||item.locked) return;
+  if(!item.vectorMask && !item.maskedById) return;
   pushHistory();
   delete item.vectorMask;
+  delete item.maskedById;
   const el=canvasWorld.querySelector(`[data-id="${item.id}"]`);
   if(el) applyItemStyle(el,item);
   updateProps(); scheduleSave(); scheduleThumb();
@@ -3781,6 +3862,7 @@ $('shape-stroke-width').addEventListener('change',e=>
   updateShapeProp('strokeWidth',Math.max(0,parseFloat(e.target.value)||0),true)
 );
 $('shape-fill-clear').addEventListener('click',()=>updateShapeProp('fill','transparent',true));
+$('shape-stroke-clear').addEventListener('click',()=>updateShapeProp('stroke','transparent',true));
 $('boolean-op').addEventListener('change',e=>updateBooleanOperation(selFirst(),e.target.value,true));
 $('boolean-edit-btn').addEventListener('click',()=>{
   const item=selFirst(); if(!item||item.type!=='shape'||item.shape!=='boolean'||item.locked) return;
@@ -3813,6 +3895,7 @@ $('default-shape-stroke-width').addEventListener('change',e=>
   updateDefaultShapeProp('strokeWidth',Math.max(0,parseFloat(e.target.value)||0))
 );
 $('default-shape-fill-clear').addEventListener('click',()=>updateDefaultShapeProp('fill','transparent'));
+$('default-shape-stroke-clear').addEventListener('click',()=>updateDefaultShapeProp('stroke','transparent'));
 
 let layerDrag={ids:null,startY:0};
 let lastLayerSelectIds=[];
@@ -3864,24 +3947,30 @@ function renderLayers(){
   if(!allItems.length){list.innerHTML='<div class="layer-empty">No layers</div>';return;}
   if(!items.length){list.innerHTML='<div class="layer-empty">No matching layers</div>';return;}
 
-  const itemRow=item=>`
-    <div class="layer-item${state.selectedIds.includes(item.id)?' selected':''}"
-         data-id="${item.id}" draggable="true">
-      <div class="layer-drag-handle" title="Drag to reorder">⠿</div>
-      <div class="layer-thumb ${(item.type==='text'||item.type==='note'||item.type==='comment'||item.type==='frame')?'text-thumb':item.type==='shape'?'shape-thumb':''}">
-        ${layerThumb(item)}
+  const itemRow=item=>{
+    const isMasked = !!item.maskedById;
+    const isMaskShape = ac().items.some(other => other.maskedById === item.id);
+    const namePrefix = isMasked ? '<span style="color:var(--accent2);margin-right:4px;">↳</span>' : '';
+    const maskBadge = isMaskShape ? '<span style="font-size:9px;background:var(--accent2);color:#fff;padding:1px 3px;border-radius:3px;margin-left:6px;font-weight:bold;">MASK</span>' : '';
+    return `
+      <div class="layer-item${state.selectedIds.includes(item.id)?' selected':''}"
+           data-id="${item.id}" draggable="true">
+        <div class="layer-drag-handle" title="Drag to reorder">⠿</div>
+        <div class="layer-thumb ${(item.type==='text'||item.type==='note'||item.type==='comment'||item.type==='frame')?'text-thumb':item.type==='shape'?'shape-thumb':''}">
+          ${layerThumb(item)}
+        </div>
+        <div class="layer-name-el" data-name="${item.id}" contenteditable="false">${namePrefix}${item.name}${maskBadge}</div>
+        <div class="layer-actions">
+          <div class="layer-icon${item.locked?' off':''}" data-lock="${item.id}">🔒</div>
+          <div class="layer-icon${item.visible?'':' off'}" data-vis="${item.id}">◉</div>
+        </div>
       </div>
-      <div class="layer-name-el" data-name="${item.id}" contenteditable="false">${item.name}</div>
-      <div class="layer-actions">
-        <div class="layer-icon${item.locked?' off':''}" data-lock="${item.id}">🔒</div>
-        <div class="layer-icon${item.visible?'':' off'}" data-vis="${item.id}">◉</div>
-      </div>
-    </div>
-  `;
+    `;
+  };
   const booleanChildRow=(parent,part,idx)=>`
     <div class="layer-item group-child boolean-child${state.booleanAdjustId===parent.id&&state.booleanPartIndex===idx?' selected':''}"
          data-bool-parent="${parent.id}" data-bool-part="${idx}" draggable="true">
-      <div class="layer-drag-handle" title="Drag to reorder">â ¿</div>
+      <div class="layer-drag-handle" title="Drag to reorder">⠿</div>
       <div class="layer-thumb shape-thumb">${layerThumb({type:'shape',shape:part.shape})}</div>
       <div class="layer-name-el">${part.name||`${SHAPE_LABELS[part.shape]||'Shape'} ${idx+1}`}</div>
       <div class="layer-actions"><span class="layer-icon">${idx+1}</span></div>
@@ -3920,7 +4009,13 @@ function renderLayers(){
         </div>
       `);
       if(!collapsed) members.forEach(member=>rows.push(itemRow(member).replace('layer-item','layer-item group-child')));
-    }else rows.push(itemRow(item));
+    }else {
+      let rowHtml = itemRow(item);
+      if (item.maskedById) {
+        rowHtml = rowHtml.replace('layer-item', 'layer-item group-child');
+      }
+      rows.push(rowHtml);
+    }
   });
   list.innerHTML=rows.join('');
 
@@ -4008,7 +4103,7 @@ function renderLayers(){
         return;
       }
       const id=parseInt(el.dataset.id);
-      const item=getItem(id), idsToSelect=selectionIdsForItem(item);
+      const item=getItem(id), idsToSelect=item&&item.groupId?groupMembers(item.groupId).map(i=>i.id):[id];
       applyLayerSelection(el,idsToSelect,e);
       renderItemsHighlight(); updateSelectionOverlay();
       updateMultiSelBox(); updateProps(); renderLayers();
