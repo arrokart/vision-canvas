@@ -1,14 +1,22 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
+import { supabase } from '../lib/supabase'
 
 export default function Canvas() {
   const { id } = useParams()
   const navigate = useNavigate()
   const [loaded, setLoaded] = useState(false)
+  const [accessToken, setAccessToken] = useState('')
 
   useEffect(() => {
     if (!id) navigate('/dashboard')
   }, [id])
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => {
+      setAccessToken(data.session?.access_token || '')
+    })
+  }, [])
 
   return (
     <div style={{ width:'100vw', height:'100vh', background:'#0b0b0e', position:'relative' }}>
@@ -28,7 +36,7 @@ export default function Canvas() {
         </div>
       )}
       <iframe
-        src={`/canvas.html?id=${id}`}
+        src={`/canvas.html?id=${id}${accessToken ? `&auth=${encodeURIComponent(accessToken)}` : ''}`}
         style={{ width:'100%', height:'100%', border:'none' }}
         title="Vision Canvas"
         onLoad={() => setLoaded(true)}

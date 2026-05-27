@@ -3,9 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <title>Vision Canvas</title>
-<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600&family=Syne:wght@600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700;800&family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&family=Outfit:wght@300;400;500;600;700;800&family=Syne:wght@600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="/paper-full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box;}
 :root{
@@ -66,12 +67,18 @@ body{display:flex;flex-direction:column;}
 .tb-btn{height:30px;padding:0 10px;border-radius:8px;border:1px solid var(--border2);
   background:rgba(255,255,255,.025);color:var(--text2);cursor:pointer;font-size:11px;
   font-family:'Outfit',sans-serif;display:flex;align-items:center;gap:4px;
-  transition:.15s;white-space:nowrap;flex-shrink:0;}
+  transition:.15s;white-space:nowrap;flex-shrink:0;position:relative;}
 .tb-btn:hover{background:rgba(255,255,255,.06);color:var(--text);border-color:rgba(255,255,255,.18);}
 .tb-btn.primary{background:linear-gradient(135deg,var(--accent),#7d6dff);border-color:rgba(155,140,255,.65);color:#fff;}
 .tb-btn.primary:hover{background:var(--accent2);}
 .tb-btn:disabled{opacity:.35;cursor:not-allowed;}
 .tb-btn:disabled:hover{background:transparent;color:var(--text2);}
+.share-pending-badge{position:absolute;top:-7px;right:-7px;min-width:17px;height:17px;padding:0 5px;
+  border-radius:999px;background:var(--danger);color:#fff;border:2px solid var(--bg);
+  display:none;align-items:center;justify-content:center;font-size:10px;font-weight:700;
+  box-shadow:0 6px 16px rgba(239,95,103,.32);}
+.tb-btn.has-requests{color:#fff;border-color:rgba(239,95,103,.45);background:rgba(239,95,103,.13);}
+.tb-btn.has-requests .share-pending-badge{display:flex;}
 .tb-sep{width:1px;height:20px;background:var(--border);margin:0 2px;}
 @media (max-width:900px){
   :root{--topbar-h:76px;}
@@ -398,10 +405,15 @@ body.exporting-canvas .frame-label{display:none!important;}
 #text-props,#shape-props,#image-props,#effect-props{display:none;flex-direction:column;gap:7px;
   padding-top:7px;border-top:1px solid rgba(255,255,255,.075);margin-top:3px;}
 .text-align-row{display:flex;gap:4px;}
-.align-btn-ui{flex:1;height:32px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.09);
-  border-radius:8px;color:var(--text2);font-size:13px;cursor:pointer;transition:.15s;}
-.align-btn-ui:hover,.align-btn-ui.active{background:rgba(108,113,240,.15);
+.align-btn-ui, .format-btn-ui{flex:1;height:32px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.09);
+  border-radius:8px;color:var(--text2);font-size:13px;cursor:pointer;transition:.15s;display:inline-flex;align-items:center;justify-content:center;}
+.align-btn-ui:hover,.align-btn-ui.active, .format-btn-ui:hover, .format-btn-ui.active{background:rgba(108,113,240,.15);
   border-color:rgba(108,113,240,.3);color:var(--accent2);}
+.text-preset-row{display:grid;grid-template-columns:repeat(3,1fr);gap:5px;}
+.text-preset-btn{height:30px;border-radius:8px;border:1px solid rgba(255,255,255,.09);
+  background:rgba(255,255,255,.035);color:var(--text2);font-family:'Outfit',sans-serif;
+  font-size:11px;font-weight:700;cursor:pointer;transition:.15s;}
+.text-preset-btn:hover{background:rgba(108,113,240,.18);border-color:rgba(139,143,244,.38);color:#d8d6ff;}
 .color-row{display:flex;align-items:center;gap:8px;}
 .color-swatch{width:32px;height:32px;border-radius:8px;border:1px solid var(--border2);
   cursor:pointer;position:relative;flex-shrink:0;}
@@ -413,6 +425,8 @@ body.exporting-canvas .frame-label{display:none!important;}
   padding:8px 10px;color:var(--text);font-family:'Outfit',sans-serif;font-size:13px;
   outline:none;width:100%;font-weight:600;}
 .font-select:focus{border-color:rgba(139,143,244,.5);}
+.font-select option {background-color:#12121a;color:#eeeef5;}
+.font-select optgroup {background-color:#12121a;color:#8b8ff4;font-weight:700;font-style:normal;}
 
 /* ALIGNMENT TOOLS */
 .align-tools-row{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;}
@@ -501,6 +515,9 @@ body.exporting-canvas .frame-label{display:none!important;}
   padding:7px 10px;color:var(--text);font-family:'Outfit',sans-serif;font-size:13px;
   outline:none;width:100%;}
 .modal-input:focus{border-color:var(--accent);}
+.guest-summary{font-size:12px;color:var(--text2);line-height:1.45;margin-top:-4px;}
+.guest-summary strong{color:var(--text);font-weight:600;}
+.guest-skip{font-size:11px;color:var(--text3);text-align:center;margin-top:-4px;}
 .modal-actions{display:flex;gap:8px;margin-top:4px;}
 .modal-btn{flex:1;height:34px;border-radius:7px;border:1px solid var(--border2);
   background:var(--bg3);color:var(--text2);cursor:pointer;font-family:'Outfit',sans-serif;
@@ -518,9 +535,96 @@ body.exporting-canvas .frame-label{display:none!important;}
 .share-preview strong{font-size:12px;color:var(--text);font-weight:600;}
 .share-preview span{font-size:11px;color:var(--text2);line-height:1.4;}
 .save-indicator{font-size:11px;color:var(--text3);margin-left:8px;display:flex;align-items:center;gap:4px;
-  min-width:76px;font-variant-numeric:tabular-nums;}
+  min-width:126px;font-variant-numeric:tabular-nums;}
 .save-indicator.failed{color:var(--danger);font-weight:600;}
 .save-indicator.offline{color:var(--warn);font-weight:600;}
+.activity-badge{height:24px;padding:0 8px;border-radius:999px;border:1px solid var(--border);
+  background:rgba(255,255,255,.035);color:var(--text2);font-size:10.5px;font-weight:600;
+  display:flex;align-items:center;gap:5px;white-space:nowrap;}
+.activity-badge::before{content:'';width:6px;height:6px;border-radius:50%;background:var(--accent3);
+  box-shadow:0 0 0 3px rgba(34,211,238,.12);}
+.activity-badge.view{color:#8fdcff;border-color:rgba(34,211,238,.28);background:rgba(34,211,238,.08);}
+.activity-badge.comment{color:#ffd36a;border-color:rgba(240,168,64,.28);background:rgba(240,168,64,.08);}
+.activity-badge.edit{color:#a9ffc5;border-color:rgba(82,201,122,.28);background:rgba(82,201,122,.08);}
+.activity-badge.owner{color:#c9c7ff;border-color:rgba(139,143,244,.28);background:rgba(108,113,240,.1);}
+.activity-badge.comment::before{background:var(--warn);box-shadow:0 0 0 3px rgba(240,168,64,.12);}
+.activity-badge.edit::before{background:var(--success);box-shadow:0 0 0 3px rgba(82,201,122,.12);}
+.activity-badge.owner::before{background:var(--accent2);box-shadow:0 0 0 3px rgba(108,113,240,.16);}
+.collab-status{height:24px;max-width:150px;padding:0 8px;border-radius:999px;border:1px solid rgba(34,211,238,.22);
+  background:rgba(34,211,238,.07);color:#8fdcff;font-size:10.5px;font-weight:600;
+  display:flex;align-items:center;gap:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.collab-status::before{content:'';width:6px;height:6px;border-radius:50%;background:var(--accent3);
+  box-shadow:0 0 0 3px rgba(34,211,238,.12);}
+.collab-status.offline{display:none;}
+.remote-cursor{position:absolute;left:0;top:0;z-index:4200;pointer-events:none;transform:translate(-2px,-2px);
+  transition:transform .08s linear,opacity .18s;filter:drop-shadow(0 8px 14px rgba(0,0,0,.32));}
+.remote-cursor svg{width:18px;height:18px;display:block;}
+.remote-cursor-label{position:absolute;left:14px;top:14px;padding:3px 7px;border-radius:999px;
+  color:#fff;font-size:10.5px;font-weight:700;white-space:nowrap;background:var(--cursor-color,#6c71f0);}
+.remote-cursor.idle{opacity:.45;}
+.remote-change-toast{position:absolute;top:14px;left:50%;transform:translateX(-50%);z-index:4300;
+  display:none;align-items:center;gap:8px;background:rgba(18,18,28,.96);border:1px solid rgba(139,143,244,.32);
+  box-shadow:0 16px 44px rgba(0,0,0,.32);border-radius:999px;padding:7px 8px 7px 12px;color:var(--text2);
+  font-size:12px;}
+.remote-change-toast.show{display:flex;}
+.remote-change-toast strong{color:var(--text);font-weight:700;}
+.remote-change-toast button{height:26px;border:none;border-radius:999px;background:var(--accent);color:#fff;
+  padding:0 10px;font-family:'Outfit',sans-serif;font-size:11px;font-weight:700;cursor:pointer;}
+.share-modal-box{width:420px;max-width:calc(100vw - 28px);}
+.feedback-modal-box{width:420px;max-width:calc(100vw - 28px);}
+.feedback-textarea{width:100%;min-height:112px;resize:vertical;background:var(--bg3);
+  border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:'Outfit',sans-serif;
+  font-size:13px;line-height:1.45;padding:9px 10px;outline:none;}
+.feedback-textarea:focus{border-color:var(--accent);}
+.mobile-guard{position:fixed;inset:0;z-index:9000;display:none;align-items:center;justify-content:center;
+  padding:22px;background:linear-gradient(180deg,rgba(9,9,15,.98),rgba(12,12,20,.98));}
+.mobile-guard-card{width:min(420px,100%);border:1px solid rgba(139,143,244,.28);
+  background:rgba(18,18,28,.94);box-shadow:0 24px 80px rgba(0,0,0,.48);
+  border-radius:18px;padding:24px;display:flex;flex-direction:column;gap:14px;text-align:left;}
+.mobile-guard-mark{width:42px;height:42px;border-radius:12px;background:rgba(108,113,240,.18);
+  border:1px solid rgba(139,143,244,.34);display:flex;align-items:center;justify-content:center;
+  color:#c9c7ff;font-family:'Syne',sans-serif;font-weight:700;}
+.mobile-guard-card h2{font-family:'Syne',sans-serif;font-size:21px;font-weight:700;color:var(--text);}
+.mobile-guard-card p{font-size:13px;color:var(--text2);line-height:1.6;}
+.mobile-guard-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:4px;}
+.mobile-guard-actions .modal-btn{min-width:130px;flex:1;}
+@media (max-width:760px), (max-height:520px){
+  body.mobile-guard-active .mobile-guard{display:flex;}
+  body.mobile-guard-active #topbar,
+  body.mobile-guard-active #main,
+  body.mobile-guard-active #toast{filter:blur(2px);pointer-events:none;}
+}
+.share-mode-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:12px 0;}
+.share-mode-card{border:1px solid var(--border);background:rgba(255,255,255,.025);color:var(--text2);
+  border-radius:10px;padding:10px;cursor:pointer;text-align:left;font-family:'Outfit',sans-serif;
+  transition:.15s;min-height:94px;display:flex;flex-direction:column;gap:6px;}
+.share-mode-card:hover{background:rgba(255,255,255,.055);border-color:rgba(255,255,255,.18);}
+.share-mode-card.active{border-color:rgba(139,143,244,.55);background:linear-gradient(135deg,rgba(108,113,240,.22),rgba(34,211,238,.08));color:var(--text);}
+.share-mode-card strong{font-size:12px;color:inherit;font-weight:700;}
+.share-mode-card span{font-size:10.5px;line-height:1.35;color:var(--text2);}
+.share-mode-card .share-mode-icon{font-size:15px;line-height:1;}
+.share-link-box input.has-link{color:var(--text);border-color:rgba(82,201,122,.28);}
+.access-requests{border-top:1px solid var(--border);padding-top:10px;margin-top:2px;display:flex;flex-direction:column;gap:7px;}
+.access-requests h4{font-size:11px;color:var(--text3);letter-spacing:.8px;text-transform:uppercase;font-weight:700;}
+.access-request-row{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;background:rgba(255,255,255,.025);
+  border:1px solid var(--border);border-radius:9px;padding:8px;}
+.access-request-name{font-size:12px;color:var(--text);font-weight:600;}
+.access-request-meta{font-size:10.5px;color:var(--text3);margin-top:2px;}
+.access-request-actions{display:flex;gap:5px;}
+.mini-btn{height:26px;padding:0 8px;border-radius:6px;border:1px solid var(--border2);background:var(--bg3);
+  color:var(--text2);font-family:'Outfit',sans-serif;font-size:11px;cursor:pointer;}
+.mini-btn.approve{background:rgba(82,201,122,.12);border-color:rgba(82,201,122,.32);color:#a9ffc5;}
+.mini-btn.reject{background:rgba(239,95,103,.1);border-color:rgba(239,95,103,.28);color:#ffadb2;}
+.access-status-pill{font-size:10px;padding:3px 6px;border-radius:999px;border:1px solid var(--border);color:var(--text3);}
+.access-status-pill.approved{color:#a9ffc5;border-color:rgba(82,201,122,.28);background:rgba(82,201,122,.08);}
+.access-status-pill.rejected{color:#ffadb2;border-color:rgba(239,95,103,.28);background:rgba(239,95,103,.08);}
+.access-section{display:flex;flex-direction:column;gap:7px;}
+.access-activity-row{display:flex;justify-content:space-between;gap:10px;font-size:11px;color:var(--text2);
+  border-top:1px solid var(--border);padding-top:7px;}
+.access-activity-row:first-child{border-top:none;padding-top:0;}
+.access-activity-row strong{color:var(--text);font-weight:600;}
+.access-activity-time{color:var(--text3);white-space:nowrap;}
+.access-empty{font-size:11px;color:var(--text3);}
 
 /* SHORTCUTS MODAL */
 #shortcuts-modal .modal-box{width:480px;max-height:80vh;overflow-y:auto;}
@@ -600,8 +704,11 @@ body.exporting-canvas .frame-label{display:none!important;}
     <button class="tb-btn" id="reset-btn">Reset</button>
     <div class="tb-sep"></div>
     <button class="tb-btn" id="url-btn">🔗 URL</button>
+    <span id="activity-badge" class="activity-badge owner">Owner</span>
+    <span id="collab-status" class="collab-status offline">Live</span>
     <span id="save-indicator" class="save-indicator">Saved</span>
-    <button class="tb-btn" id="share-btn">🔗 Share</button>
+    <button class="tb-btn" id="feedback-btn">Feedback</button>
+    <button class="tb-btn" id="share-btn">🔗 Share<span id="share-pending-badge" class="share-pending-badge">0</span></button>
     <button class="tb-btn" id="export-btn">⬇ Export</button>
     <button class="tb-btn primary" id="upload-btn">+ Image</button>
     <input type="file" id="file-input" accept="image/*" multiple style="display:none">
@@ -696,6 +803,11 @@ body.exporting-canvas .frame-label{display:none!important;}
     <div id="minimap">
       <canvas id="minimap-canvas" width="168" height="112"></canvas>
       <div id="minimap-view"></div>
+    </div>
+    <div id="remote-cursors"></div>
+    <div id="remote-change-toast" class="remote-change-toast">
+      <span><strong id="remote-change-name">Someone</strong> saved newer changes</span>
+      <button id="remote-reload-btn">Load latest</button>
     </div>
     <div id="comment-panel" class="comment-panel">
       <div class="comment-panel-head">
@@ -829,30 +941,84 @@ body.exporting-canvas .frame-label{display:none!important;}
           </div>
           <div id="text-props">
             <div class="inspector-group-title">Text</div>
+            <div class="text-preset-row">
+              <button class="text-preset-btn" data-text-preset="heading">Heading</button>
+              <button class="text-preset-btn" data-text-preset="subheading">Subhead</button>
+              <button class="text-preset-btn" data-text-preset="body">Body</button>
+            </div>
             <div class="prop-2col">
               <div class="prop-group"><span class="lbl">Sz</span><input type="number" id="t-size" step="1" min="8" max="200" value="24"></div>
               <select class="font-select" id="t-weight">
                 <option value="300">Light</option>
                 <option value="400" selected>Regular</option>
+                <option value="500">Medium</option>
                 <option value="600">SemiBold</option>
                 <option value="700">Bold</option>
+                <option value="800">Extra Bold</option>
               </select>
             </div>
             <div class="prop-2col">
               <div class="prop-group"><span class="lbl">Line</span><input type="number" id="t-line" step="0.05" min="0.8" max="3" value="1.4"></div>
-              <button class="act-btn" id="t-fit" style="height:28px;">Fit height</button>
+              <div class="prop-group"><span class="lbl">Track</span><input type="number" id="t-track" step="0.1" min="-5" max="30" value="0"></div>
             </div>
             <select class="font-select" id="t-font">
-              <option value="'Outfit', sans-serif">Outfit</option>
-              <option value="'Syne', sans-serif">Syne</option>
-              <option value="Georgia, serif">Georgia</option>
-              <option value="'Courier New', monospace">Monospace</option>
+              <optgroup label="Sans-Serif">
+                <option value="'Inter', sans-serif">Inter</option>
+                <option value="'Outfit', sans-serif">Outfit</option>
+                <option value="'DM Sans', sans-serif">DM Sans</option>
+                <option value="'Montserrat', sans-serif">Montserrat</option>
+                <option value="'Space Grotesk', sans-serif">Space Grotesk</option>
+                <option value="'Poppins', sans-serif">Poppins</option>
+                <option value="'Plus Jakarta Sans', sans-serif">Plus Jakarta Sans</option>
+              </optgroup>
+              <optgroup label="Serif">
+                <option value="'Playfair Display', serif">Playfair Display</option>
+                <option value="'Cormorant Garamond', serif">Cormorant Garamond</option>
+                <option value="'Merriweather', serif">Merriweather</option>
+                <option value="'Lora', serif">Lora</option>
+                <option value="Georgia, serif">Georgia</option>
+                <option value="'Times New Roman', serif">Times New Roman</option>
+              </optgroup>
+              <optgroup label="Display & Decorative">
+                <option value="'Syne', sans-serif">Syne</option>
+                <option value="'Bungee', sans-serif">Bungee</option>
+                <option value="'Abril Fatface', serif">Abril Fatface</option>
+                <option value="'Unbounded', sans-serif">Unbounded</option>
+                <option value="'Cinzel', serif">Cinzel</option>
+              </optgroup>
+              <optgroup label="Monospace">
+                <option value="'JetBrains Mono', monospace">JetBrains Mono</option>
+                <option value="'Space Mono', monospace">Space Mono</option>
+                <option value="'Fira Code', monospace">Fira Code</option>
+                <option value="'Courier New', monospace">Courier New</option>
+              </optgroup>
+              <optgroup label="Handwritten">
+                <option value="'Reenie Beanie', cursive">Reenie Beanie</option>
+                <option value="'Caveat', cursive">Caveat</option>
+                <option value="'Pacifico', cursive">Pacifico</option>
+                <option value="'Shadows Into Light', cursive">Shadows Into Light</option>
+              </optgroup>
             </select>
+            <div class="prop-2col">
+              <select class="font-select" id="t-transform">
+                <option value="none">Normal case</option>
+                <option value="uppercase">Uppercase</option>
+                <option value="lowercase">Lowercase</option>
+                <option value="capitalize">Capitalize</option>
+              </select>
+              <div class="prop-group"><span class="lbl">Pad</span><input type="number" id="t-pad" step="1" min="0" max="80" value="8"></div>
+            </div>
             <div class="text-align-row">
               <button class="align-btn-ui" data-align="left">⬅</button>
               <button class="align-btn-ui" data-align="center">↔</button>
               <button class="align-btn-ui" data-align="right">➡</button>
             </div>
+            <div class="text-align-row" style="margin-top: 4px; gap: 4px;">
+              <button class="format-btn-ui" id="t-italic-btn" style="font-style:italic;" title="Italic">I</button>
+              <button class="format-btn-ui" id="t-underline-btn" style="text-decoration:underline;" title="Underline">U</button>
+              <button class="format-btn-ui" id="t-strike-btn" style="text-decoration:line-through;" title="Strikethrough">S</button>
+            </div>
+            <button class="act-btn" id="t-fit" style="height:30px;">Fit text box height</button>
             <div class="color-row">
               <div class="color-swatch"><input type="color" id="t-color" value="#eeeef5"></div>
               <span class="color-label">Text</span>
@@ -1067,6 +1233,20 @@ body.exporting-canvas .frame-label{display:none!important;}
   <div class="ctx-item" data-action="fit-mask"><span class="ci">I</span>Fit Image</div>
 </div>
 
+<!-- MOBILE GUARD -->
+<div class="mobile-guard" id="mobile-guard">
+  <div class="mobile-guard-card">
+    <div class="mobile-guard-mark">V</div>
+    <h2>Open on desktop or large tablet</h2>
+    <p>Vision Canvas is built for precise canvas work with a keyboard, pointer, and larger screen. Please open this link on a desktop browser or large tablet for editing.</p>
+    <p id="mobile-view-note">View-only shared links can still be inspected with pan and zoom on larger screens.</p>
+    <div class="mobile-guard-actions">
+      <button class="modal-btn accent" id="mobile-copy-link">Copy link</button>
+      <button class="modal-btn" id="mobile-continue-view">Continue view only</button>
+    </div>
+  </div>
+</div>
+
 <!-- URL MODAL -->
 <div class="modal-overlay" id="url-modal">
   <div class="modal-box" style="width:360px;">
@@ -1124,7 +1304,7 @@ body.exporting-canvas .frame-label{display:none!important;}
 
 <!-- SHARE MODAL -->
 <div class="modal-overlay" id="share-modal">
-  <div class="modal-box" style="width:340px;">
+  <div class="modal-box share-modal-box">
     <div class="modal-title">Share Canvas</div>
     <div class="modal-row">
       <span>Permission</span>
@@ -1134,6 +1314,23 @@ body.exporting-canvas .frame-label{display:none!important;}
         <option value="edit">Can edit</option>
       </select>
     </div>
+    <div class="share-mode-grid" id="share-mode-grid">
+      <button class="share-mode-card" data-share-card="view">
+        <span class="share-mode-icon">View</span>
+        <strong>View only</strong>
+        <span>Open without login. Pan, zoom, and inspect only.</span>
+      </button>
+      <button class="share-mode-card" data-share-card="comment">
+        <span class="share-mode-icon">Comment</span>
+        <strong>Can comment</strong>
+        <span>Add comment pins without changing design content.</span>
+      </button>
+      <button class="share-mode-card" data-share-card="edit">
+        <span class="share-mode-icon">Edit</span>
+        <strong>Can edit</strong>
+        <span>Trusted people can change and save this canvas.</span>
+      </button>
+    </div>
     <div class="share-preview" id="share-preview"></div>
     <div class="share-link-box">
       <input id="share-link-input" readonly placeholder="No shared link yet">
@@ -1141,11 +1338,43 @@ body.exporting-canvas .frame-label{display:none!important;}
     </div>
     <div class="share-status" id="share-status">Create a link to share this canvas.</div>
     <div class="modal-hint">Comment links allow adding and editing comment pins only.</div>
+    <div class="access-requests" id="access-requests">
+      <h4>Access requests</h4>
+      <div class="access-empty">No pending requests.</div>
+    </div>
     <div class="modal-actions">
       <button class="modal-btn danger" id="share-disable">Disable</button>
       <button class="modal-btn" id="share-cancel">Cancel</button>
       <button class="modal-btn accent" id="share-copy">Save & Copy</button>
     </div>
+  </div>
+</div>
+
+<!-- FEEDBACK MODAL -->
+<div class="modal-overlay" id="feedback-modal">
+  <div class="modal-box feedback-modal-box">
+    <div class="modal-title">Send Feedback</div>
+    <div class="guest-summary">Tell us what felt confusing, broken, or missing. The report includes the current page link so it is easier to reproduce.</div>
+    <textarea class="feedback-textarea" id="feedback-text" maxlength="1000" placeholder="What happened?"></textarea>
+    <div class="share-status" id="feedback-status">Feedback is copied locally so you can send it to the owner during testing.</div>
+    <div class="modal-actions">
+      <button class="modal-btn" id="feedback-cancel">Cancel</button>
+      <button class="modal-btn accent" id="feedback-copy">Copy Report</button>
+    </div>
+  </div>
+</div>
+
+<!-- GUEST MODAL -->
+<div class="modal-overlay" id="guest-modal">
+  <div class="modal-box" style="width:340px;">
+    <div class="modal-title">Join Canvas</div>
+    <div class="guest-summary" id="guest-summary">Add your name so comments and shared activity are easier to recognize.</div>
+    <input class="modal-input" id="guest-name-input" maxlength="32" placeholder="Your name">
+    <div class="modal-actions">
+      <button class="modal-btn" id="guest-skip-btn">Continue as Guest</button>
+      <button class="modal-btn accent" id="guest-save-btn">Continue</button>
+    </div>
+    <div class="guest-skip">No account required.</div>
   </div>
 </div>
 
@@ -1174,8 +1403,176 @@ body.exporting-canvas .frame-label{display:none!important;}
 // Block all editing in readonly mode immediately
 const URL_PARAMS = new URLSearchParams(window.location.search);
 const ACCESS_MODE = URL_PARAMS.get('readonly') ? 'view' : (URL_PARAMS.get('mode') || 'edit');
-function canEditAll(){return ACCESS_MODE==='edit';}
-function canComment(){return ACCESS_MODE==='edit'||ACCESS_MODE==='comment';}
+const SHARE_TOKEN_PARAM = URL_PARAMS.get('share');
+let guestAccessStatus = SHARE_TOKEN_PARAM && ACCESS_MODE!=='view' ? 'checking' : 'approved';
+function hasSharedAccess(){return !SHARE_TOKEN_PARAM||ACCESS_MODE==='view'||guestAccessStatus==='approved';}
+function canEditAll(){return ACCESS_MODE==='edit'&&hasSharedAccess();}
+function canComment(){return (ACCESS_MODE==='edit'||ACCESS_MODE==='comment')&&hasSharedAccess();}
+const MOBILE_GUARD_KEY = `vision-mobile-guard-${SHARE_TOKEN_PARAM || URL_PARAMS.get('id') || 'local'}`;
+const GUEST_STORAGE_KEY = SHARE_TOKEN_PARAM ? `vision-guest-${SHARE_TOKEN_PARAM}` : 'vision-owner';
+const GUEST_KEY_STORAGE_KEY = SHARE_TOKEN_PARAM ? `vision-guest-key-${SHARE_TOKEN_PARAM}` : 'vision-owner-key';
+let guestName = '';
+let guestKey = '';
+let accessPollTimer = null;
+function guestDisplayName(){
+  return SHARE_TOKEN_PARAM ? (guestName || 'Guest') : 'You';
+}
+function createGuestKey(){
+  if(window.crypto?.randomUUID) return window.crypto.randomUUID();
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+}
+function loadGuestIdentity(){
+  try{
+    guestName = localStorage.getItem(GUEST_STORAGE_KEY) || '';
+    guestKey = localStorage.getItem(GUEST_KEY_STORAGE_KEY) || createGuestKey();
+    localStorage.setItem(GUEST_KEY_STORAGE_KEY, guestKey);
+  }catch(e){
+    guestName='';
+    guestKey=createGuestKey();
+  }
+}
+function saveGuestName(name){
+  guestName = (name || '').trim().slice(0,32);
+  try{ localStorage.setItem(GUEST_STORAGE_KEY, guestName); }catch(e){}
+  updateActivityBadge();
+  refreshCollabIdentity();
+}
+function isSmallEditorScreen(){
+  return window.innerWidth <= 760 || window.innerHeight <= 520;
+}
+function updateMobileGuard(){
+  const continueBtn = $('mobile-continue-view');
+  const note = $('mobile-view-note');
+  const canContinue = ACCESS_MODE === 'view';
+  if(continueBtn) continueBtn.style.display = canContinue ? '' : 'none';
+  if(note) note.textContent = canContinue
+    ? 'This view-only link can be inspected on a larger tablet, but editing is disabled on phone-sized screens.'
+    : 'For editing, open this canvas on desktop or a large tablet.';
+  let dismissed = false;
+  try{ dismissed = sessionStorage.getItem(MOBILE_GUARD_KEY) === 'dismissed'; }catch(e){}
+  document.body.classList.toggle('mobile-guard-active', isSmallEditorScreen() && !(dismissed && canContinue));
+}
+async function copyCurrentLink(){
+  const link = window.location.href;
+  try{
+    await navigator.clipboard.writeText(link);
+    showToast('Link copied');
+  }catch(e){
+    window.prompt('Copy this link', link);
+  }
+}
+function dismissMobileViewGuard(){
+  if(ACCESS_MODE !== 'view') return;
+  try{ sessionStorage.setItem(MOBILE_GUARD_KEY, 'dismissed'); }catch(e){}
+  document.body.classList.remove('mobile-guard-active');
+}
+function requestGuestName(){
+  if(!SHARE_TOKEN_PARAM || ACCESS_MODE==='view' || guestName) return;
+  const modal=$('guest-modal'), input=$('guest-name-input'), summary=$('guest-summary');
+  if(!modal||!input) return;
+  summary.innerHTML = 'Add your name so comments and edits are easier to recognize.';
+  input.value='';
+  modal.classList.add('show');
+  setTimeout(()=>input.focus(),80);
+}
+function closeGuestModal(name){
+  saveGuestName(name || 'Guest');
+  $('guest-modal')?.classList.remove('show');
+  ensureGuestAccess();
+}
+async function ensureGuestAccess(){
+  if(!SHARE_TOKEN_PARAM || ACCESS_MODE==='view') {
+    guestAccessStatus='approved';
+    return true;
+  }
+  if(!guestName){
+    guestAccessStatus='needs-name';
+    updateActivityBadge();
+    requestGuestName();
+    return false;
+  }
+  try{
+    const res=await fetch(`${SUPABASE_URL}/rest/v1/rpc/request_canvas_access`,{
+      method:'POST',
+      headers:{
+        'Content-Type':'application/json',
+        'apikey':SUPABASE_KEY,
+        'Authorization':`Bearer ${SUPABASE_KEY}`
+      },
+      body:JSON.stringify({
+        p_token:SHARE_TOKEN_PARAM,
+        p_guest_key:guestKey,
+        p_guest_name:guestName,
+        p_permission:ACCESS_MODE
+      })
+    });
+    if(!res.ok) throw new Error('request failed');
+    const data=await res.json();
+    guestAccessStatus=(Array.isArray(data)?data[0]?.status:data?.status)||'pending';
+    updateActivityBadge();
+    if(guestAccessStatus==='approved') {
+      showToast('Access approved');
+      return true;
+    }
+    showAccessStatus();
+    startAccessPolling();
+    return false;
+  }catch(e){
+    guestAccessStatus='setup-needed';
+    updateActivityBadge();
+    showAccessStatus('Approval setup is not ready. Run the Supabase access approval SQL first.');
+    return false;
+  }
+}
+function showAccessStatus(message){
+  const modal=$('guest-modal'), summary=$('guest-summary'), input=$('guest-name-input');
+  if(!modal||!summary) return;
+  input.style.display='none';
+  $('guest-save-btn').style.display='none';
+  $('guest-skip-btn').textContent='Close';
+  summary.innerHTML = message || (guestAccessStatus==='rejected'
+    ? 'Your request was rejected by the owner.'
+    : 'Your request was sent. You can keep this tab open while the owner approves access.');
+  modal.classList.add('show');
+}
+function startAccessPolling(){
+  if(accessPollTimer||!SHARE_TOKEN_PARAM||ACCESS_MODE==='view') return;
+  accessPollTimer=setInterval(checkGuestAccessStatus,5000);
+}
+async function checkGuestAccessStatus(){
+  if(!guestKey||guestAccessStatus==='approved') {
+    clearInterval(accessPollTimer);
+    accessPollTimer=null;
+    return;
+  }
+  try{
+    const res=await fetch(`${SUPABASE_URL}/rest/v1/rpc/get_canvas_access_status`,{
+      method:'POST',
+      headers:{
+        'Content-Type':'application/json',
+        'apikey':SUPABASE_KEY,
+        'Authorization':`Bearer ${SUPABASE_KEY}`
+      },
+      body:JSON.stringify({p_token:SHARE_TOKEN_PARAM,p_guest_key:guestKey})
+    });
+    if(!res.ok) return;
+    const data=await res.json();
+    const status=(Array.isArray(data)?data[0]?.status:data?.status)||guestAccessStatus;
+    if(status!==guestAccessStatus){
+      guestAccessStatus=status;
+      updateActivityBadge();
+      if(status==='approved'){
+        clearInterval(accessPollTimer);
+        accessPollTimer=null;
+        $('guest-modal')?.classList.remove('show');
+        renderAll();
+        showToast('Access approved');
+      }else if(status==='rejected'){
+        showAccessStatus();
+      }
+    }
+  }catch(e){}
+}
 if(ACCESS_MODE==='view') {
   document.addEventListener('contextmenu', e=>e.preventDefault(), true);
 }
@@ -1197,6 +1594,7 @@ const commandModal = $('command-modal');
 const commandInput = $('command-input');
 const commandList = $('command-list');
 let textEditDirty=false;
+let savedTextRange=null, savedTextRangeId=null;
 let imageCropDirty=false;
 let imageAdjustDirty=false;
 
@@ -1218,9 +1616,11 @@ let state = {
   nextGroupId:1,
   shapeDefaults:{fill:'#6c71f0',stroke:'#8b8ff4',strokeWidth:2},
   minimapEnabled:true,
+  remoteCanvasId:null,
   shareToken:null,
   sharePermission:'view',
   shareName:'',
+  sharedActivity:null,
   cropAdjustId:null,
   booleanAdjustId:null,
   booleanPartIndex:null,
@@ -1301,7 +1701,7 @@ function addTextItem(x,y,w=220,h=70){
   pushHistory();
   const id=++state.nextId;
   ac().items.push({id,type:'text',name:`Text ${id}`,
-    text:'',fontSize:24,lineHeight:1.4,
+    text:'',fontSize:24,lineHeight:1.4,letterSpacing:0,textTransform:'none',textPadding:8,
     fontFamily:"'Outfit', sans-serif",fontWeight:'400',
     color:'#eeeef5',textAlign:'left',bgColor:'',
     x,y,w:Math.max(40,w),h:Math.max(28,h),rot:0,opacity:100,
@@ -1323,7 +1723,7 @@ function addNoteItem(x,y,w=220,h=160){
   pushHistory();
   const id=++state.nextId;
   ac().items.push({id,type:'note',name:`Note ${id}`,
-    text:'',fontSize:18,lineHeight:1.35,
+    text:'',fontSize:18,lineHeight:1.35,letterSpacing:0,textTransform:'none',textPadding:12,
     fontFamily:"'Outfit', sans-serif",fontWeight:'500',
     color:'#171717',textAlign:'left',bgColor:'#ffd966',
     x,y,w:Math.max(120,w),h:Math.max(90,h),rot:0,opacity:100,
@@ -1346,7 +1746,7 @@ function addCommentItem(x,y,text){
   const id=++state.nextId;
   const number=nextCommentNumber();
   ac().items.push({id,type:'comment',name:`Comment ${number}`,
-    text:(text||'').trim(),number,x,y,w:210,h:64,rot:0,opacity:100,
+    text:(text||'').trim(),author:guestDisplayName(),number,x,y,w:210,h:64,rot:0,opacity:100,
     visible:true,locked:false,flipH:false,flipV:false,z:maxZ()+1});
   state.selectedIds=[id];
   renderItems(); renderLayers();
@@ -1763,17 +2163,31 @@ function startTextEdit(id,el){
   tc.contentEditable='true';
   tc.spellcheck=true;
   if(isLegacyTextPlaceholder(item)) item.text='';
-  tc.innerText=item.text||'';
+  tc.innerHTML=item.html||escapeHtml(item.text||'').replace(/\n/g,'<br>');
   tc.focus();
   const range=document.createRange();
   range.selectNodeContents(tc);
   range.collapse(false);
   const s=window.getSelection(); s.removeAllRanges(); s.addRange(range);
   const onBlur=()=>{
+    const clickedPanel = lastMousedownTarget && lastMousedownTarget.closest('#panels');
+    if (clickedPanel) {
+      // Selection was already saved in the mousedown capture handler
+      // (before the browser could clear it on blur)
+      return;
+    }
+    teardown();
+  };
+  const teardown=()=>{
+    if(state.editingId!==item.id) return;
     const nextText=normalizeTextContent(tc.innerText);
+    const nextHtml=sanitizeTextHtml(tc.innerHTML);
     if(!textEditDirty&&nextText!==item.text) pushHistory();
     item.text=nextText;
+    if(nextHtml&&nextHtml!==escapeHtml(nextText).replace(/\n/g,'<br>')) item.html=nextHtml;
+    else delete item.html;
     fitTextHeight(item,el);
+    savedTextRange=null; savedTextRangeId=null;
     tc.contentEditable='false'; state.editingId=null; textEditDirty=false;
     el.classList.remove('editing');
     tc.removeEventListener('blur',onBlur);
@@ -1782,9 +2196,11 @@ function startTextEdit(id,el){
     applyItemStyle(el,item);
     renderLayers(); updateProps(); scheduleThumb();
   };
+  state.endActiveTextEdit = teardown;
   const onInput=()=>{
     if(!textEditDirty){pushHistory();textEditDirty=true;}
     item.text=normalizeTextContent(tc.innerText);
+    item.html=sanitizeTextHtml(tc.innerHTML);
     fitTextHeight(item,el);
     updateSelectionOverlay(); updateProps(); scheduleSave();
   };
@@ -1799,6 +2215,111 @@ function startTextEdit(id,el){
   fitTextHeight(item,el);
 }
 
+function sanitizeTextHtml(html){
+  const t=document.createElement('template');
+  t.innerHTML=html||'';
+  const allowedStyle=new Set(['color','background-color','font-size','font-family','font-weight','line-height','letter-spacing','text-transform','font-style','text-decoration']);
+  function clean(node){
+    if(node.nodeType===Node.TEXT_NODE) return escapeHtml(node.textContent||'');
+    if(node.nodeType!==Node.ELEMENT_NODE) return '';
+    const tag=node.tagName.toLowerCase();
+    if(tag==='br') return '<br>';
+    const body=[...node.childNodes].map(clean).join('');
+    if(tag==='div'||tag==='p') return body+'<br>';
+    if(!['span','b','strong','i','em','u'].includes(tag)) return body;
+    const styles=[];
+    if(node.getAttribute('style')){
+      node.getAttribute('style').split(';').forEach(pair=>{
+        const [rawKey,...rest]=pair.split(':');
+        const key=(rawKey||'').trim().toLowerCase();
+        const value=rest.join(':').trim().replace(/[<>"']/g,'');
+        if(allowedStyle.has(key)&&value) styles.push(`${key}:${value}`);
+      });
+    }
+    return styles.length ? `<span style="${styles.join(';')}">${body}</span>` : body;
+  }
+  return [...t.content.childNodes].map(clean).join('').replace(/(<br>)+$/,'');
+}
+function selectionInsideTextContent(tc){
+  const sel=window.getSelection();
+  if(!sel||sel.rangeCount===0||sel.isCollapsed) return null;
+  const range=sel.getRangeAt(0);
+  if(!tc.contains(range.commonAncestorContainer)) return null;
+  return range;
+}
+function rememberTextSelection(){
+  if(!state.editingId) return;
+  const el=canvasWorld.querySelector(`[data-id="${state.editingId}"]`);
+  const tc=el?.querySelector('.text-content');
+  const range=tc&&selectionInsideTextContent(tc);
+  if(range){
+    savedTextRange=range.cloneRange();
+    savedTextRangeId=state.editingId;
+  }
+}
+document.addEventListener('selectionchange',rememberTextSelection);
+function getEditableTextRange(tc,itemId){
+  const live=selectionInsideTextContent(tc);
+  if(live){
+    savedTextRange=live.cloneRange();
+    savedTextRangeId=itemId;
+    return live;
+  }
+  if(savedTextRange&&savedTextRangeId===itemId&&tc.contains(savedTextRange.commonAncestorContainer)){
+    const sel=window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(savedTextRange);
+    return savedTextRange.cloneRange();
+  }
+  return null;
+}
+function applyInlineTextStyle(prop,value){
+  const item=selFirst(); if(!item||state.editingId!==item.id) return false;
+  const el=canvasWorld.querySelector(`[data-id="${item.id}"]`);
+  const tc=el?.querySelector('.text-content');
+  if(!tc) return false;
+
+  // If a panel input currently has focus (e.g. the font-size number input),
+  // we must briefly restore focus to the contentEditable so that
+  // range.extractContents() works correctly in Chrome. Without this,
+  // Chrome ignores addRange() while a form input holds focus and the
+  // extraction produces an empty fragment, causing the whole-text fallback.
+  const prevFocus = document.activeElement;
+  const needsRefocus = prevFocus && prevFocus !== tc && tc.contentEditable === 'true';
+  if (needsRefocus) {
+    // Temporarily suppress the blur→teardown while we swap focus
+    lastMousedownTarget = tc;
+    tc.focus();
+  }
+
+  const range = getEditableTextRange(tc, item.id);
+  if(!range){
+    if(needsRefocus && prevFocus && prevFocus.focus) prevFocus.focus();
+    return false;
+  }
+  if(!textEditDirty){pushHistory();textEditDirty=true;}
+  const span=document.createElement('span');
+  span.style[prop]=value;
+  span.appendChild(range.extractContents());
+  range.insertNode(span);
+  const nextRange=document.createRange();
+  nextRange.selectNodeContents(span);
+  const sel=window.getSelection(); sel.removeAllRanges(); sel.addRange(nextRange);
+  savedTextRange=nextRange.cloneRange();
+  savedTextRangeId=item.id;
+  item.text=normalizeTextContent(tc.innerText);
+  item.html=sanitizeTextHtml(tc.innerHTML);
+
+  // Return focus to the panel control that triggered this
+  if(needsRefocus && prevFocus && prevFocus.focus){
+    lastMousedownTarget = prevFocus;
+    prevFocus.focus();
+  }
+
+  fitTextHeight(item,el);
+  updateSelectionOverlay(); scheduleSave(); scheduleThumb();
+  return true;
+}
 function isLegacyTextPlaceholder(item){
   return (item.type==='text'&&item.text==='Double-click to edit')
     ||(item.type==='note'&&item.text==='Write a note...');
@@ -1992,24 +2513,32 @@ function applyItemStyle(el,item){
   el.classList.toggle('multi-sel',state.selectedIds.length>1&&state.selectedIds.includes(item.id));
   el.classList.toggle('comment-open',state.selectedIds.includes(item.id)&&item.type==='comment');
   if(item.type==='text'||item.type==='note'){
-  const tc=el.querySelector('.text-content');
-  if(tc&&tc.contentEditable!=='true'){
-    tc.innerText=isLegacyTextPlaceholder(item)?'':(item.text||'');
-    tc.dataset.placeholder=item.type==='note'?'Write a note...':'Type text';
-    tc.style.fontSize=item.fontSize+'px';
-    tc.style.fontFamily=item.fontFamily;
-    tc.style.fontWeight=item.fontWeight;
-    tc.style.color=item.color;
-    tc.style.textAlign=item.textAlign;
-    tc.style.background=item.bgColor||(item.type==='note'?'#ffd966':'transparent');
-    tc.style.width='100%';
-    tc.style.height='100%';
-    tc.style.overflow='hidden';
-    tc.style.wordBreak='break-word';
-    tc.style.whiteSpace='pre-wrap';
-    tc.style.lineHeight=item.lineHeight||1.4;
-    tc.style.padding='8px';
-  }
+    if(item.fontFamily) ensureFontLoaded(item.fontFamily);
+    const tc=el.querySelector('.text-content');
+    if(tc){
+      if(tc.contentEditable!=='true'){
+        if(item.html&&!isLegacyTextPlaceholder(item)) tc.innerHTML=sanitizeTextHtml(item.html);
+        else tc.innerText=isLegacyTextPlaceholder(item)?'':(item.text||'');
+      }
+      tc.dataset.placeholder=item.type==='note'?'Write a note...':'Type text';
+      tc.style.fontSize=item.fontSize+'px';
+      tc.style.fontFamily=item.fontFamily;
+      tc.style.fontWeight=item.fontWeight;
+      tc.style.fontStyle=item.fontStyle||'normal';
+      tc.style.textDecoration=item.textDecoration||'none';
+      tc.style.color=item.color;
+      tc.style.textAlign=item.textAlign;
+      tc.style.letterSpacing=(item.letterSpacing||0)+'px';
+      tc.style.textTransform=item.textTransform||'none';
+      tc.style.background=item.bgColor||(item.type==='note'?'#ffd966':'transparent');
+      tc.style.width='100%';
+      tc.style.height='100%';
+      tc.style.overflow='hidden';
+      tc.style.wordBreak='break-word';
+      tc.style.whiteSpace='pre-wrap';
+      tc.style.lineHeight=item.lineHeight||1.4;
+      tc.style.padding=(item.textPadding??(item.type==='note'?12:8))+'px';
+    }
   }
   if(item.type==='shape'){
     const sc=el.querySelector('.shape-content');
@@ -2220,13 +2749,13 @@ function renderCommentPanel(){
     <div class="comment-row">
       <div class="comment-avatar">${item.number||''}</div>
       <div>
-        <div class="comment-meta"><span class="comment-author">You</span><span class="comment-time">note</span></div>
+        <div class="comment-meta"><span class="comment-author">${escapeHtml(item.author||'Guest')}</span><span class="comment-time">note</span></div>
         ${canComment()?`<textarea class="comment-body-edit" id="comment-main-input" placeholder="Add a comment">${escapeHtml(item.text||'')}</textarea>`:`<div class="comment-body">${escapeHtml(item.text||'')}</div>`}
       </div>
     </div>
     ${replies.map(r=>`<div class="comment-row">
       <div class="comment-avatar">↳</div>
-      <div><div class="comment-meta"><span class="comment-author">You</span><span class="comment-time">reply</span></div>
+      <div><div class="comment-meta"><span class="comment-author">${escapeHtml(r.author||'Guest')}</span><span class="comment-time">reply</span></div>
       <div class="comment-body">${escapeHtml(r.text||'')}</div></div>
     </div>`).join('')}
     ${canComment()?`<div class="comment-reply">
@@ -2257,7 +2786,7 @@ function escapeHtml(value){
 function addCommentReply(item,text){
   if(!canComment()||!text.trim()) return;
   pushHistory();
-  item.replies=[...(item.replies||[]),{text:text.trim(),at:Date.now()}];
+  item.replies=[...(item.replies||[]),{text:text.trim(),author:guestDisplayName(),at:Date.now()}];
   renderCommentPanel(); renderLayers(); scheduleThumb();
 }
 function autoSizeCommentInput(input){
@@ -2637,6 +3166,38 @@ function buildAlignTools(){
   });
 }
 
+function rgbToHex(rgb) {
+  if (!rgb) return '#ffffff';
+  if (rgb.startsWith('#')) return rgb;
+  const match = rgb.match(/^rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+  if (!match) return '#ffffff';
+  return '#' + [match[1], match[2], match[3]].map(x => {
+    const hex = parseInt(x).toString(16);
+    return hex.length === 1 ? '0' + hex : hex;
+  }).join('');
+}
+
+function getActiveTextStyles(tc) {
+  let range = null;
+  const sel = window.getSelection();
+  if (sel && sel.rangeCount > 0) {
+    const r = sel.getRangeAt(0);
+    if (tc.contains(r.commonAncestorContainer)) {
+      range = r;
+    }
+  }
+  if (!range && savedTextRange && savedTextRangeId === state.editingId && tc.contains(savedTextRange.commonAncestorContainer)) {
+    range = savedTextRange;
+  }
+  if (!range) return null;
+
+  let node = range.commonAncestorContainer;
+  if (node.nodeType === Node.TEXT_NODE) {
+    node = node.parentNode;
+  }
+  return window.getComputedStyle(node);
+}
+
 // ── PROPS PANEL ───────────────────────────────────────────────────
 function updateProps(){
   const item=selFirst(), count=state.selectedIds.length;
@@ -2684,12 +3245,70 @@ function updateProps(){
   $('flip-h-btn').style.display=isText?'none':'';
   $('flip-v-btn').style.display=isText?'none':'';
   if(isText){
-    $('t-size').value=item.fontSize; $('t-weight').value=item.fontWeight;
-    $('t-line').value=item.lineHeight||1.4;
-    $('t-font').value=item.fontFamily; $('t-color').value=item.color;
+    const el = canvasWorld.querySelector(`[data-id="${item.id}"]`);
+    const tcEl = el?.querySelector('.text-content');
+    const computed = (state.editingId === item.id && tcEl) ? getActiveTextStyles(tcEl) : null;
+    
+    if (computed) {
+      const compSize = parseFloat(computed.fontSize);
+      $('t-size').value = isNaN(compSize) ? item.fontSize : compSize;
+      
+      const compLH = computed.lineHeight;
+      let lhVal = item.lineHeight || 1.4;
+      if (compLH && compLH !== 'normal') {
+        const parsedLH = parseFloat(compLH);
+        if (!isNaN(parsedLH) && compSize > 0) {
+          lhVal = compLH.endsWith('px') ? Math.round((parsedLH / compSize) * 100) / 100 : parsedLH;
+        }
+      }
+      $('t-line').value = lhVal;
+      
+      const compLS = parseFloat(computed.letterSpacing);
+      $('t-track').value = isNaN(compLS) ? (item.letterSpacing || 0) : compLS;
+      
+      $('t-transform').value = computed.textTransform || item.textTransform || 'none';
+      $('t-weight').value = computed.fontWeight || item.fontWeight;
+      
+      let compFont = computed.fontFamily || '';
+      compFont = compFont.replace(/['"]/g, '').toLowerCase();
+      let matchedFont = item.fontFamily;
+      const fontSelect = $('t-font');
+      if (fontSelect) {
+        for (let i = 0; i < fontSelect.options.length; i++) {
+          const option = fontSelect.options[i];
+          const optVal = option.value.replace(/['"]/g, '').toLowerCase();
+          if (optVal && (optVal === compFont || compFont.includes(optVal) || optVal.includes(compFont))) {
+            matchedFont = option.value;
+            break;
+          }
+        }
+      }
+      $('t-font').value = matchedFont;
+      
+      const compCol = computed.color;
+      $('t-color').value = compCol ? rgbToHex(compCol) : item.color;
+      
+      $('t-italic-btn').classList.toggle('active', computed.fontStyle === 'italic');
+      
+      const deco = computed.textDecorationLine || computed.textDecoration || '';
+      $('t-underline-btn').classList.toggle('active', deco.includes('underline'));
+      $('t-strike-btn').classList.toggle('active', deco.includes('line-through'));
+    } else {
+      $('t-size').value=item.fontSize; $('t-weight').value=item.fontWeight;
+      $('t-line').value=item.lineHeight||1.4;
+      $('t-track').value=item.letterSpacing||0;
+      $('t-transform').value=item.textTransform||'none';
+      $('t-font').value=item.fontFamily; $('t-color').value=item.color;
+      
+      $('t-italic-btn').classList.toggle('active', item.fontStyle === 'italic');
+      $('t-underline-btn').classList.toggle('active', item.textDecoration === 'underline');
+      $('t-strike-btn').classList.toggle('active', item.textDecoration === 'line-through');
+    }
+    
+    $('t-pad').value=item.textPadding??(item.type==='note'?12:8);
     if(item.bgColor) $('t-bg').value=item.bgColor;
-  document.querySelectorAll('.align-btn-ui').forEach(b=>
-      b.classList.toggle('active',b.dataset.align===item.textAlign));
+    document.querySelectorAll('.align-btn-ui').forEach(b=>
+        b.classList.toggle('active',b.dataset.align===item.textAlign));
   }
   if(isShape){
     setColorControl('shape-fill',item.fill,'#6c71f0');
@@ -2969,20 +3588,86 @@ $('img-reset-crop-btn').addEventListener('click',()=>{
   updateProps(); scheduleSave(); scheduleThumb(); showToast('Image crop reset');
 });
 
+const loadedFonts = new Set(["Inter", "Outfit", "DM Sans", "Syne", "Georgia", "Times New Roman", "JetBrains Mono", "Courier New"]);
+function ensureFontLoaded(fontFamily) {
+  if (!fontFamily) return;
+  const cleanName = fontFamily.replace(/['"]/g, '').split(',')[0].trim();
+  if (loadedFonts.has(cleanName)) return;
+  const link = document.createElement('link');
+  link.rel = 'stylesheet';
+  link.href = `https://fonts.googleapis.com/css2?family=${encodeURIComponent(cleanName)}:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,300;1,400;1,500;1,600;1,700;1,800&display=swap`;
+  document.head.appendChild(link);
+  loadedFonts.add(cleanName);
+}
+
 function bindTextProp(id,key,isNum){
   $(id).addEventListener('change',e=>{
     const item=selFirst(); if(!item||(item.type!=='text'&&item.type!=='note')) return;
     const fallback=key==='lineHeight'?1.4:16;
-    pushHistory(); item[key]=isNum?(parseFloat(e.target.value)||fallback):e.target.value;
+    const next=isNum?(parseFloat(e.target.value)||fallback):e.target.value;
+    if (key === 'fontFamily') ensureFontLoaded(next);
+    const inlineMap={fontSize:['fontSize',`${next}px`],lineHeight:['lineHeight',String(next)],letterSpacing:['letterSpacing',`${next}px`],textPadding:null,textTransform:['textTransform',next],fontWeight:['fontWeight',next],fontFamily:['fontFamily',next]};
+    if(inlineMap[key]&&applyInlineTextStyle(inlineMap[key][0],inlineMap[key][1])){ updateProps(); return; }
+    pushHistory(); item[key]=next;
     const el=canvasWorld.querySelector(`[data-id="${item.id}"]`);
     if(el){ applyItemStyle(el,item); fitTextHeight(item,el); }
-    updateSelectionOverlay(); updateProps(); scheduleThumb();
+    updateSelectionOverlay(); updateProps(); scheduleSave(); scheduleThumb();
   });
 }
+function setTextProps(patch,withHistory=true){
+  const item=selFirst(); if(!item||(item.type!=='text'&&item.type!=='note')||item.locked) return;
+  if(withHistory) pushHistory();
+  Object.assign(item,patch);
+  if(patch.fontFamily) ensureFontLoaded(patch.fontFamily);
+  const el=canvasWorld.querySelector(`[data-id="${item.id}"]`);
+  if(el){ applyItemStyle(el,item); fitTextHeight(item,el); }
+  updateSelectionOverlay(); updateProps(); scheduleSave(); scheduleThumb();
+}
+
+$('t-italic-btn').addEventListener('click',()=>{
+  const item=selFirst(); if(!item||(item.type!=='text'&&item.type!=='note')||item.locked) return;
+  const nextStyle=item.fontStyle==='italic'?'normal':'italic';
+  if(applyInlineTextStyle('fontStyle',nextStyle)){ updateProps(); return; }
+  pushHistory(); item.fontStyle=nextStyle;
+  const el=canvasWorld.querySelector(`[data-id="${item.id}"]`);
+  if(el) applyItemStyle(el,item);
+  updateProps(); scheduleSave(); scheduleThumb();
+});
+$('t-underline-btn').addEventListener('click',()=>{
+  const item=selFirst(); if(!item||(item.type!=='text'&&item.type!=='note')||item.locked) return;
+  const nextDeco=item.textDecoration==='underline'?'none':'underline';
+  if(applyInlineTextStyle('textDecoration',nextDeco)){ updateProps(); return; }
+  pushHistory(); item.textDecoration=nextDeco;
+  const el=canvasWorld.querySelector(`[data-id="${item.id}"]`);
+  if(el) applyItemStyle(el,item);
+  updateProps(); scheduleSave(); scheduleThumb();
+});
+$('t-strike-btn').addEventListener('click',()=>{
+  const item=selFirst(); if(!item||(item.type!=='text'&&item.type!=='note')||item.locked) return;
+  const nextDeco=item.textDecoration==='line-through'?'none':'line-through';
+  if(applyInlineTextStyle('textDecoration',nextDeco)){ updateProps(); return; }
+  pushHistory(); item.textDecoration=nextDeco;
+  const el=canvasWorld.querySelector(`[data-id="${item.id}"]`);
+  if(el) applyItemStyle(el,item);
+  updateProps(); scheduleSave(); scheduleThumb();
+});
 bindTextProp('t-size','fontSize',true);
 bindTextProp('t-line','lineHeight',true);
+bindTextProp('t-track','letterSpacing',true);
+bindTextProp('t-pad','textPadding',true);
+bindTextProp('t-transform','textTransform',false);
 bindTextProp('t-weight','fontWeight',false);
 bindTextProp('t-font','fontFamily',false);
+document.querySelectorAll('[data-text-preset]').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    const presets={
+      heading:{fontSize:48,fontWeight:'800',lineHeight:1.05,letterSpacing:-0.5,fontFamily:"'Syne', sans-serif",textTransform:'none',textPadding:8},
+      subheading:{fontSize:28,fontWeight:'700',lineHeight:1.18,letterSpacing:0,fontFamily:"'Inter', sans-serif",textTransform:'none',textPadding:8},
+      body:{fontSize:18,fontWeight:'400',lineHeight:1.45,letterSpacing:0,fontFamily:"'Inter', sans-serif",textTransform:'none',textPadding:8}
+    };
+    setTextProps(presets[btn.dataset.textPreset]||presets.body,true);
+  });
+});
 $('t-fit').addEventListener('click',()=>{
   const item=selFirst(); if(!item||(item.type!=='text'&&item.type!=='note')||item.locked) return;
   pushHistory();
@@ -2992,22 +3677,32 @@ $('t-fit').addEventListener('click',()=>{
 });
 $('t-color').addEventListener('input',e=>{
   const item=selFirst(); if(!item||(item.type!=='text'&&item.type!=='note')) return;
+  if(applyInlineTextStyle('color',e.target.value)) return;
   item.color=e.target.value;
   const el=canvasWorld.querySelector(`[data-id="${item.id}"]`);
   if(el) applyItemStyle(el,item);
+  scheduleSave(); scheduleThumb();
 });
 $('t-bg').addEventListener('input',e=>{
   const item=selFirst(); if(!item||(item.type!=='text'&&item.type!=='note')) return;
+  if(applyInlineTextStyle('backgroundColor',e.target.value)) return;
   item.bgColor=e.target.value;
   const el=canvasWorld.querySelector(`[data-id="${item.id}"]`);
   if(el) applyItemStyle(el,item);
+  scheduleSave(); scheduleThumb();
 });
 $('t-bg-clear').addEventListener('click',()=>{
   const item=selFirst(); if(!item||(item.type!=='text'&&item.type!=='note')) return;
   pushHistory(); item.bgColor='';
   const el=canvasWorld.querySelector(`[data-id="${item.id}"]`);
   if(el) applyItemStyle(el,item);
+  updateProps(); scheduleSave(); scheduleThumb();
 });
+const justifyBtn=document.createElement('button');
+justifyBtn.className='align-btn-ui';
+justifyBtn.dataset.align='justify';
+justifyBtn.textContent='Justify';
+document.querySelector('.text-align-row')?.appendChild(justifyBtn);
 document.querySelectorAll('.align-btn-ui').forEach(btn=>{
   btn.addEventListener('click',()=>{
     const item=selFirst(); if(!item||(item.type!=='text'&&item.type!=='note')) return;
@@ -4118,12 +4813,42 @@ canvasArea.addEventListener('dblclick',e=>{
     addTextItem(wp.x-110,wp.y-35);
   }
 });
+let lastMousedownTarget = null;
 document.addEventListener('mousedown',e=>{
+  lastMousedownTarget = e.target;
+  if (state.editingId && state.endActiveTextEdit) {
+    const activeEl = canvasWorld.querySelector(`[data-id="${state.editingId}"]`);
+    const insideText = activeEl && activeEl.contains(e.target);
+    const insidePanel = e.target.closest('#panels');
+    if (insidePanel && !insideText) {
+      // CRITICAL: Save the text selection RIGHT NOW in the capture phase,
+      // before the browser clears it when focus moves to the panel control.
+      // This must happen here — by the time blur fires, the selection is gone.
+      const tc = activeEl && activeEl.querySelector('.text-content');
+      if (tc) {
+        const sel = window.getSelection();
+        if (sel && sel.rangeCount > 0 && !sel.isCollapsed) {
+          const r = sel.getRangeAt(0);
+          if (tc.contains(r.commonAncestorContainer)) {
+            savedTextRange = r.cloneRange();
+            savedTextRangeId = state.editingId;
+          }
+        }
+      }
+    }
+    if (!insideText && !insidePanel) {
+      setTimeout(() => {
+        if (state.editingId && state.endActiveTextEdit) {
+          state.endActiveTextEdit();
+        }
+      }, 100);
+    }
+  }
   if(!commentPanel.classList.contains('show')) return;
   if(e.target.closest('#comment-panel')||e.target.closest('.comment-item')) return;
   flushActiveCommentEditor();
   commentPanel.classList.remove('show');
-});
+}, true);
 canvasArea.addEventListener('wheel',e=>{
   e.preventDefault(); zoomAt(e.clientX,e.clientY,-e.deltaY);
 },{passive:false});
@@ -4392,7 +5117,7 @@ function renameItem(id){
 function copyItemStyle(id){
   const item=getItem(id); if(!item) return;
   const keys=['opacity','blendMode','shadow','shadowBlur','shadowY','shadowColor','radius',
-    'fill','stroke','strokeWidth','color','bgColor','fontSize','lineHeight','fontFamily','fontWeight','textAlign',
+    'fill','stroke','strokeWidth','color','bgColor','fontSize','lineHeight','letterSpacing','textTransform','textPadding','fontFamily','fontWeight','textAlign',
     'fit','imgX','imgY','imgScale','imgBright','imgContrast','imgSaturate','imgBlur'];
   state.styleClipboard={style:{}};
   keys.forEach(key=>{if(item[key]!==undefined) state.styleClipboard.style[key]=item[key];});
@@ -4405,10 +5130,11 @@ function pasteItemStyle(ids){
   pushHistory();
   targets.forEach(item=>{
     Object.entries(state.styleClipboard.style).forEach(([key,value])=>{
-      const textOnly=['color','bgColor','fontSize','lineHeight','fontFamily','fontWeight','textAlign'];
+    const textOnly=['color','bgColor','fontSize','lineHeight','letterSpacing','textTransform','textPadding','fontFamily','fontWeight','textAlign'];
       const imageOnly=['fit','imgX','imgY','imgScale','imgBright','imgContrast','imgSaturate','imgBlur'];
       const shapeOnly=['fill','stroke','strokeWidth'];
       if(textOnly.includes(key)&&!(item.type==='text'||item.type==='note')) return;
+      if(key==='html') return;
       if(imageOnly.includes(key)&&item.type!=='image') return;
       if(shapeOnly.includes(key)&&!(item.type==='shape'||item.type==='frame')) return;
       item[key]=value;
@@ -4634,9 +5360,17 @@ function showShortcuts(){
 }
 $('help-btn').addEventListener('click',showShortcuts);
 $('shortcuts-close').addEventListener('click',()=>$('shortcuts-modal').classList.remove('show'));
+$('feedback-btn')?.addEventListener('click',openFeedbackModal);
+$('feedback-cancel')?.addEventListener('click',()=>$('feedback-modal').classList.remove('show'));
+$('feedback-copy')?.addEventListener('click',copyFeedbackReport);
+$('mobile-copy-link')?.addEventListener('click',copyCurrentLink);
+$('mobile-continue-view')?.addEventListener('click',dismissMobileViewGuard);
+$('remote-reload-btn')?.addEventListener('click',loadLatestRemoteChanges);
+canvasArea.addEventListener('mousemove',broadcastCursor);
+window.addEventListener('resize',updateMobileGuard);
 
 // Close modals on overlay click
-['url-modal','export-modal','share-modal','shortcuts-modal'].forEach(id=>{
+['url-modal','export-modal','share-modal','shortcuts-modal','feedback-modal'].forEach(id=>{
   $(id).addEventListener('click',e=>{if(e.target===$(id)) $(id).classList.remove('show');});
 });
 
@@ -4663,6 +5397,34 @@ function showToast(msg){
   const t=$('toast'); t.textContent=msg; t.classList.add('show');
   clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove('show'),2200);
 }
+function openFeedbackModal(){
+  const modal=$('feedback-modal'), input=$('feedback-text'), status=$('feedback-status');
+  if(!modal||!input) return;
+  input.value='';
+  if(status) status.textContent='Feedback is copied locally so you can send it to the owner during testing.';
+  modal.classList.add('show');
+  setTimeout(()=>input.focus(),80);
+}
+async function copyFeedbackReport(){
+  const input=$('feedback-text'), status=$('feedback-status');
+  const report = [
+    'Vision Canvas feedback',
+    `Page: ${window.location.href}`,
+    `Mode: ${ACCESS_MODE}${SHARE_TOKEN ? ' shared' : ' owner'}`,
+    `Canvas: ${state?.shareName || CANVAS_ID || 'unknown'}`,
+    `Screen: ${window.innerWidth}x${window.innerHeight}`,
+    '',
+    (input?.value || '').trim() || '(No message entered)'
+  ].join('\n');
+  try{
+    await navigator.clipboard.writeText(report);
+    if(status) status.textContent='Copied. Send this report to the project owner.';
+    showToast('Feedback report copied');
+  }catch(e){
+    if(status) status.textContent='Clipboard blocked. Select and copy your message manually.';
+    window.prompt('Copy feedback report', report);
+  }
+}
 
 // ── CANVAS HINT ───────────────────────────────────────────────────
 function updateCanvasHint(){
@@ -4680,13 +5442,152 @@ function renderAll(){
 // ── SAVE & LOAD ───────────────────────────────────────────────────
 const CANVAS_ID = new URLSearchParams(window.location.search).get('id')
 const SHARE_TOKEN = new URLSearchParams(window.location.search).get('share')
+const OWNER_AUTH_TOKEN = new URLSearchParams(window.location.search).get('auth')
 const SUPABASE_URL = 'https://tzzbinwvtuvjhynlmjzo.supabase.co'
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR6emJpbnd2dHV2amh5bmxtanpvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzcyMTQwNDgsImV4cCI6MjA5Mjc5MDA0OH0.J5evLhHjvW3hn280SelzkenehL1qj7uHjW8uG-3HvZY'
+function apiBearer(){return CANVAS_ID&&OWNER_AUTH_TOKEN?OWNER_AUTH_TOKEN:SUPABASE_KEY}
+
+let realtimeClient = null, collabChannel = null, collabUser = null, lastCursorSent = 0, remoteAutoLoadTimer = null
+const remoteCursors = new Map()
+function collabKey(){return state.remoteCanvasId || CANVAS_ID || null}
+function hashColor(seed){
+  const colors=['#6c71f0','#22d3ee','#f472b6','#fbbf24','#34d399','#f97316','#a78bfa']
+  let h=0; for(let i=0;i<seed.length;i++) h=(h*31+seed.charCodeAt(i))>>>0
+  return colors[h%colors.length]
+}
+function getCollabUser(){
+  if(collabUser) return collabUser
+  const key = guestKey || OWNER_AUTH_TOKEN?.slice(-12) || Math.random().toString(36).slice(2)
+  const name = guestDisplayName ? guestDisplayName() : 'User'
+  collabUser = {key,name,color:hashColor(key),mode:ACCESS_MODE}
+  return collabUser
+}
+function updateCollabStatus(count=0){
+  const el=$('collab-status')
+  if(!el) return
+  el.classList.toggle('offline', !collabChannel)
+  const others=Math.max(0,count-1)
+  el.textContent=others ? `${others} live` : 'Live'
+  el.title=others ? `${others} other user${others===1?'':'s'} currently here` : 'Realtime ready'
+}
+function refreshCollabIdentity(){
+  collabUser = null
+  if(collabChannel) collabChannel.track({...getCollabUser(),activeAt:Date.now()})
+}
+function initRealtimeCollab(){
+  const key=collabKey()
+  if(!key || !window.supabase?.createClient) return
+  try{
+    realtimeClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
+      realtime:{params:{eventsPerSecond:8}}
+    })
+    collabChannel = realtimeClient.channel(`canvas:${key}`, {
+      config:{presence:{key:getCollabUser().key},broadcast:{self:false}}
+    })
+    collabChannel.on('presence',{event:'sync'},()=>{
+      const stateMap=collabChannel.presenceState()
+      const users=Object.values(stateMap).flat()
+      updateCollabStatus(users.length)
+      cleanupRemoteCursors(new Set(users.map(u=>u.key)))
+    })
+    collabChannel.on('broadcast',{event:'cursor'},payload=>renderRemoteCursor(payload.payload))
+    collabChannel.on('broadcast',{event:'saved'},payload=>handleRemoteSaved(payload.payload))
+    collabChannel.subscribe(status=>{
+      if(status==='SUBSCRIBED'){
+        collabChannel.track({...getCollabUser(),activeAt:Date.now()})
+        updateCollabStatus(1)
+      }
+    })
+  }catch(e){
+    collabChannel=null
+    updateCollabStatus(0)
+  }
+}
+function cleanupRemoteCursors(activeKeys){
+  remoteCursors.forEach((entry,key)=>{
+    if(!activeKeys.has(key)){
+      entry.el.remove()
+      remoteCursors.delete(key)
+    }
+  })
+}
+function broadcastCursor(e){
+  if(!collabChannel || document.body.classList.contains('mobile-guard-active')) return
+  const now=Date.now()
+  if(now-lastCursorSent<90) return
+  const r=canvasArea.getBoundingClientRect()
+  if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom) return
+  lastCursorSent=now
+  const p=screenToWorld(e.clientX,e.clientY)
+  collabChannel.send({type:'broadcast',event:'cursor',payload:{...getCollabUser(),x:p.x,y:p.y,t:now}})
+}
+function renderRemoteCursor(data){
+  if(!data || data.key===getCollabUser().key) return
+  const layer=$('remote-cursors')
+  if(!layer) return
+  let entry=remoteCursors.get(data.key)
+  if(!entry){
+    const el=document.createElement('div')
+    el.className='remote-cursor'
+    el.innerHTML=`<svg viewBox="0 0 24 24"><path d="M4 2l16 10-7 1.5L9 22z" fill="var(--cursor-color)"/></svg><div class="remote-cursor-label"></div>`
+    layer.appendChild(el)
+    entry={el,lastSeen:0}
+    remoteCursors.set(data.key,entry)
+  }
+  const p=worldToScreen(data.x,data.y)
+  const r=canvasArea.getBoundingClientRect()
+  entry.el.style.setProperty('--cursor-color',data.color||'#6c71f0')
+  entry.el.style.transform=`translate(${p.x-r.left}px,${p.y-r.top}px)`
+  entry.el.querySelector('.remote-cursor-label').textContent=data.name||'Guest'
+  entry.el.classList.remove('idle')
+  entry.lastSeen=Date.now()
+}
+setInterval(()=>{
+  const now=Date.now()
+  remoteCursors.forEach(entry=>entry.el.classList.toggle('idle',now-entry.lastSeen>2500))
+},1200)
+function broadcastSaved(){
+  if(!collabChannel) return
+  collabChannel.send({type:'broadcast',event:'saved',payload:{...getCollabUser(),savedAt:Date.now()}})
+}
+function handleRemoteSaved(data){
+  if(!data || data.key===getCollabUser().key) return
+  if(canAutoApplyRemoteChange()){
+    clearTimeout(remoteAutoLoadTimer)
+    remoteAutoLoadTimer = setTimeout(()=>loadLatestRemoteChanges({auto:true,name:data.name||'Someone'}), 250)
+    return
+  }
+  const box=$('remote-change-toast'), name=$('remote-change-name')
+  if(name) name.textContent=data.name||'Someone'
+  if(box) box.classList.add('show')
+  showToast(`${data.name||'Someone'} saved newer changes`)
+}
+function canAutoApplyRemoteChange(){
+  return !hasUnsavedChanges && !saveInProgress && !interaction && !state.editingId
+}
+async function loadLatestRemoteChanges(opts={}){
+  $('remote-change-toast')?.classList.remove('show')
+  if(!opts.auto && hasUnsavedChanges && !window.confirm('You have unsaved local changes. Load latest anyway?')) return
+  if(opts.auto && !canAutoApplyRemoteChange()) return
+  const view={activeId:state.activeId,pan:{...state.pan},zoom:state.zoom,selectedIds:[...state.selectedIds],tool:state.tool}
+  await loadCanvas()
+  if(state.canvases.some(c=>c.id===view.activeId)) state.activeId=view.activeId
+  state.pan=view.pan
+  state.zoom=view.zoom
+  state.selectedIds=view.selectedIds.filter(id=>getItem(id))
+  state.tool=view.tool
+  renderAll()
+  updateProps()
+  renderLayers()
+  setTool(view.tool)
+  showToast(opts.auto ? `${opts.name} updated the canvas` : 'Latest changes loaded')
+}
 
 const THUMB_SAVE_INTERVAL = 30000
 let saveTimer, retrySaveTimer, thumbTimer, thumbInProgress = false, thumbDirty = false, lastThumbSave = 0
 let hasUnsavedChanges = false, saveInProgress = false, lastSaveAttempt = 0, saveFailureCount = 0
 let lastPersistedState = null
+let accessRequestPollTimer = null, lastPendingAccessCount = 0
 function canvasRestFilter(){
   if(CANVAS_ID) return `id=eq.${encodeURIComponent(CANVAS_ID)}`
   if(SHARE_TOKEN) return `share_token=eq.${encodeURIComponent(SHARE_TOKEN)}`
@@ -4716,6 +5617,7 @@ async function saveStateOnly(){
       lastPersistedState = buildPersistedState()
       clearSaveRetry()
       showSaveIndicator('saved')
+      broadcastSaved()
     }
     else queueSaveRetry('error')
   }catch(err){
@@ -4726,7 +5628,7 @@ async function saveStateOnly(){
 }
 
 async function patchCanvasState(nextState, filter){
-  if(SHARE_TOKEN&&ACCESS_MODE==='edit'){
+  if(SHARE_TOKEN&&(ACCESS_MODE==='edit'||ACCESS_MODE==='comment')){
     const rpcRes = await fetch(`${SUPABASE_URL}/rest/v1/rpc/update_shared_canvas`,{
       method:'POST',
       headers:{
@@ -4734,7 +5636,7 @@ async function patchCanvasState(nextState, filter){
         'apikey':SUPABASE_KEY,
         'Authorization':`Bearer ${SUPABASE_KEY}`
       },
-      body:JSON.stringify({p_token:SHARE_TOKEN,p_state:nextState})
+      body:JSON.stringify({p_token:SHARE_TOKEN,p_guest_key:guestKey,p_state:nextState})
     })
     if(rpcRes.ok){
       const updated = await rpcRes.json().catch(()=>false)
@@ -4747,7 +5649,7 @@ async function patchCanvasState(nextState, filter){
     headers:{
       'Content-Type':'application/json',
       'apikey':SUPABASE_KEY,
-      'Authorization':`Bearer ${SUPABASE_KEY}`,
+      'Authorization':`Bearer ${apiBearer()}`,
       'Prefer':'return=minimal'
     },
     body:JSON.stringify({state:nextState})
@@ -4758,7 +5660,11 @@ function buildPersistedState(){
   const nextState = {
     canvases:state.canvases,nextId:state.nextId,
     nextGroupId:state.nextGroupId,shapeDefaults:state.shapeDefaults,
-    minimapEnabled:state.minimapEnabled
+    minimapEnabled:state.minimapEnabled,
+    sharedActivity:state.sharedActivity
+  }
+  if(SHARE_TOKEN&&ACCESS_MODE==='edit'){
+    nextState.sharedActivity={lastEditor:guestDisplayName(),lastEditedAt:Date.now()}
   }
   if(SHARE_TOKEN&&ACCESS_MODE==='comment'&&lastPersistedState?.canvases){
     const commentCanvases = JSON.parse(JSON.stringify(lastPersistedState.canvases))
@@ -4843,7 +5749,7 @@ async function saveCanvasThumbnail(){
         method:'POST',
         headers:{
           'apikey':SUPABASE_KEY,
-          'Authorization':`Bearer ${SUPABASE_KEY}`,
+          'Authorization':`Bearer ${apiBearer()}`,
           'Content-Type':'image/jpeg',
           'x-upsert':'true'
         },
@@ -4861,7 +5767,7 @@ async function saveCanvasThumbnail(){
         headers:{
           'Content-Type':'application/json',
           'apikey':SUPABASE_KEY,
-          'Authorization':`Bearer ${SUPABASE_KEY}`,
+          'Authorization':`Bearer ${apiBearer()}`,
           'Prefer':'return=minimal'
         },
         body:JSON.stringify({thumbnail_url: thumbnailUrl})
@@ -4880,6 +5786,7 @@ async function loadCanvas(){
   if(!query) return
   const row=await fetchCanvasRow(query)
   if(row){
+    state.remoteCanvasId=row.id||CANVAS_ID||state.remoteCanvasId
     state.shareToken=row.share_token||null
     state.sharePermission=validSharePermission(row.share_permission)
     state.shareName=row.name||''
@@ -4895,6 +5802,7 @@ async function loadCanvas(){
     state.minimapEnabled=saved.minimapEnabled!==false
     state.collapsedGroups=saved.collapsedGroups||{}
     state.lockAspect=!!saved.lockAspect
+    state.sharedActivity=saved.sharedActivity||null
     state.activeId=state.canvases[0]?.id||1
     state.canvases.forEach(c=>{
       if(!c.history) c.history=[]
@@ -4924,8 +5832,8 @@ async function fetchCanvasRow(query){
       }
     }catch(e){}
   }
-  const res=await fetch(`${SUPABASE_URL}/rest/v1/canvases?${query}&select=state,name,share_token,share_permission`,{
-    headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${SUPABASE_KEY}`}
+  const res=await fetch(`${SUPABASE_URL}/rest/v1/canvases?${query}&select=id,state,name,share_token,share_permission`,{
+    headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${apiBearer()}`}
   })
   const data=await res.json()
   return data[0]
@@ -4935,10 +5843,38 @@ function showSaveIndicator(status){
   const el=document.getElementById('save-indicator')
   if(!el) return
   el.classList.remove('failed','offline')
-  if(status==='saving'){el.textContent='Saving...';el.style.color='#f0a840'}
-  if(status==='saved') {el.textContent='Saved';el.style.color='#52c97a'}
-  if(status==='error') {el.textContent='Save failed';el.style.color='';el.classList.add('failed')}
-  if(status==='offline') {el.textContent='Offline';el.style.color='';el.classList.add('offline')}
+  if(status==='saving'){el.textContent='Saving changes...';el.style.color='#f0a840';el.title='Your latest changes are being saved.'}
+  if(status==='saved') {el.textContent='All changes saved';el.style.color='#52c97a';el.title='Your canvas is saved.'}
+  if(status==='error') {el.textContent='Save failed - retrying';el.style.color='';el.title='The app will keep retrying. Do not close this tab yet.';el.classList.add('failed')}
+  if(status==='offline') {el.textContent='Offline - retrying';el.style.color='';el.title='Reconnect to finish saving these changes.';el.classList.add('offline')}
+}
+function updateActivityBadge(){
+  const el=$('activity-badge')
+  if(!el) return
+  el.classList.remove('owner','view','comment','edit')
+  if(!SHARE_TOKEN){
+    el.textContent=state.sharedActivity?.lastEditor ? `Owner · Last: ${state.sharedActivity.lastEditor}` : 'Owner'
+    el.classList.add('owner')
+    el.title=state.sharedActivity?.lastEditedAt
+      ? `Last shared edit by ${state.sharedActivity.lastEditor} at ${new Date(state.sharedActivity.lastEditedAt).toLocaleString()}`
+      : 'You own this canvas'
+  }else if(ACCESS_MODE==='view'){
+    el.textContent=guestName ? `Viewing: ${guestName}` : 'Viewing link'
+    el.classList.add('view')
+    el.title='Shared view-only mode'
+  }else if(ACCESS_MODE==='comment'){
+    el.textContent=guestAccessStatus==='approved'
+      ? (guestName ? `Commenting: ${guestName}` : 'Commenting link')
+      : guestAccessStatus==='rejected' ? 'Access rejected' : 'Waiting approval'
+    el.classList.add('comment')
+    el.title='Shared comment mode'
+  }else{
+    el.textContent=guestAccessStatus==='approved'
+      ? (guestName ? `Editing: ${guestName}` : 'Editing link')
+      : guestAccessStatus==='rejected' ? 'Access rejected' : 'Waiting approval'
+    el.classList.add('edit')
+    el.title='Shared edit mode'
+  }
 }
 window.addEventListener('offline',()=>showSaveIndicator('offline'))
 window.addEventListener('online',()=>{
@@ -4977,9 +5913,15 @@ document.addEventListener('mouseup', () => {
 
 // ── INIT ──────────────────────────────────────────────────────────
 async function init(){
+  loadGuestIdentity();
   initBgPresets(); buildAlignTools();
   await loadCanvas();
+  await ensureGuestAccess();
+  updateActivityBadge();
+  updateMobileGuard();
   renderAll();
+  initRealtimeCollab();
+  requestGuestName();
   if(ac().items.length) setTimeout(fitAll, 300);
   
   // Shared permission modes
@@ -5028,6 +5970,7 @@ async function init(){
   } else {
     showToast('Vision Canvas v3 — ? for shortcuts ✦');
   }
+  startOwnerAccessPolling();
 }
 
 $('share-btn').addEventListener('click', () => {
@@ -5035,8 +5978,25 @@ $('share-btn').addEventListener('click', () => {
   renderShareModal()
   $('share-modal').classList.add('show')
 })
+$('guest-save-btn')?.addEventListener('click',()=>closeGuestModal($('guest-name-input').value))
+$('guest-skip-btn')?.addEventListener('click',()=>{
+  if(guestAccessStatus==='pending'||guestAccessStatus==='rejected'||guestAccessStatus==='setup-needed') {
+    $('guest-modal')?.classList.remove('show')
+    return
+  }
+  closeGuestModal('Guest')
+})
+$('guest-name-input')?.addEventListener('keydown',e=>{
+  if(e.key==='Enter') closeGuestModal(e.currentTarget.value)
+})
 $('share-mode').addEventListener('change',renderSharePreview)
 $('share-cancel').addEventListener('click', ()=>$('share-modal').classList.remove('show'))
+document.querySelectorAll('[data-share-card]').forEach(card=>{
+  card.addEventListener('click',()=>{
+    $('share-mode').value=card.dataset.shareCard
+    renderSharePreview()
+  })
+})
 $('share-copy-existing').addEventListener('click',()=>{
   if(!state.shareToken){showToast('No shared link yet');return}
   navigator.clipboard.writeText(shareUrlForToken(state.shareToken))
@@ -5047,7 +6007,7 @@ $('share-disable').addEventListener('click',async()=>{
   const res=await updateShareSettings(null,'view')
   if(res.ok){
     state.shareToken=null; state.sharePermission='view'
-    renderShareModal(); showToast('Sharing disabled')
+    renderShareModal(); updateActivityBadge(); showToast('Sharing disabled')
   }else showToast('Could not disable sharing')
 })
 $('share-copy').addEventListener('click', async () => {
@@ -5060,6 +6020,7 @@ $('share-copy').addEventListener('click', async () => {
     state.shareToken=token; state.sharePermission=mode
     const shareUrl = shareUrlForToken(token)
     navigator.clipboard.writeText(shareUrl)
+    updateActivityBadge()
     renderShareModal()
     showToast(`${mode==='view'?'View':mode==='comment'?'Comment':'Edit'} link copied!`)
   }else showToast('Could not update share link')
@@ -5069,23 +6030,28 @@ function renderShareModal(){
   const token=state.shareToken
   $('share-mode').value=validSharePermission(state.sharePermission)
   $('share-link-input').value=shareUrlForToken(token)
+  $('share-link-input').classList.toggle('has-link',!!token)
   $('share-status').textContent=token
-    ? `Sharing is on. Current permission: ${shareLabel(state.sharePermission)}.`
-    : 'Create a link to share this canvas.'
+    ? `Link is active as ${shareLabel(state.sharePermission)}. Changing permission updates the same link.`
+    : 'Choose a permission, then Save & Copy to create a link.'
   renderSharePreview()
   $('share-disable').disabled=!token
   $('share-copy-existing').disabled=!token
+  renderAccessRequests()
 }
 function shareLabel(mode){
   return mode==='comment'?'Can comment':mode==='edit'?'Can edit':'View only'
 }
 function shareDescription(mode){
-  if(mode==='edit') return 'Anyone with the link can open and edit this canvas.'
-  if(mode==='comment') return 'Anyone with the link can view and add comment pins only.'
-  return 'Anyone with the link can view this canvas without logging in.'
+  if(mode==='edit') return 'Best for trusted collaborators. Anyone with this link can change and save the canvas.'
+  if(mode==='comment') return 'Good for feedback. Link holders can add comment pins without normal editing tools.'
+  return 'Best for review. Anyone with this link can view, pan, and zoom without logging in.'
 }
 function renderSharePreview(){
   const mode=validSharePermission($('share-mode').value)
+  document.querySelectorAll('[data-share-card]').forEach(card=>{
+    card.classList.toggle('active',card.dataset.shareCard===mode)
+  })
   $('share-preview').innerHTML=`<strong>${shareLabel(mode)}</strong><span>${shareDescription(mode)}</span>`
 }
 async function updateShareSettings(token,permission){
@@ -5094,10 +6060,145 @@ async function updateShareSettings(token,permission){
     headers: {
       'Content-Type': 'application/json',
       'apikey': SUPABASE_KEY,
-      'Authorization': `Bearer ${SUPABASE_KEY}`
+      'Authorization': `Bearer ${apiBearer()}`
     },
     body: JSON.stringify({ share_token: token, share_permission: permission })
   })
+}
+
+async function renderAccessRequests(){
+  const box=$('access-requests')
+  if(!box||!CANVAS_ID) return
+  try{
+    const rows=await fetchAccessRequests()
+    const pending=(rows||[]).filter(r=>r.status==='pending')
+    const approved=(rows||[]).filter(r=>r.status==='approved')
+    updateShareRequestBadge(pending.length)
+    box.innerHTML=`<h4>Pending requests</h4>${
+      pending.length ? pending.map(r=>`
+        <div class="access-request-row" data-request-id="${r.id}">
+          <div>
+            <div class="access-request-name">${escapeHtml(r.guest_name||'Guest')}</div>
+            <div class="access-request-meta">${shareLabel(r.requested_permission)} · ${new Date(r.created_at).toLocaleString()}</div>
+          </div>
+          <div class="access-request-actions">
+            <button class="mini-btn approve" data-access-action="approved">Approve</button>
+            <button class="mini-btn reject" data-access-action="rejected">Reject</button>
+          </div>
+        </div>`).join('') : '<div class="access-empty">No pending requests.</div>'
+    }`
+    box.insertAdjacentHTML('beforeend',`
+      <div class="access-section">
+        <h4>Approved people</h4>
+        ${approved.length ? approved.map(r=>accessRowHtml(r,`
+          <button class="mini-btn reject" data-access-action="rejected">Revoke</button>
+        `,'approved')).join('') : '<div class="access-empty">No approved people yet.</div>'}
+      </div>
+    `)
+    box.querySelectorAll('[data-access-action]').forEach(btn=>{
+      btn.addEventListener('click',()=>setAccessRequestStatus(
+        btn.closest('[data-request-id]').dataset.requestId,
+        btn.dataset.accessAction
+      ))
+    })
+  }catch(e){
+    box.innerHTML='<h4>Access requests</h4><div class="access-empty">Run the access approval SQL to enable requests.</div>'
+  }
+}
+
+function accessRowHtml(r,actions,statusClass=''){
+  const stamp=r.updated_at||r.created_at
+  return `<div class="access-request-row" data-request-id="${r.id}">
+    <div>
+      <div class="access-request-name">${escapeHtml(r.guest_name||'Guest')} ${statusClass?`<span class="access-status-pill ${statusClass}">${statusClass}</span>`:''}</div>
+      <div class="access-request-meta">${shareLabel(r.requested_permission)} · ${new Date(stamp).toLocaleString()}</div>
+    </div>
+    <div class="access-request-actions">${actions}</div>
+  </div>`
+}
+
+function accessActivityHtml(a){
+  const verb={
+    requested:'requested access',
+    approved:'was approved',
+    revoked:'access was revoked',
+    saved:'saved changes'
+  }[a.action]||a.action
+  const detail=a.detail?` · ${shareLabel(a.detail)||a.detail}`:''
+  return `<div class="access-activity-row">
+    <span><strong>${escapeHtml(a.guest_name||'Guest')}</strong> ${escapeHtml(verb)}${escapeHtml(detail)}</span>
+    <span class="access-activity-time">${new Date(a.created_at).toLocaleString()}</span>
+  </div>`
+}
+
+async function fetchAccessRequests(){
+  const res=await fetch(`${SUPABASE_URL}/rest/v1/rpc/list_canvas_access_requests`,{
+    method:'POST',
+    headers:{
+      'Content-Type':'application/json',
+      'apikey':SUPABASE_KEY,
+      'Authorization':`Bearer ${apiBearer()}`
+    },
+    body:JSON.stringify({p_canvas_id:CANVAS_ID})
+  })
+  if(!res.ok) throw new Error('request list failed')
+  return res.json()
+}
+
+async function fetchAccessActivity(){
+  const res=await fetch(`${SUPABASE_URL}/rest/v1/rpc/list_canvas_access_activity`,{
+    method:'POST',
+    headers:{
+      'Content-Type':'application/json',
+      'apikey':SUPABASE_KEY,
+      'Authorization':`Bearer ${apiBearer()}`
+    },
+    body:JSON.stringify({p_canvas_id:CANVAS_ID})
+  })
+  if(!res.ok) throw new Error('activity list failed')
+  return res.json()
+}
+
+function updateShareRequestBadge(count){
+  lastPendingAccessCount=count
+  const btn=$('share-btn'), badge=$('share-pending-badge')
+  if(!btn||!badge) return
+  btn.classList.toggle('has-requests',count>0)
+  badge.textContent=count>9?'9+':String(count)
+  btn.title=count>0?`${count} pending access request${count===1?'':'s'}`:'Share canvas'
+}
+
+function startOwnerAccessPolling(){
+  if(!CANVAS_ID||SHARE_TOKEN||accessRequestPollTimer) return
+  refreshOwnerAccessRequests(false)
+  accessRequestPollTimer=setInterval(()=>refreshOwnerAccessRequests(true),8000)
+}
+
+async function refreshOwnerAccessRequests(showToastOnNew=false){
+  if(!CANVAS_ID||SHARE_TOKEN) return
+  try{
+    const rows=await fetchAccessRequests()
+    const pending=(rows||[]).filter(r=>r.status==='pending')
+    if(showToastOnNew&&pending.length>lastPendingAccessCount){
+      showToast(`${pending.length} access request${pending.length===1?'':'s'} pending`)
+    }
+    updateShareRequestBadge(pending.length)
+    if($('share-modal')?.classList.contains('show')) renderAccessRequests()
+  }catch(e){}
+}
+
+async function setAccessRequestStatus(id,status){
+  const res=await fetch(`${SUPABASE_URL}/rest/v1/rpc/set_canvas_access_request`,{
+    method:'POST',
+    headers:{
+      'Content-Type':'application/json',
+      'apikey':SUPABASE_KEY,
+      'Authorization':`Bearer ${apiBearer()}`
+    },
+    body:JSON.stringify({p_request_id:id,p_status:status})
+  })
+  if(res.ok){showToast(status==='approved'?'Access approved':'Access rejected'); renderAccessRequests(); refreshOwnerAccessRequests(false)}
+  else showToast('Could not update request')
 }
 
 init();
