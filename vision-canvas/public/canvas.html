@@ -643,20 +643,28 @@ body.exporting-canvas .frame-label{display:none!important;}
   font-size:10px;color:var(--text);}
 
 /* COMMAND MENU */
-#command-modal{align-items:flex-start;padding-top:12vh;}
-#command-modal .modal-box{width:min(560px,calc(100vw - 28px));padding:10px;gap:8px;}
-#command-input{height:38px;background:var(--bg3);border:1px solid var(--border2);
-  border-radius:8px;color:var(--text);font-family:'Outfit',sans-serif;font-size:14px;
-  outline:none;padding:0 12px;}
-#command-input:focus{border-color:var(--accent);}
-#command-list{display:flex;flex-direction:column;gap:2px;max-height:360px;overflow-y:auto;}
+#command-modal{align-items:flex-start;padding-top:12vh;background:rgba(8,8,12,0.45);backdrop-filter:blur(16px);}
+#command-modal .modal-box{width:min(560px,calc(100vw - 28px));padding:12px;gap:12px;
+  background:rgba(13,13,20,0.85);border:1px solid rgba(255,255,255,0.12);
+  border-radius:16px;box-shadow:0 24px 64px rgba(0,0,0,0.7);backdrop-filter:blur(24px);}
+#command-input{height:44px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);
+  border-radius:10px;color:var(--text);font-family:'Outfit',sans-serif;font-size:14px;
+  outline:none;padding:0 16px;transition:border-color 0.2s;}
+#command-input:focus{border-color:var(--accent);background:rgba(255,255,255,0.05);}
+#command-list{display:flex;flex-direction:column;gap:4px;max-height:380px;overflow-y:auto;padding-right:4px;}
 .cmd-item{display:flex;align-items:center;justify-content:space-between;gap:12px;
-  padding:9px 10px;border-radius:7px;color:var(--text2);font-size:13px;cursor:pointer;}
-.cmd-item:hover,.cmd-item.active{background:rgba(108,113,240,.14);color:var(--text);}
-.cmd-title{display:flex;flex-direction:column;gap:2px;}
-.cmd-title span:last-child{font-size:11px;color:var(--text3);}
-.cmd-key{font-size:10px;color:var(--text3);border:1px solid var(--border);
-  border-radius:4px;padding:1px 5px;white-space:nowrap;}
+  padding:10px 14px;border-radius:10px;color:var(--text2);font-size:13px;cursor:pointer;
+  transition:background 0.15s, color 0.15s, transform 0.15s;}
+.cmd-item:hover,.cmd-item.active{
+  background:linear-gradient(90deg, rgba(139,143,244,0.18) 0%, rgba(139,143,244,0.06) 100%);
+  color:var(--text);transform:translateX(2px);
+}
+.cmd-title{display:flex;flex-direction:column;gap:3px;}
+.cmd-title span:first-child{font-weight:500;}
+.cmd-title span:last-child{font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;}
+.cmd-key{font-size:9px;font-family:'Outfit',monospace;color:var(--text2);
+  background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);
+  border-radius:6px;padding:2px 7px;white-space:nowrap;box-shadow:0 2px 4px rgba(0,0,0,0.2);}
 
 /* TOAST */
 #toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);
@@ -929,14 +937,15 @@ body.exporting-canvas .frame-label{display:none!important;}
             <label class="prop-check"><input type="checkbox" id="fx-shadow"> Drop shadow</label>
             <div class="prop-2col">
               <div class="prop-group"><span class="lbl">Blur</span><input type="number" id="fx-shadow-blur" min="0" max="120" step="1"></div>
-              <div class="prop-group"><span class="lbl">Y</span><input type="number" id="fx-shadow-y" min="-80" max="120" step="1"></div>
+              <div class="prop-group"><span class="lbl">Round</span><input type="number" id="fx-radius" min="0" max="120" step="1"></div>
             </div>
             <div class="prop-2col">
-              <div class="prop-group"><span class="lbl">Round</span><input type="number" id="fx-radius" min="0" max="120" step="1"></div>
-              <div class="color-row" style="padding:0;">
-                <div class="color-swatch"><input type="color" id="fx-shadow-color" value="#000000"></div>
-                <span class="color-label">Shadow</span>
-              </div>
+              <div class="prop-group"><span class="lbl">X</span><input type="number" id="fx-shadow-x" min="-120" max="120" step="1"></div>
+              <div class="prop-group"><span class="lbl">Y</span><input type="number" id="fx-shadow-y" min="-120" max="120" step="1"></div>
+            </div>
+            <div class="color-row" style="padding:0; gap:6px;">
+              <div class="color-swatch"><input type="color" id="fx-shadow-color" value="#000000"></div>
+              <span class="color-label">Shadow</span>
             </div>
           </div>
           <div id="text-props">
@@ -2331,8 +2340,12 @@ function fitTextHeight(item,el,shrink=false){
   if(!item||!(item.type==='text'||item.type==='note')) return;
   el=el||canvasWorld.querySelector(`[data-id="${item.id}"]`);
   const tc=el?.querySelector('.text-content'); if(!tc) return;
+  const oldH=tc.style.height;
+  tc.style.height='auto';
+  const scrollH=tc.scrollHeight;
+  tc.style.height=oldH;
   const minH=item.type==='note'?90:28;
-  const nextH=Math.max(minH,Math.ceil(tc.scrollHeight)+2);
+  const nextH=Math.max(minH,Math.ceil(scrollH)+2);
   if(shrink||nextH>item.h){
     item.h=nextH;
     el.style.height=item.h+'px';
@@ -2505,13 +2518,28 @@ function applyItemStyle(el,item){
   el.style.display=item.visible?'':'none';
   el.style.mixBlendMode=item.blendMode||'normal';
   el.style.borderRadius=(item.radius||0)+'px';
-  el.style.boxShadow=item.shadow?`0 ${item.shadowY||10}px ${item.shadowBlur||18}px ${item.shadowColor||'rgba(0,0,0,.35)'}`:'none';
+
+  // Calculate shadow styles dynamically:
+  // If the item is a text element with a transparent background, we apply no box-shadow to the wrapper
+  // and instead use filter: drop-shadow on the inner text container to shadow characters only (Figma-style).
+  // If it's a sticky note or has a background fill, the box-shadow is cast by the container.
+  const shadowStr=item.shadow?`${item.shadowX??0}px ${item.shadowY??10}px ${item.shadowBlur??18}px ${item.shadowColor||'rgba(0,0,0,.35)'}`:'none';
+  const isTextLike=item.type==='text'||item.type==='note';
+  const hasBg=isTextLike && (item.bgColor || item.type==='note');
+
+  if (isTextLike && !hasBg) {
+    el.style.boxShadow='none';
+  } else {
+    el.style.boxShadow=shadowStr;
+  }
+
   el.classList.toggle('locked-item',!!item.locked);
   el.classList.toggle('image-item',item.type==='image');
   el.classList.toggle('mask-editing',item.type==='image'&&state.cropAdjustId===item.id);
   el.classList.toggle('boolean-editing',item.type==='shape'&&item.shape==='boolean'&&state.booleanAdjustId===item.id);
   el.classList.toggle('multi-sel',state.selectedIds.length>1&&state.selectedIds.includes(item.id));
   el.classList.toggle('comment-open',state.selectedIds.includes(item.id)&&item.type==='comment');
+  
   if(item.type==='text'||item.type==='note'){
     if(item.fontFamily) ensureFontLoaded(item.fontFamily);
     const tc=el.querySelector('.text-content');
@@ -2538,6 +2566,13 @@ function applyItemStyle(el,item){
       tc.style.whiteSpace='pre-wrap';
       tc.style.lineHeight=item.lineHeight||1.4;
       tc.style.padding=(item.textPadding??(item.type==='note'?12:8))+'px';
+      
+      // Apply shadow dynamically to text content using SVG drop-shadow filter
+      if (item.shadow && !hasBg) {
+        tc.style.filter=`drop-shadow(${item.shadowX??0}px ${item.shadowY??10}px ${item.shadowBlur??18}px ${item.shadowColor||'rgba(0,0,0,.35)'})`;
+      } else {
+        tc.style.filter='none';
+      }
     }
   }
   if(item.type==='shape'){
@@ -3035,7 +3070,13 @@ function updateSelectionOverlay(){
   if(!item||!item.visible){selOverlay.style.display='none';return;}
   if(item.type==='comment'){selOverlay.style.display='none';return;}
   const sx=item.x*state.zoom+state.pan.x,sy=item.y*state.zoom+state.pan.y;
-  selOverlay.style.cssText=`display:block;left:${sx}px;top:${sy}px;width:${item.w*state.zoom}px;height:${item.h*state.zoom}px;transform:rotate(${item.rot}deg);position:absolute;pointer-events:none;transform-origin:center center;`;
+  
+  // Disable transition physics during mouse dragging/resizing/rotation to avoid lagging the cursor,
+  // but use a smooth spring cubic-bezier transition when selection changes.
+  const isInteracting = !!interaction;
+  const transitionStr = isInteracting ? 'none' : 'left 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), top 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), width 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), height 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1)';
+  
+  selOverlay.style.cssText=`display:block;left:${sx}px;top:${sy}px;width:${item.w*state.zoom}px;height:${item.h*state.zoom}px;transform:rotate(${item.rot}deg);position:absolute;pointer-events:none;transform-origin:center center;transition:${transitionStr};`;
   const locked=item.locked;
   selOverlay.querySelectorAll('.sel-handle,.sel-rotate-handle,.sel-rotate-line')
     .forEach(h=>h.style.display=locked?'none':'');
@@ -3047,7 +3088,11 @@ function updateMultiSelBox(){
   if(!items.length){multiSelBox.style.display='none';return;}
   const minX=Math.min(...items.map(i=>i.x)),minY=Math.min(...items.map(i=>i.y));
   const maxX=Math.max(...items.map(i=>i.x+i.w)),maxY=Math.max(...items.map(i=>i.y+i.h));
-  multiSelBox.style.cssText=`display:block;position:absolute;left:${minX*state.zoom+state.pan.x}px;top:${minY*state.zoom+state.pan.y}px;width:${(maxX-minX)*state.zoom}px;height:${(maxY-minY)*state.zoom}px;border:1.5px solid var(--accent2);border-radius:2px;pointer-events:none;z-index:44;`;
+  
+  const isInteracting = !!interaction;
+  const transitionStr = isInteracting ? 'none' : 'left 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), top 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), width 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), height 0.18s cubic-bezier(0.34, 1.56, 0.64, 1)';
+  
+  multiSelBox.style.cssText=`display:block;position:absolute;left:${minX*state.zoom+state.pan.x}px;top:${minY*state.zoom+state.pan.y}px;width:${(maxX-minX)*state.zoom}px;height:${(maxY-minY)*state.zoom}px;border:1.5px solid var(--accent2);border-radius:2px;pointer-events:none;z-index:44;transition:${transitionStr};`;
   $('ms-info').textContent=`${items.length} items`;
 }
 
@@ -3231,6 +3276,7 @@ function updateProps(){
   $('blend-mode').value=item.blendMode||'normal';
   $('fx-shadow').checked=!!item.shadow;
   $('fx-shadow-blur').value=item.shadowBlur??18;
+  $('fx-shadow-x').value=item.shadowX??0;
   $('fx-shadow-y').value=item.shadowY??10;
   $('fx-radius').value=item.radius??0;
   setColorControl('fx-shadow-color',shadowColorHex(item),'#000000');
@@ -3306,7 +3352,7 @@ function updateProps(){
     }
     
     $('t-pad').value=item.textPadding??(item.type==='note'?12:8);
-    if(item.bgColor) $('t-bg').value=item.bgColor;
+    $('t-bg').value=item.bgColor||'#000000';
     document.querySelectorAll('.align-btn-ui').forEach(b=>
         b.classList.toggle('active',b.dataset.align===item.textAlign));
   }
@@ -3434,6 +3480,7 @@ function updateEffectProp(key,value,withHistory=false){
 $('blend-mode').addEventListener('change',e=>updateEffectProp('blendMode',e.target.value,true));
 $('fx-shadow').addEventListener('change',e=>updateEffectProp('shadow',e.target.checked,true));
 $('fx-shadow-blur').addEventListener('change',e=>updateEffectProp('shadowBlur',Math.max(0,parseFloat(e.target.value)||0),true));
+$('fx-shadow-x').addEventListener('change',e=>updateEffectProp('shadowX',parseFloat(e.target.value)||0,true));
 $('fx-shadow-y').addEventListener('change',e=>updateEffectProp('shadowY',parseFloat(e.target.value)||0,true));
 $('fx-radius').addEventListener('input',e=>updateEffectProp('radius',Math.max(0,parseFloat(e.target.value)||0),false));
 $('fx-radius').addEventListener('change',e=>updateEffectProp('radius',Math.max(0,parseFloat(e.target.value)||0),true));
@@ -3693,7 +3740,13 @@ $('t-bg').addEventListener('input',e=>{
 });
 $('t-bg-clear').addEventListener('click',()=>{
   const item=selFirst(); if(!item||(item.type!=='text'&&item.type!=='note')) return;
-  pushHistory(); item.bgColor='';
+  pushHistory();
+  item.bgColor='';
+  if(state.editingId===item.id){
+    try {
+      document.execCommand('backColor', false, 'rgba(0,0,0,0)');
+    } catch(e) {}
+  }
   const el=canvasWorld.querySelector(`[data-id="${item.id}"]`);
   if(el) applyItemStyle(el,item);
   updateProps(); scheduleSave(); scheduleThumb();
@@ -5116,7 +5169,7 @@ function renameItem(id){
 }
 function copyItemStyle(id){
   const item=getItem(id); if(!item) return;
-  const keys=['opacity','blendMode','shadow','shadowBlur','shadowY','shadowColor','radius',
+  const keys=['opacity','blendMode','shadow','shadowBlur','shadowX','shadowY','shadowColor','radius',
     'fill','stroke','strokeWidth','color','bgColor','fontSize','lineHeight','letterSpacing','textTransform','textPadding','fontFamily','fontWeight','textAlign',
     'fit','imgX','imgY','imgScale','imgBright','imgContrast','imgSaturate','imgBlur'];
   state.styleClipboard={style:{}};
