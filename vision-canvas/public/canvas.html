@@ -405,9 +405,9 @@ body.exporting-canvas .frame-label{display:none!important;}
 #text-props,#shape-props,#image-props,#effect-props{display:none;flex-direction:column;gap:7px;
   padding-top:7px;border-top:1px solid rgba(255,255,255,.075);margin-top:3px;}
 .text-align-row{display:flex;gap:4px;}
-.align-btn-ui{flex:1;height:32px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.09);
-  border-radius:8px;color:var(--text2);font-size:13px;cursor:pointer;transition:.15s;}
-.align-btn-ui:hover,.align-btn-ui.active{background:rgba(108,113,240,.15);
+.align-btn-ui, .format-btn-ui{flex:1;height:32px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.09);
+  border-radius:8px;color:var(--text2);font-size:13px;cursor:pointer;transition:.15s;display:inline-flex;align-items:center;justify-content:center;}
+.align-btn-ui:hover,.align-btn-ui.active, .format-btn-ui:hover, .format-btn-ui.active{background:rgba(108,113,240,.15);
   border-color:rgba(108,113,240,.3);color:var(--accent2);}
 .text-preset-row{display:grid;grid-template-columns:repeat(3,1fr);gap:5px;}
 .text-preset-btn{height:30px;border-radius:8px;border:1px solid rgba(255,255,255,.09);
@@ -425,6 +425,8 @@ body.exporting-canvas .frame-label{display:none!important;}
   padding:8px 10px;color:var(--text);font-family:'Outfit',sans-serif;font-size:13px;
   outline:none;width:100%;font-weight:600;}
 .font-select:focus{border-color:rgba(139,143,244,.5);}
+.font-select option {background-color:#12121a;color:#eeeef5;}
+.font-select optgroup {background-color:#12121a;color:#8b8ff4;font-weight:700;font-style:normal;}
 
 /* ALIGNMENT TOOLS */
 .align-tools-row{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;}
@@ -960,14 +962,42 @@ body.exporting-canvas .frame-label{display:none!important;}
               <div class="prop-group"><span class="lbl">Track</span><input type="number" id="t-track" step="0.1" min="-5" max="30" value="0"></div>
             </div>
             <select class="font-select" id="t-font">
-              <option value="'Inter', sans-serif">Inter</option>
-              <option value="'Outfit', sans-serif">Outfit</option>
-              <option value="'DM Sans', sans-serif">DM Sans</option>
-              <option value="'Syne', sans-serif">Syne</option>
-              <option value="Georgia, serif">Georgia</option>
-              <option value="'Times New Roman', serif">Times New Roman</option>
-              <option value="'JetBrains Mono','Courier New', monospace">JetBrains Mono</option>
-              <option value="'Courier New', monospace">Courier New</option>
+              <optgroup label="Sans-Serif">
+                <option value="'Inter', sans-serif">Inter</option>
+                <option value="'Outfit', sans-serif">Outfit</option>
+                <option value="'DM Sans', sans-serif">DM Sans</option>
+                <option value="'Montserrat', sans-serif">Montserrat</option>
+                <option value="'Space Grotesk', sans-serif">Space Grotesk</option>
+                <option value="'Poppins', sans-serif">Poppins</option>
+                <option value="'Plus Jakarta Sans', sans-serif">Plus Jakarta Sans</option>
+              </optgroup>
+              <optgroup label="Serif">
+                <option value="'Playfair Display', serif">Playfair Display</option>
+                <option value="'Cormorant Garamond', serif">Cormorant Garamond</option>
+                <option value="'Merriweather', serif">Merriweather</option>
+                <option value="'Lora', serif">Lora</option>
+                <option value="Georgia, serif">Georgia</option>
+                <option value="'Times New Roman', serif">Times New Roman</option>
+              </optgroup>
+              <optgroup label="Display & Decorative">
+                <option value="'Syne', sans-serif">Syne</option>
+                <option value="'Bungee', sans-serif">Bungee</option>
+                <option value="'Abril Fatface', serif">Abril Fatface</option>
+                <option value="'Unbounded', sans-serif">Unbounded</option>
+                <option value="'Cinzel', serif">Cinzel</option>
+              </optgroup>
+              <optgroup label="Monospace">
+                <option value="'JetBrains Mono', monospace">JetBrains Mono</option>
+                <option value="'Space Mono', monospace">Space Mono</option>
+                <option value="'Fira Code', monospace">Fira Code</option>
+                <option value="'Courier New', monospace">Courier New</option>
+              </optgroup>
+              <optgroup label="Handwritten">
+                <option value="'Reenie Beanie', cursive">Reenie Beanie</option>
+                <option value="'Caveat', cursive">Caveat</option>
+                <option value="'Pacifico', cursive">Pacifico</option>
+                <option value="'Shadows Into Light', cursive">Shadows Into Light</option>
+              </optgroup>
             </select>
             <div class="prop-2col">
               <select class="font-select" id="t-transform">
@@ -982,6 +1012,11 @@ body.exporting-canvas .frame-label{display:none!important;}
               <button class="align-btn-ui" data-align="left">⬅</button>
               <button class="align-btn-ui" data-align="center">↔</button>
               <button class="align-btn-ui" data-align="right">➡</button>
+            </div>
+            <div class="text-align-row" style="margin-top: 4px; gap: 4px;">
+              <button class="format-btn-ui" id="t-italic-btn" style="font-style:italic;" title="Italic">I</button>
+              <button class="format-btn-ui" id="t-underline-btn" style="text-decoration:underline;" title="Underline">U</button>
+              <button class="format-btn-ui" id="t-strike-btn" style="text-decoration:line-through;" title="Strikethrough">S</button>
             </div>
             <button class="act-btn" id="t-fit" style="height:30px;">Fit text box height</button>
             <div class="color-row">
@@ -2135,6 +2170,16 @@ function startTextEdit(id,el){
   range.collapse(false);
   const s=window.getSelection(); s.removeAllRanges(); s.addRange(range);
   const onBlur=()=>{
+    const clickedPanel = lastMousedownTarget && lastMousedownTarget.closest('#panels');
+    if (clickedPanel) {
+      // Selection was already saved in the mousedown capture handler
+      // (before the browser could clear it on blur)
+      return;
+    }
+    teardown();
+  };
+  const teardown=()=>{
+    if(state.editingId!==item.id) return;
     const nextText=normalizeTextContent(tc.innerText);
     const nextHtml=sanitizeTextHtml(tc.innerHTML);
     if(!textEditDirty&&nextText!==item.text) pushHistory();
@@ -2151,6 +2196,7 @@ function startTextEdit(id,el){
     applyItemStyle(el,item);
     renderLayers(); updateProps(); scheduleThumb();
   };
+  state.endActiveTextEdit = teardown;
   const onInput=()=>{
     if(!textEditDirty){pushHistory();textEditDirty=true;}
     item.text=normalizeTextContent(tc.innerText);
@@ -2172,7 +2218,7 @@ function startTextEdit(id,el){
 function sanitizeTextHtml(html){
   const t=document.createElement('template');
   t.innerHTML=html||'';
-  const allowedStyle=new Set(['color','background-color','font-size','font-family','font-weight','line-height','letter-spacing','text-transform']);
+  const allowedStyle=new Set(['color','background-color','font-size','font-family','font-weight','line-height','letter-spacing','text-transform','font-style','text-decoration']);
   function clean(node){
     if(node.nodeType===Node.TEXT_NODE) return escapeHtml(node.textContent||'');
     if(node.nodeType!==Node.ELEMENT_NODE) return '';
@@ -2231,8 +2277,26 @@ function applyInlineTextStyle(prop,value){
   const item=selFirst(); if(!item||state.editingId!==item.id) return false;
   const el=canvasWorld.querySelector(`[data-id="${item.id}"]`);
   const tc=el?.querySelector('.text-content');
-  const range=tc&&getEditableTextRange(tc,item.id);
-  if(!range) return false;
+  if(!tc) return false;
+
+  // If a panel input currently has focus (e.g. the font-size number input),
+  // we must briefly restore focus to the contentEditable so that
+  // range.extractContents() works correctly in Chrome. Without this,
+  // Chrome ignores addRange() while a form input holds focus and the
+  // extraction produces an empty fragment, causing the whole-text fallback.
+  const prevFocus = document.activeElement;
+  const needsRefocus = prevFocus && prevFocus !== tc && tc.contentEditable === 'true';
+  if (needsRefocus) {
+    // Temporarily suppress the blur→teardown while we swap focus
+    lastMousedownTarget = tc;
+    tc.focus();
+  }
+
+  const range = getEditableTextRange(tc, item.id);
+  if(!range){
+    if(needsRefocus && prevFocus && prevFocus.focus) prevFocus.focus();
+    return false;
+  }
   if(!textEditDirty){pushHistory();textEditDirty=true;}
   const span=document.createElement('span');
   span.style[prop]=value;
@@ -2245,6 +2309,13 @@ function applyInlineTextStyle(prop,value){
   savedTextRangeId=item.id;
   item.text=normalizeTextContent(tc.innerText);
   item.html=sanitizeTextHtml(tc.innerHTML);
+
+  // Return focus to the panel control that triggered this
+  if(needsRefocus && prevFocus && prevFocus.focus){
+    lastMousedownTarget = prevFocus;
+    prevFocus.focus();
+  }
+
   fitTextHeight(item,el);
   updateSelectionOverlay(); scheduleSave(); scheduleThumb();
   return true;
@@ -2442,27 +2513,32 @@ function applyItemStyle(el,item){
   el.classList.toggle('multi-sel',state.selectedIds.length>1&&state.selectedIds.includes(item.id));
   el.classList.toggle('comment-open',state.selectedIds.includes(item.id)&&item.type==='comment');
   if(item.type==='text'||item.type==='note'){
-  const tc=el.querySelector('.text-content');
-  if(tc&&tc.contentEditable!=='true'){
-    if(item.html&&!isLegacyTextPlaceholder(item)) tc.innerHTML=sanitizeTextHtml(item.html);
-    else tc.innerText=isLegacyTextPlaceholder(item)?'':(item.text||'');
-    tc.dataset.placeholder=item.type==='note'?'Write a note...':'Type text';
-    tc.style.fontSize=item.fontSize+'px';
-    tc.style.fontFamily=item.fontFamily;
-    tc.style.fontWeight=item.fontWeight;
-    tc.style.color=item.color;
-    tc.style.textAlign=item.textAlign;
-    tc.style.letterSpacing=(item.letterSpacing||0)+'px';
-    tc.style.textTransform=item.textTransform||'none';
-    tc.style.background=item.bgColor||(item.type==='note'?'#ffd966':'transparent');
-    tc.style.width='100%';
-    tc.style.height='100%';
-    tc.style.overflow='hidden';
-    tc.style.wordBreak='break-word';
-    tc.style.whiteSpace='pre-wrap';
-    tc.style.lineHeight=item.lineHeight||1.4;
-    tc.style.padding=(item.textPadding??(item.type==='note'?12:8))+'px';
-  }
+    if(item.fontFamily) ensureFontLoaded(item.fontFamily);
+    const tc=el.querySelector('.text-content');
+    if(tc){
+      if(tc.contentEditable!=='true'){
+        if(item.html&&!isLegacyTextPlaceholder(item)) tc.innerHTML=sanitizeTextHtml(item.html);
+        else tc.innerText=isLegacyTextPlaceholder(item)?'':(item.text||'');
+      }
+      tc.dataset.placeholder=item.type==='note'?'Write a note...':'Type text';
+      tc.style.fontSize=item.fontSize+'px';
+      tc.style.fontFamily=item.fontFamily;
+      tc.style.fontWeight=item.fontWeight;
+      tc.style.fontStyle=item.fontStyle||'normal';
+      tc.style.textDecoration=item.textDecoration||'none';
+      tc.style.color=item.color;
+      tc.style.textAlign=item.textAlign;
+      tc.style.letterSpacing=(item.letterSpacing||0)+'px';
+      tc.style.textTransform=item.textTransform||'none';
+      tc.style.background=item.bgColor||(item.type==='note'?'#ffd966':'transparent');
+      tc.style.width='100%';
+      tc.style.height='100%';
+      tc.style.overflow='hidden';
+      tc.style.wordBreak='break-word';
+      tc.style.whiteSpace='pre-wrap';
+      tc.style.lineHeight=item.lineHeight||1.4;
+      tc.style.padding=(item.textPadding??(item.type==='note'?12:8))+'px';
+    }
   }
   if(item.type==='shape'){
     const sc=el.querySelector('.shape-content');
@@ -3090,6 +3166,38 @@ function buildAlignTools(){
   });
 }
 
+function rgbToHex(rgb) {
+  if (!rgb) return '#ffffff';
+  if (rgb.startsWith('#')) return rgb;
+  const match = rgb.match(/^rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+  if (!match) return '#ffffff';
+  return '#' + [match[1], match[2], match[3]].map(x => {
+    const hex = parseInt(x).toString(16);
+    return hex.length === 1 ? '0' + hex : hex;
+  }).join('');
+}
+
+function getActiveTextStyles(tc) {
+  let range = null;
+  const sel = window.getSelection();
+  if (sel && sel.rangeCount > 0) {
+    const r = sel.getRangeAt(0);
+    if (tc.contains(r.commonAncestorContainer)) {
+      range = r;
+    }
+  }
+  if (!range && savedTextRange && savedTextRangeId === state.editingId && tc.contains(savedTextRange.commonAncestorContainer)) {
+    range = savedTextRange;
+  }
+  if (!range) return null;
+
+  let node = range.commonAncestorContainer;
+  if (node.nodeType === Node.TEXT_NODE) {
+    node = node.parentNode;
+  }
+  return window.getComputedStyle(node);
+}
+
 // ── PROPS PANEL ───────────────────────────────────────────────────
 function updateProps(){
   const item=selFirst(), count=state.selectedIds.length;
@@ -3137,15 +3245,70 @@ function updateProps(){
   $('flip-h-btn').style.display=isText?'none':'';
   $('flip-v-btn').style.display=isText?'none':'';
   if(isText){
-    $('t-size').value=item.fontSize; $('t-weight').value=item.fontWeight;
-    $('t-line').value=item.lineHeight||1.4;
-    $('t-track').value=item.letterSpacing||0;
-    $('t-transform').value=item.textTransform||'none';
+    const el = canvasWorld.querySelector(`[data-id="${item.id}"]`);
+    const tcEl = el?.querySelector('.text-content');
+    const computed = (state.editingId === item.id && tcEl) ? getActiveTextStyles(tcEl) : null;
+    
+    if (computed) {
+      const compSize = parseFloat(computed.fontSize);
+      $('t-size').value = isNaN(compSize) ? item.fontSize : compSize;
+      
+      const compLH = computed.lineHeight;
+      let lhVal = item.lineHeight || 1.4;
+      if (compLH && compLH !== 'normal') {
+        const parsedLH = parseFloat(compLH);
+        if (!isNaN(parsedLH) && compSize > 0) {
+          lhVal = compLH.endsWith('px') ? Math.round((parsedLH / compSize) * 100) / 100 : parsedLH;
+        }
+      }
+      $('t-line').value = lhVal;
+      
+      const compLS = parseFloat(computed.letterSpacing);
+      $('t-track').value = isNaN(compLS) ? (item.letterSpacing || 0) : compLS;
+      
+      $('t-transform').value = computed.textTransform || item.textTransform || 'none';
+      $('t-weight').value = computed.fontWeight || item.fontWeight;
+      
+      let compFont = computed.fontFamily || '';
+      compFont = compFont.replace(/['"]/g, '').toLowerCase();
+      let matchedFont = item.fontFamily;
+      const fontSelect = $('t-font');
+      if (fontSelect) {
+        for (let i = 0; i < fontSelect.options.length; i++) {
+          const option = fontSelect.options[i];
+          const optVal = option.value.replace(/['"]/g, '').toLowerCase();
+          if (optVal && (optVal === compFont || compFont.includes(optVal) || optVal.includes(compFont))) {
+            matchedFont = option.value;
+            break;
+          }
+        }
+      }
+      $('t-font').value = matchedFont;
+      
+      const compCol = computed.color;
+      $('t-color').value = compCol ? rgbToHex(compCol) : item.color;
+      
+      $('t-italic-btn').classList.toggle('active', computed.fontStyle === 'italic');
+      
+      const deco = computed.textDecorationLine || computed.textDecoration || '';
+      $('t-underline-btn').classList.toggle('active', deco.includes('underline'));
+      $('t-strike-btn').classList.toggle('active', deco.includes('line-through'));
+    } else {
+      $('t-size').value=item.fontSize; $('t-weight').value=item.fontWeight;
+      $('t-line').value=item.lineHeight||1.4;
+      $('t-track').value=item.letterSpacing||0;
+      $('t-transform').value=item.textTransform||'none';
+      $('t-font').value=item.fontFamily; $('t-color').value=item.color;
+      
+      $('t-italic-btn').classList.toggle('active', item.fontStyle === 'italic');
+      $('t-underline-btn').classList.toggle('active', item.textDecoration === 'underline');
+      $('t-strike-btn').classList.toggle('active', item.textDecoration === 'line-through');
+    }
+    
     $('t-pad').value=item.textPadding??(item.type==='note'?12:8);
-    $('t-font').value=item.fontFamily; $('t-color').value=item.color;
     if(item.bgColor) $('t-bg').value=item.bgColor;
-  document.querySelectorAll('.align-btn-ui').forEach(b=>
-      b.classList.toggle('active',b.dataset.align===item.textAlign));
+    document.querySelectorAll('.align-btn-ui').forEach(b=>
+        b.classList.toggle('active',b.dataset.align===item.textAlign));
   }
   if(isShape){
     setColorControl('shape-fill',item.fill,'#6c71f0');
@@ -3425,11 +3588,24 @@ $('img-reset-crop-btn').addEventListener('click',()=>{
   updateProps(); scheduleSave(); scheduleThumb(); showToast('Image crop reset');
 });
 
+const loadedFonts = new Set(["Inter", "Outfit", "DM Sans", "Syne", "Georgia", "Times New Roman", "JetBrains Mono", "Courier New"]);
+function ensureFontLoaded(fontFamily) {
+  if (!fontFamily) return;
+  const cleanName = fontFamily.replace(/['"]/g, '').split(',')[0].trim();
+  if (loadedFonts.has(cleanName)) return;
+  const link = document.createElement('link');
+  link.rel = 'stylesheet';
+  link.href = `https://fonts.googleapis.com/css2?family=${encodeURIComponent(cleanName)}:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,300;1,400;1,500;1,600;1,700;1,800&display=swap`;
+  document.head.appendChild(link);
+  loadedFonts.add(cleanName);
+}
+
 function bindTextProp(id,key,isNum){
   $(id).addEventListener('change',e=>{
     const item=selFirst(); if(!item||(item.type!=='text'&&item.type!=='note')) return;
     const fallback=key==='lineHeight'?1.4:16;
     const next=isNum?(parseFloat(e.target.value)||fallback):e.target.value;
+    if (key === 'fontFamily') ensureFontLoaded(next);
     const inlineMap={fontSize:['fontSize',`${next}px`],lineHeight:['lineHeight',String(next)],letterSpacing:['letterSpacing',`${next}px`],textPadding:null,textTransform:['textTransform',next],fontWeight:['fontWeight',next],fontFamily:['fontFamily',next]};
     if(inlineMap[key]&&applyInlineTextStyle(inlineMap[key][0],inlineMap[key][1])){ updateProps(); return; }
     pushHistory(); item[key]=next;
@@ -3442,10 +3618,39 @@ function setTextProps(patch,withHistory=true){
   const item=selFirst(); if(!item||(item.type!=='text'&&item.type!=='note')||item.locked) return;
   if(withHistory) pushHistory();
   Object.assign(item,patch);
+  if(patch.fontFamily) ensureFontLoaded(patch.fontFamily);
   const el=canvasWorld.querySelector(`[data-id="${item.id}"]`);
   if(el){ applyItemStyle(el,item); fitTextHeight(item,el); }
   updateSelectionOverlay(); updateProps(); scheduleSave(); scheduleThumb();
 }
+
+$('t-italic-btn').addEventListener('click',()=>{
+  const item=selFirst(); if(!item||(item.type!=='text'&&item.type!=='note')||item.locked) return;
+  const nextStyle=item.fontStyle==='italic'?'normal':'italic';
+  if(applyInlineTextStyle('fontStyle',nextStyle)){ updateProps(); return; }
+  pushHistory(); item.fontStyle=nextStyle;
+  const el=canvasWorld.querySelector(`[data-id="${item.id}"]`);
+  if(el) applyItemStyle(el,item);
+  updateProps(); scheduleSave(); scheduleThumb();
+});
+$('t-underline-btn').addEventListener('click',()=>{
+  const item=selFirst(); if(!item||(item.type!=='text'&&item.type!=='note')||item.locked) return;
+  const nextDeco=item.textDecoration==='underline'?'none':'underline';
+  if(applyInlineTextStyle('textDecoration',nextDeco)){ updateProps(); return; }
+  pushHistory(); item.textDecoration=nextDeco;
+  const el=canvasWorld.querySelector(`[data-id="${item.id}"]`);
+  if(el) applyItemStyle(el,item);
+  updateProps(); scheduleSave(); scheduleThumb();
+});
+$('t-strike-btn').addEventListener('click',()=>{
+  const item=selFirst(); if(!item||(item.type!=='text'&&item.type!=='note')||item.locked) return;
+  const nextDeco=item.textDecoration==='line-through'?'none':'line-through';
+  if(applyInlineTextStyle('textDecoration',nextDeco)){ updateProps(); return; }
+  pushHistory(); item.textDecoration=nextDeco;
+  const el=canvasWorld.querySelector(`[data-id="${item.id}"]`);
+  if(el) applyItemStyle(el,item);
+  updateProps(); scheduleSave(); scheduleThumb();
+});
 bindTextProp('t-size','fontSize',true);
 bindTextProp('t-line','lineHeight',true);
 bindTextProp('t-track','letterSpacing',true);
@@ -4608,12 +4813,42 @@ canvasArea.addEventListener('dblclick',e=>{
     addTextItem(wp.x-110,wp.y-35);
   }
 });
+let lastMousedownTarget = null;
 document.addEventListener('mousedown',e=>{
+  lastMousedownTarget = e.target;
+  if (state.editingId && state.endActiveTextEdit) {
+    const activeEl = canvasWorld.querySelector(`[data-id="${state.editingId}"]`);
+    const insideText = activeEl && activeEl.contains(e.target);
+    const insidePanel = e.target.closest('#panels');
+    if (insidePanel && !insideText) {
+      // CRITICAL: Save the text selection RIGHT NOW in the capture phase,
+      // before the browser clears it when focus moves to the panel control.
+      // This must happen here — by the time blur fires, the selection is gone.
+      const tc = activeEl && activeEl.querySelector('.text-content');
+      if (tc) {
+        const sel = window.getSelection();
+        if (sel && sel.rangeCount > 0 && !sel.isCollapsed) {
+          const r = sel.getRangeAt(0);
+          if (tc.contains(r.commonAncestorContainer)) {
+            savedTextRange = r.cloneRange();
+            savedTextRangeId = state.editingId;
+          }
+        }
+      }
+    }
+    if (!insideText && !insidePanel) {
+      setTimeout(() => {
+        if (state.editingId && state.endActiveTextEdit) {
+          state.endActiveTextEdit();
+        }
+      }, 100);
+    }
+  }
   if(!commentPanel.classList.contains('show')) return;
   if(e.target.closest('#comment-panel')||e.target.closest('.comment-item')) return;
   flushActiveCommentEditor();
   commentPanel.classList.remove('show');
-});
+}, true);
 canvasArea.addEventListener('wheel',e=>{
   e.preventDefault(); zoomAt(e.clientX,e.clientY,-e.deltaY);
 },{passive:false});
