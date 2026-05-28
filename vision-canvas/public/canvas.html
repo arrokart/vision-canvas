@@ -5,6 +5,7 @@
 <title>Vision Canvas</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700;800&family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&family=Outfit:wght@300;400;500;600;700;800&family=Syne:wght@600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="/paper-full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
@@ -1275,42 +1276,69 @@ body.exporting-canvas .frame-label{display:none!important;}
 
 <!-- EXPORT MODAL -->
 <div class="modal-overlay" id="export-modal">
-  <div class="modal-box" style="width:300px;">
-    <div class="modal-title">Export Canvas</div>
-    <div class="modal-row">
-      <span>Area</span>
-      <select class="modal-select" id="export-area">
-        <option value="canvas" selected>Whole canvas</option>
-        <option value="selection">Selection</option>
-      </select>
+  <div class="modal-box" style="width: 680px; display: flex; flex-direction: row; gap: 24px; padding: 24px;">
+    <!-- Left panel: Visual Preview -->
+    <div style="flex: 1; display: flex; flex-direction: column; gap: 8px; justify-content: center; align-items: center; background: rgba(0,0,0,0.25); border-radius: 8px; border: 1px solid var(--border); padding: 16px; min-width: 320px; min-height: 320px; position: relative;">
+      <div style="font-size: 10px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.8px; font-weight: 700; position: absolute; top: 12px; left: 16px;">Preview</div>
+      <div id="export-preview-box" style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; overflow: hidden; margin-top: 15px;">
+        <canvas id="export-preview-canvas" style="max-width: 100%; max-height: 280px; box-shadow: 0 4px 20px rgba(0,0,0,0.5); border-radius: 6px; background: repeating-conic-gradient(#181824 0% 25%, #101018 0% 50%) 50% / 16px 16px;"></canvas>
+      </div>
     </div>
-    <div class="modal-row">
-      <span>Resolution</span>
-      <select class="modal-select" id="export-scale">
-        <option value="1">1× standard</option>
-        <option value="2" selected>2× retina</option>
-        <option value="3">3× high quality</option>
-      </select>
-    </div>
-    <div class="modal-row">
-      <span>Format</span>
-      <select class="modal-select" id="export-format">
-        <option value="png">PNG</option>
-        <option value="jpeg">JPEG</option>
-        <option value="webp">WebP</option>
-      </select>
-    </div>
-    <div class="modal-row">
-      <span>Background</span>
-      <select class="modal-select" id="export-bg">
-        <option value="transparent" selected>Transparent background</option>
-        <option value="white">White background</option>
-        <option value="canvas">Canvas background</option>
-      </select>
-    </div>
-    <div class="modal-actions">
-      <button class="modal-btn" id="export-cancel">Cancel</button>
-      <button class="modal-btn accent" id="export-confirm">Download</button>
+    <!-- Right panel: Settings -->
+    <div style="width: 280px; display: flex; flex-direction: column; gap: 16px; justify-content: space-between;">
+      <div>
+        <div class="modal-title" style="margin-bottom: 16px; font-size: 18px;">Export Settings</div>
+        
+        <div class="modal-row" style="margin-bottom: 12px;">
+          <span>Area</span>
+          <select class="modal-select" id="export-area" style="padding: 6px 12px; font-size: 13px;">
+            <option value="canvas" selected>Whole canvas</option>
+            <option value="selection">Selection</option>
+          </select>
+        </div>
+        
+        <div class="modal-row" style="margin-bottom: 12px;">
+          <span>Format</span>
+          <select class="modal-select" id="export-format" style="padding: 6px 12px; font-size: 13px;">
+            <option value="png">PNG</option>
+            <option value="jpeg">JPEG</option>
+            <option value="webp">WebP</option>
+            <option value="svg">SVG (vector)</option>
+            <option value="pdf">PDF (document)</option>
+          </select>
+        </div>
+
+        <div class="modal-row" id="export-quality-row" style="display: none; flex-direction: column; align-items: flex-start; gap: 6px; margin-bottom: 12px;">
+          <div style="width: 100%; display: flex; justify-content: space-between; font-size: 13px;">
+            <span>Quality</span>
+            <span id="export-quality-val" style="color: var(--accent2); font-weight: bold;">90%</span>
+          </div>
+          <input type="range" id="export-quality" min="10" max="100" value="90" style="width: 100%; accent-color: var(--accent);">
+        </div>
+
+        <div class="modal-row" id="export-scale-row" style="margin-bottom: 12px;">
+          <span>Resolution</span>
+          <select class="modal-select" id="export-scale" style="padding: 6px 12px; font-size: 13px;">
+            <option value="1">1× standard</option>
+            <option value="2" selected>2× retina</option>
+            <option value="3">3× high quality</option>
+          </select>
+        </div>
+        
+        <div class="modal-row" id="export-bg-row" style="margin-bottom: 12px;">
+          <span>Background</span>
+          <select class="modal-select" id="export-bg" style="padding: 6px 12px; font-size: 13px;">
+            <option value="transparent" selected>Transparent</option>
+            <option value="white">White</option>
+            <option value="canvas">Canvas background</option>
+          </select>
+        </div>
+      </div>
+      
+      <div class="modal-actions" style="margin-top: 12px; gap: 10px;">
+        <button class="modal-btn" id="export-cancel" style="height: 38px;">Cancel</button>
+        <button class="modal-btn accent" id="export-confirm" style="height: 38px;">Export</button>
+      </div>
     </div>
   </div>
 </div>
@@ -5359,21 +5387,383 @@ ctxMenu.querySelectorAll('.ctx-item').forEach(item=>{
 });
 
 // ── EXPORT ────────────────────────────────────────────────────────
+function escapeHtml(str) {
+  return (str || '').replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+}
+
+const imgCache = new Map();
+
+function getShapePathString(item) {
+  if (item.shape === 'ellipse') return 'M 50 4 A 46 46 0 1 0 50 96 A 46 46 0 1 0 50 4 Z';
+  if (item.shape === 'polygon') {
+    const r = Math.max(0, Math.min(28, item.radius || 0));
+    if (r > 0) return roundedPolygonPath([[50,4],[96,94],[4,94]], r);
+    return 'M 50 4 L 96 94 L 4 94 Z';
+  }
+  if (item.shape === 'star') return 'M 50 4 L 61 36 L 95 36 L 67 56 L 78 90 L 50 70 L 22 90 L 33 56 L 5 36 L 39 36 Z';
+  if (item.shape === 'line') return 'M 4 96 L 96 4';
+  if (item.shape === 'arrow') return 'M 4 96 L 92 8';
+  if (item.shape === 'boolean' || item.shape === 'booleanFlat') {
+    if (item.shape === 'booleanFlat') {
+      return (item.flattenedPaths || []).join(' ');
+    }
+    if (item.resultPath) return item.resultPath;
+    return (item.booleanShapes || []).map(boolShapePath).join(' ');
+  }
+  // rect
+  const rx = Math.max(0, Math.min(46, item.radius ?? 3));
+  return `M ${4+rx} 4 H ${96-rx} Q 96 4 96 ${4+rx} V ${96-rx} Q 96 96 ${96-rx} 96 H ${4+rx} Q 4 96 4 ${96-rx} V ${4+rx} Q 4 4 ${4+rx} 4 Z`;
+}
+
+function renderExportPreview() {
+  const canvas = $('export-preview-canvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  
+  const selectedOnly = $('export-area').value === 'selection' && state.selectedIds.length > 0;
+  const exportIds = selectedOnly ? exportSelectionIds(state.selectedIds) : new Set(ac().items.map(i => i.id));
+  const items = ac().items.filter(i => i.visible && exportIds.has(i.id));
+  
+  if (!items.length) {
+    canvas.width = 300;
+    canvas.height = 280;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = '#5f5d73';
+    ctx.font = '12px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('No layers to preview', 150, 140);
+    return;
+  }
+  
+  const pad = selectedOnly ? 0 : 40;
+  const selectedFrame = selectedOnly && state.selectedIds.length === 1 ? getItem(state.selectedIds[0]) : null;
+  const exportFrame = selectedFrame?.type === 'frame' ? selectedFrame : null;
+  const boundsItems = selectedOnly
+    ? ac().items.filter(i => i.visible && state.selectedIds.includes(i.id))
+    : items;
+    
+  const minX = exportFrame ? exportFrame.x : Math.min(...boundsItems.map(i => i.x)) - pad;
+  const minY = exportFrame ? exportFrame.y : Math.min(...boundsItems.map(i => i.y)) - pad;
+  const maxX = exportFrame ? exportFrame.x + exportFrame.w : Math.max(...boundsItems.map(i => i.x + i.w)) + pad;
+  const maxY = exportFrame ? exportFrame.y + exportFrame.h : Math.max(...boundsItems.map(i => i.y + i.h)) + pad;
+  
+  const w = Math.max(1, maxX - minX);
+  const h = Math.max(1, maxY - minY);
+  
+  const maxW = 300;
+  const maxH = 280;
+  const scale = Math.min(maxW / w, maxH / h);
+  canvas.width = w * scale;
+  canvas.height = h * scale;
+  
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  
+  // Background
+  const bgMode = $('export-bg').value;
+  if (bgMode === 'canvas') {
+    if (ac().bgType === 'gradient') {
+      ctx.fillStyle = '#161622';
+    } else {
+      ctx.fillStyle = ac().bg || '#09090f';
+    }
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+  } else if (bgMode === 'white' || $('export-format').value === 'pdf') {
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+  }
+  
+  // Items
+  const sorted = [...items].sort((a, b) => a.z - b.z);
+  sorted.forEach(item => {
+    const ix = (item.x - minX) * scale;
+    const iy = (item.y - minY) * scale;
+    const iw = item.w * scale;
+    const ih = item.h * scale;
+    
+    ctx.save();
+    
+    // Apply Vector Mask Clip
+    let masked = false;
+    if (item.type === 'image' && item.maskedById) {
+      const maskItem = getItem(item.maskedById);
+      if (maskItem) {
+        ctx.save();
+        const mix = (maskItem.x - minX) * scale;
+        const miy = (maskItem.y - minY) * scale;
+        const miw = maskItem.w * scale;
+        const mih = maskItem.h * scale;
+        
+        ctx.translate(mix + miw / 2, miy + mih / 2);
+        ctx.rotate(maskItem.rot * Math.PI / 180);
+        ctx.scale(maskItem.flipH ? -1 : 1, maskItem.flipV ? -1 : 1);
+        ctx.translate(-miw / 2, -mih / 2);
+        ctx.scale(miw / 100, mih / 100);
+        
+        const mPathStr = getShapePathString(maskItem);
+        const mPath = new Path2D(mPathStr);
+        ctx.restore(); // restore local transform back to main canvas coords
+        ctx.clip(mPath);
+        
+        ctx.save(); // save again for image's own transform
+        masked = true;
+      }
+    }
+    
+    ctx.translate(ix + iw / 2, iy + ih / 2);
+    ctx.rotate(item.rot * Math.PI / 180);
+    ctx.scale(item.flipH ? -1 : 1, item.flipV ? -1 : 1);
+    ctx.translate(-iw / 2, -ih / 2);
+    ctx.globalAlpha = (item.opacity ?? 100) / 100;
+    
+    if (item.type === 'shape') {
+      ctx.fillStyle = item.fill === 'transparent' ? 'rgba(108,113,240,0.15)' : item.fill || '#6c71f0';
+      ctx.strokeStyle = item.stroke || '#8b8ff4';
+      const sw = item.strokeWidth ?? 2;
+      ctx.lineWidth = Math.max(0.5, sw * (scale * (100 / Math.max(item.w, item.h))));
+      
+      const pathStr = getShapePathString(item);
+      const path = new Path2D(pathStr);
+      ctx.save();
+      ctx.scale(iw / 100, ih / 100);
+      if (item.fill !== 'transparent') {
+        ctx.fill(path);
+      }
+      ctx.stroke(path);
+      ctx.restore();
+    } else if (item.type === 'text' || item.type === 'note') {
+      ctx.fillStyle = item.bgColor || (item.type === 'note' ? '#ffd966' : 'transparent');
+      ctx.fillRect(0, 0, iw, ih);
+      ctx.fillStyle = item.color || '#eeeeff';
+      
+      const fSize = Math.max(3, (item.fontSize || 16) * scale);
+      ctx.font = `${item.fontWeight || 400} ${item.fontStyle || 'normal'} ${fSize}px ${item.fontFamily || 'sans-serif'}`;
+      ctx.textBaseline = 'top';
+      const textPadding = (item.textPadding ?? (item.type === 'note' ? 12 : 8)) * scale;
+      const lines = (item.text || '').split('\n');
+      let currentY = textPadding;
+      
+      lines.forEach(line => {
+        let textX = textPadding;
+        if (item.textAlign === 'center') {
+          ctx.textAlign = 'center';
+          textX = iw / 2;
+        } else if (item.textAlign === 'right') {
+          ctx.textAlign = 'right';
+          textX = iw - textPadding;
+        } else {
+          ctx.textAlign = 'left';
+        }
+        ctx.fillText(line, textX, currentY);
+        currentY += fSize * (item.lineHeight || 1.4);
+      });
+    } else if (item.type === 'image') {
+      if (item.src) {
+        if (imgCache.has(item.src)) {
+          const cachedImg = imgCache.get(item.src);
+          if (cachedImg.complete) {
+            ctx.drawImage(cachedImg, 0, 0, iw, ih);
+          } else {
+            // Draw loading placeholder
+            ctx.fillStyle = 'rgba(108,113,240,0.1)';
+            ctx.fillRect(0, 0, iw, ih);
+          }
+        } else {
+          const img = new Image();
+          img.crossOrigin = 'anonymous';
+          img.src = item.src;
+          imgCache.set(item.src, img);
+          img.onload = () => {
+            renderExportPreview(); // trigger redraw when loaded
+          };
+          ctx.fillStyle = 'rgba(108,113,240,0.1)';
+          ctx.fillRect(0, 0, iw, ih);
+        }
+      } else {
+        ctx.fillStyle = 'rgba(108,113,240,0.1)';
+        ctx.fillRect(0, 0, iw, ih);
+      }
+    } else if (item.type === 'frame') {
+      ctx.strokeStyle = item.stroke || '#8b8ff4';
+      ctx.lineWidth = 1.5;
+      ctx.strokeRect(0, 0, iw, ih);
+    }
+    
+    ctx.restore(); // restore shape translation group
+    if (masked) {
+      ctx.restore(); // restore clip-path context
+    }
+  });
+}
+
+function exportToSVG(items, minX, minY, w, h, bgMode) {
+  let defs = '';
+  let clipPaths = '';
+  
+  // Collect masks
+  const maskShapes = new Map();
+  items.forEach(item => {
+    if (item.maskedById) {
+      const maskItem = getItem(item.maskedById);
+      if (maskItem && !maskShapes.has(maskItem.id)) {
+        maskShapes.set(maskItem.id, maskItem);
+      }
+    }
+  });
+  
+  // Render clipPaths
+  maskShapes.forEach(maskItem => {
+    const rotX = maskItem.w / 2;
+    const rotY = maskItem.h / 2;
+    let mTrans = `translate(${maskItem.x - minX}, ${maskItem.y - minY})`;
+    if (maskItem.rot) {
+      mTrans += ` rotate(${maskItem.rot}, ${rotX}, ${rotY})`;
+    }
+    if (maskItem.flipH || maskItem.flipV) {
+      mTrans += ` translate(${rotX}, ${rotY}) scale(${maskItem.flipH ? -1 : 1}, ${maskItem.flipV ? -1 : 1}) translate(${-rotX}, -${rotY})`;
+    }
+    
+    clipPaths += `<clipPath id="mask-clip-${maskItem.id}">`;
+    clipPaths += `<g transform="${mTrans}">`;
+    clipPaths += shapeMarkup(maskItem).replace('class="shape-content"', `width="${maskItem.w}" height="${maskItem.h}"`);
+    clipPaths += `</g>`;
+    clipPaths += `</clipPath>`;
+  });
+  
+  if (clipPaths) {
+    defs = `<defs>${clipPaths}</defs>`;
+  }
+  
+  let bgHtml = '';
+  if (bgMode === 'canvas') {
+    const bgFill = ac().bgType === 'gradient' ? '#161622' : (ac().bg || '#09090f');
+    bgHtml = `<rect x="0" y="0" width="${w}" height="${h}" fill="${bgFill}" />`;
+  } else if (bgMode === 'white') {
+    bgHtml = `<rect x="0" y="0" width="${w}" height="${h}" fill="#ffffff" />`;
+  }
+  
+  let body = '';
+  const sorted = [...items].sort((a, b) => a.z - b.z);
+  sorted.forEach(item => {
+    const rotX = item.w / 2;
+    const rotY = item.h / 2;
+    
+    // Relative position
+    const relX = item.x - minX;
+    const relY = item.y - minY;
+    
+    let transform = `translate(${relX}, ${relY})`;
+    if (item.rot) {
+      transform += ` rotate(${item.rot}, ${rotX}, ${rotY})`;
+    }
+    if (item.flipH || item.flipV) {
+      transform += ` translate(${rotX}, ${rotY}) scale(${item.flipH ? -1 : 1}, ${item.flipV ? -1 : 1}) translate(${-rotX}, -${rotY})`;
+    }
+    
+    let clipAttr = '';
+    if (item.maskedById && maskShapes.has(item.maskedById)) {
+      clipAttr = ` clip-path="url(#mask-clip-${item.maskedById})"`;
+    }
+    
+    body += `<g transform="${transform}" opacity="${(item.opacity ?? 100) / 100}"${clipAttr}>`;
+    
+    if (item.type === 'shape') {
+      body += shapeMarkup(item).replace('class="shape-content"', `width="${item.w}" height="${item.h}"`);
+    } else if (item.type === 'image') {
+      body += `<image href="${escapeHtml(item.src)}" width="${item.w}" height="${item.h}" />`;
+    } else if (item.type === 'text' || item.type === 'note') {
+      const lines = (item.text || '').split('\n');
+      const fontSize = item.fontSize || 16;
+      const fontFamily = item.fontFamily || 'Outfit, sans-serif';
+      const fontWeight = item.fontWeight || 400;
+      const color = item.color || '#eeeef5';
+      const align = item.textAlign || 'left';
+      const padding = item.textPadding ?? (item.type === 'note' ? 12 : 8);
+      
+      let textAnchor = 'start';
+      let textX = padding;
+      if (align === 'center') {
+        textAnchor = 'middle';
+        textX = item.w / 2;
+      } else if (align === 'right') {
+        textAnchor = 'end';
+        textX = item.w - padding;
+      }
+      
+      body += `<rect width="${item.w}" height="${item.h}" fill="${item.bgColor || (item.type === 'note' ? '#ffd966' : 'transparent')}" />`;
+      body += `<text x="${textX}" y="${padding + fontSize * 0.85}" font-family="${fontFamily}" font-size="${fontSize}" font-weight="${fontWeight}" fill="${color}" text-anchor="${textAnchor}">`;
+      lines.forEach((line, idx) => {
+        body += `<tspan x="${textX}" dy="${idx === 0 ? 0 : (item.lineHeight || 1.4) * fontSize}">${escapeHtml(line)}</tspan>`;
+      });
+      body += `</text>`;
+    } else if (item.type === 'frame') {
+      body += `<rect width="${item.w}" height="${item.h}" fill="${item.fill || 'rgba(139,143,244,.06)'}" stroke="${item.stroke || '#8b8ff4'}" stroke-width="${item.strokeWidth ?? 1.5}" rx="${item.radius || 0}" ry="${item.radius || 0}" />`;
+    }
+    
+    body += `</g>\n`;
+  });
+  
+  return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" xmlns="http://www.w3.org/2000/svg">\n${defs}\n${bgHtml}\n${body}</svg>`;
+}
+
 $('export-btn').addEventListener('click',()=>{
   if(!ac().items.length){showToast('Nothing to export');return;}
   $('export-area').value=state.selectedIds.length>0?'selection':'canvas';
   $('export-area').querySelector('option[value="selection"]').disabled=state.selectedIds.length===0;
   $('export-bg').value=state.selectedIds.length>0?'transparent':'canvas';
-  $('export-bg').disabled=false;
+  
+  // Format defaults and reset UI rows
+  $('export-format').value = 'png';
+  $('export-quality-row').style.display = 'none';
+  $('export-scale-row').style.display = 'flex';
+  $('export-bg-row').style.display = 'flex';
+  
   $('export-modal').classList.add('show');
+  renderExportPreview();
 });
+
 $('export-area').addEventListener('change',e=>{
   $('export-bg').value=e.target.value==='canvas'?'canvas':'transparent';
+  renderExportPreview();
 });
+
+$('export-bg').addEventListener('change',()=>{
+  renderExportPreview();
+});
+
+$('export-quality').addEventListener('input', e => {
+  $('export-quality-val').textContent = e.target.value + '%';
+});
+
 $('export-format').addEventListener('change',e=>{
-  if(e.target.value==='jpeg'&&$('export-bg').value==='transparent') $('export-bg').value='white';
+  const fmt = e.target.value;
+  if(fmt === 'jpeg' && $('export-bg').value === 'transparent') {
+    $('export-bg').value = 'white';
+  }
+  
+  // Toggle Quality Slider
+  if (fmt === 'jpeg' || fmt === 'webp') {
+    $('export-quality-row').style.display = 'flex';
+  } else {
+    $('export-quality-row').style.display = 'none';
+  }
+  
+  // Toggle Resolution dropdown (vector SVG doesn't need scale)
+  if (fmt === 'svg') {
+    $('export-scale-row').style.display = 'none';
+  } else {
+    $('export-scale-row').style.display = 'flex';
+  }
+  
+  // Adjust background select constraints
+  if (fmt === 'pdf' && $('export-bg').value === 'transparent') {
+    $('export-bg').value = 'white';
+  }
+  
+  renderExportPreview();
 });
+
 $('export-cancel').addEventListener('click',()=>$('export-modal').classList.remove('show'));
+
 function exportSelectionIds(ids){
   const expanded=new Set();
   ids.forEach(id=>{
@@ -5383,14 +5773,18 @@ function exportSelectionIds(ids){
   });
   return expanded;
 }
+
 $('export-confirm').addEventListener('click',async()=>{
   $('export-modal').classList.remove('show');
   const selectedOnly=$('export-area').value==='selection'&&state.selectedIds.length>0;
   const exportIds=selectedOnly?exportSelectionIds(state.selectedIds):new Set(ac().items.map(i=>i.id));
   const items=ac().items.filter(i=>i.visible&&exportIds.has(i.id));
   if(!items.length){showToast('No visible items');return;}
-  const scale=parseInt($('export-scale').value)||2,fmt=$('export-format').value||'png';
+  
+  const scale=parseInt($('export-scale').value)||2;
+  const fmt=$('export-format').value||'png';
   const bgMode=$('export-bg').value;
+  const quality = parseInt($('export-quality').value || 90) / 100;
   const captureBg=bgMode==='canvas'?(ac().bgType==='gradient'?null:ac().bg):bgMode==='white'?'#ffffff':null;
   const pad=selectedOnly?0:40;
   const selectedFrame=selectedOnly&&state.selectedIds.length===1?getItem(state.selectedIds[0]):null;
@@ -5402,6 +5796,25 @@ $('export-confirm').addEventListener('click',async()=>{
   const minY=exportFrame?exportFrame.y:Math.min(...boundsItems.map(i=>i.y))-pad;
   const maxX=exportFrame?exportFrame.x+exportFrame.w:Math.max(...boundsItems.map(i=>i.x+i.w))+pad;
   const maxY=exportFrame?exportFrame.y+exportFrame.h:Math.max(...boundsItems.map(i=>i.y+i.h))+pad;
+  const w=Math.max(1,maxX-minX);
+  const h=Math.max(1,maxY-minY);
+  
+  // Vector SVG Export Bypass
+  if (fmt === 'svg') {
+    try {
+      const svgStr = exportToSVG(items, minX, minY, w, h, bgMode);
+      const blob = new Blob([svgStr], {type: 'image/svg+xml;charset=utf-8'});
+      const link = document.createElement('a');
+      link.download = `${ac().name||'canvas'}.svg`;
+      link.href = URL.createObjectURL(blob);
+      link.click();
+      showToast('Exported SVG!');
+    } catch(err) {
+      showToast('Export SVG failed');
+    }
+    return;
+  }
+  
   const hidden=[];
   const saved={pan:{...state.pan},zoom:state.zoom,sel:[...state.selectedIds]};
   if(selectedOnly){
@@ -5415,18 +5828,41 @@ $('export-confirm').addEventListener('click',async()=>{
   renderItemsHighlight(); showToast('Exporting…');
   document.body.classList.add('exporting-canvas');
   await new Promise(r=>setTimeout(r,80));
+  
   try{
     const c=await html2canvas(canvasWorld,{
       backgroundColor:captureBg,
-      scale,x:minX,y:minY,width:Math.max(1,maxX-minX),height:Math.max(1,maxY-minY),
+      scale,x:minX,y:minY,width:w,height:h,
       logging:false,useCORS:true,allowTaint:true,
     });
-    const link=document.createElement('a');
-    link.download=`${ac().name||'canvas'}.${fmt}`;
+    
     const mime=fmt==='jpeg'?'image/jpeg':fmt==='webp'?'image/webp':'image/png';
-    link.href=c.toDataURL(mime,0.95);
-    link.click(); showToast('Exported!');
-  }catch(err){showToast('Export failed');}
+    const imgData = c.toDataURL(mime, quality);
+    
+    if (fmt === 'pdf') {
+      const { jsPDF } = window.jspdf;
+      // Convert pixels to PDF points (1 px = 0.75 pt)
+      const pdfW = w * 0.75;
+      const pdfH = h * 0.75;
+      const pdf = new jsPDF({
+        orientation: pdfW > pdfH ? 'landscape' : 'portrait',
+        unit: 'pt',
+        format: [pdfW, pdfH]
+      });
+      pdf.addImage(imgData, 'PNG', 0, 0, pdfW, pdfH);
+      pdf.save(`${ac().name||'canvas'}.pdf`);
+      showToast('Exported PDF!');
+    } else {
+      const link=document.createElement('a');
+      link.download=`${ac().name||'canvas'}.${fmt}`;
+      link.href=imgData;
+      link.click(); 
+      showToast('Exported!');
+    }
+  }catch(err){
+    showToast('Export failed');
+  }
+  
   document.body.classList.remove('exporting-canvas');
   hidden.forEach(i=>i.visible=true);
   state.selectedIds=saved.sel; state.pan=saved.pan; state.zoom=saved.zoom;
